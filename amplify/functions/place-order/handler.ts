@@ -6,7 +6,7 @@ import { getAmplifyDataClientConfig } from "@aws-amplify/backend/function/runtim
 import { env } from "$amplify/env/place-order";
 import type { Schema } from "../../data/resource";
 import { priceCart, type CartItem } from "../../../lib/order-text";
-import { checkFields, cleanName } from "../../../lib/validate";
+import { checkDelivery, cleanDelivery } from "../../../lib/validate";
 import { buildOrderMessage, sendToTelegram } from "../../../lib/telegram";
 
 // placeOrder: the only way an order is created.
@@ -55,8 +55,12 @@ export const handler: Schema["placeOrder"]["functionHandler"] = async (event) =>
   if (!identity || !phone) throw new Error("not_signed_in");
 
   const args = event.arguments;
-  const name = cleanName(String(args.name ?? "")).slice(0, 80);
-  const address = String(args.address ?? "").trim().slice(0, 400);
+  const { name, province, area, address } = cleanDelivery({
+    name: String(args.name ?? ""),
+    province: String(args.province ?? ""),
+    area: String(args.area ?? ""),
+    address: String(args.address ?? ""),
+  });
   const note = String(args.note ?? "").trim().slice(0, 400) || null;
   const source = String(args.source ?? "").trim().slice(0, 200) || null;
 
@@ -71,7 +75,7 @@ export const handler: Schema["placeOrder"]["functionHandler"] = async (event) =>
   const items = Array.isArray(rawItems) ? (rawItems.slice(0, 10) as CartItem[]) : [];
   const { lines, total } = priceCart(items);
 
-  const fields = checkFields({ name, phone, address });
+  const fields = checkDelivery({ name, province, area, address });
   if (Object.keys(fields).length) throw new Error(`invalid_fields:${JSON.stringify(fields)}`);
   if (!lines.length) throw new Error("empty_cart");
 
@@ -84,6 +88,8 @@ export const handler: Schema["placeOrder"]["functionHandler"] = async (event) =>
     orderNumber: number,
     phone,
     name,
+    province,
+    area,
     address,
     note,
     source,
@@ -112,6 +118,8 @@ export const handler: Schema["placeOrder"]["functionHandler"] = async (event) =>
     total,
     name,
     phone,
+    province,
+    area,
     address,
     note,
     source,

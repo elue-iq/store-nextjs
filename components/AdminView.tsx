@@ -4,10 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "./AuthProvider";
 import { useToast } from "./Toast";
 import { LoginPanel } from "./LoginPanel";
+import { jarsLabel } from "./AddToCart";
 import { OrderItemsList, StatusChip } from "./OrderBits";
 import { baghdadTime, dataClient, newestFirst, STATUS_LABELS, STATUS_ORDER, type Order, type OrderStatus } from "@/lib/data";
 import { formatIraqiMobile, toLatinDigits } from "@/lib/phone";
 import { formatIQD } from "@/lib/site";
+import { fullAddress } from "@/lib/iraq";
 
 const baghdadDay = (iso: string) =>
   new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Baghdad", year: "numeric", month: "2-digit", day: "2-digit" }).format(
@@ -68,15 +70,16 @@ export function AdminView() {
       return (
         o.orderNumber.toLowerCase().includes(q) ||
         o.name.toLowerCase().includes(q) ||
+        fullAddress(o).toLowerCase().includes(q) ||
         (qDigits.length >= 3 && o.phone.includes(qDigits))
       );
     });
   }, [orders, filter, query]);
 
-  if (auth.status === "loading") return <p className="panel-loading">لحظة…</p>;
+  if (auth.status === "loading") return <p className="panel-loading">لحظة من فضلكم…</p>;
 
   if (auth.status === "signedOut") {
-    return <LoginPanel title="لوحة الطلبات" intro="للفريق فقط. سجّلوا الدخول برقم الواتساب المضاف للفريق." />;
+    return <LoginPanel title="لوحة الطلبات" intro="هذه الصفحة مخصصة لفريق ÉLUE. سجّلوا الدخول برقم الواتساب المضاف إلى الفريق." />;
   }
 
   if (!auth.isAdmin) {
@@ -84,10 +87,10 @@ export function AdminView() {
       <div className="login-panel">
         <h1>لوحة الطلبات</h1>
         <p className="login-panel__intro">
-          الرقم <span dir="ltr">{formatIraqiMobile(auth.phone)}</span> ما عنده صلاحية على لوحة الطلبات.
+          لا يملك الرقم <span dir="ltr">{formatIraqiMobile(auth.phone)}</span> صلاحية الدخول إلى لوحة الطلبات.
         </p>
         <button type="button" className="btn btn--quiet" onClick={() => void auth.signOut()}>
-          الدخول برقم ثاني
+          الدخول برقم آخر
         </button>
       </div>
     );
@@ -105,7 +108,7 @@ export function AdminView() {
     setSaving(null);
     if (errors?.length) {
       console.error("status update failed", errors);
-      toast({ id: "admin", tone: "attention", message: `ما انحفظت الحالة للطلب ${o.orderNumber}. حاولوا مرة ثانية.` });
+      toast({ id: "admin", tone: "attention", message: `تعذّر حفظ حالة الطلب ${o.orderNumber}. حاولوا مجددًا.` });
     } else {
       toast({ id: "admin", message: `${o.orderNumber}: ${STATUS_LABELS[status]}` });
     }
@@ -117,7 +120,7 @@ export function AdminView() {
         <div>
           <h1>لوحة الطلبات</h1>
           <p className="panel-head__sub">
-            {synced ? "مباشر: الطلبات الجديدة تظهر وحدها" : "نجيب الطلبات…"}
+            {synced ? "مباشر: تظهر الطلبات الجديدة تلقائيًا" : "جارٍ تحميل الطلبات…"}
           </p>
         </div>
         <button type="button" className="link-button" onClick={() => void auth.signOut()}>
@@ -131,7 +134,7 @@ export function AdminView() {
           <dd>{stats.todayOrders}</dd>
         </div>
         <div>
-          <dt>علب اليوم</dt>
+          <dt>عدد العلب اليوم</dt>
           <dd>{stats.todayJars}</dd>
         </div>
         <div>
@@ -139,7 +142,7 @@ export function AdminView() {
           <dd>{formatIQD(stats.todayTotal)}</dd>
         </div>
         <div className={stats.counts.NEW ? "is-attention" : undefined}>
-          <dt>تنتظر التأكيد</dt>
+          <dt>بانتظار التأكيد</dt>
           <dd>{stats.counts.NEW}</dd>
         </div>
       </dl>
@@ -158,19 +161,19 @@ export function AdminView() {
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="ابحثوا بالرقم، الاسم أو رقم الطلب"
+          placeholder="ابحثوا برقم الهاتف أو الاسم أو المنطقة أو رقم الطلب"
           aria-label="بحث"
         />
       </div>
 
       {failed && (
         <p className="panel-note" role="alert">
-          انقطع الاتصال بالطلبات. حدّثوا الصفحة.
+          انقطع الاتصال بقائمة الطلبات. حدّثوا الصفحة.
         </p>
       )}
 
-      {orders === null && !failed && <p className="panel-loading">نجيب الطلبات…</p>}
-      {orders && shown.length === 0 && <p className="hint">ماكو طلبات هنا.</p>}
+      {orders === null && !failed && <p className="panel-loading">جارٍ تحميل الطلبات…</p>}
+      {orders && shown.length === 0 && <p className="hint">لا توجد طلبات هنا.</p>}
 
       <ul className="order-cards order-cards--admin">
         {shown.map((o) => {
@@ -193,13 +196,13 @@ export function AdminView() {
                   {local}
                 </a>
               </div>
-              <p className="order-card__address">{o.address}</p>
+              <p className="order-card__address">{fullAddress(o)}</p>
               {o.note && <p className="order-card__note">ملاحظة: {o.note}</p>}
 
               <OrderItemsList items={o.items} />
               <p className="order-card__total">
                 <span>
-                  المجموع · {o.jars} {o.jars === 1 ? "علبة" : "علب"}
+                  المجموع · {jarsLabel(o.jars)}
                 </span>
                 <strong>{formatIQD(o.total)}</strong>
               </p>
@@ -207,7 +210,7 @@ export function AdminView() {
               {(o.source || o.telegramSent === false) && (
                 <p className="order-card__meta">
                   {o.source && <span dir="ltr">{o.source}</span>}
-                  {o.telegramSent === false && <span className="order-card__warn">ما وصل للتليگرام</span>}
+                  {o.telegramSent === false && <span className="order-card__warn">لم يُرسل إلى تيليغرام</span>}
                 </p>
               )}
 
@@ -221,7 +224,7 @@ export function AdminView() {
                     className={s === "CANCELLED" && confirmCancel === o.id ? "is-confirm" : undefined}
                     onClick={() => void setStatus(o, s)}
                   >
-                    {s === "CANCELLED" && confirmCancel === o.id ? "أكيد؟ إلغاء" : STATUS_LABELS[s]}
+                    {s === "CANCELLED" && confirmCancel === o.id ? "تأكيد الإلغاء؟" : STATUS_LABELS[s]}
                   </button>
                 ))}
               </div>

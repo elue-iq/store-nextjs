@@ -4,6 +4,7 @@
 import { formatIraqiMobile } from "./phone";
 import { formatIQD, site } from "./site";
 import type { OrderLine } from "./order-text";
+import { fullAddress } from "./iraq";
 
 export function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -20,6 +21,8 @@ export function buildOrderMessage(o: {
   total: number;
   name: string;
   phone: string; // 9647XXXXXXXXX
+  province: string;
+  area: string;
   address: string;
   note?: string | null;
   source?: string | null;
@@ -27,7 +30,7 @@ export function buildOrderMessage(o: {
 }): string {
   const jars = o.lines.reduce((n, l) => n + l.qty, 0);
   return [
-    `<b>طلب جديد ${ltr(o.orderNumber)}</b>${o.returning ? " · زبون راجع" : ""}`,
+    `<b>طلب جديد ${ltr(o.orderNumber)}</b>${o.returning ? " · عميل سابق" : ""}`,
     "",
     ...o.lines.map((l) => `• ${ltr(`${l.qty} × ${escapeHtml(l.product.nameEn)}`)} — ${formatIQD(l.subtotal)}`),
     `عدد العلب: ${jars}`,
@@ -36,7 +39,7 @@ export function buildOrderMessage(o: {
     "",
     `الاسم: ${escapeHtml(o.name)}`,
     `الرقم: <a href="https://wa.me/${o.phone}">${ltr(formatIraqiMobile(o.phone))}</a>`,
-    `العنوان: ${escapeHtml(o.address)}`,
+    `العنوان: ${escapeHtml(fullAddress(o))}`,
     o.note ? `ملاحظة: ${escapeHtml(o.note)}` : null,
     o.source ? `المصدر: ${ltr(escapeHtml(o.source))}` : null,
     `الوقت: ${ltr(o.time)}`,

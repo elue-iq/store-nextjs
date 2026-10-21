@@ -6,10 +6,10 @@ import { useCart } from "./CartProvider";
 import { useToast } from "./Toast";
 import { getProduct } from "@/lib/products";
 
-// "علبة"، "علبتين"، "3 علب"، "11 علبة"
+// "علبة واحدة"، "علبتان"، "3 علب"، "11 علبة"
 export function jarsLabel(n: number): string {
-  if (n === 1) return "علبة";
-  if (n === 2) return "علبتين";
+  if (n === 1) return "علبة واحدة";
+  if (n === 2) return "علبتان";
   if (n <= 10) return `${n} علب`;
   return `${n} علبة`;
 }
@@ -22,13 +22,13 @@ function useAddWithToast() {
     const name = getProduct(slug)?.nameAr ?? "";
     toast({
       id: "cart",
-      message: qty > 1 ? `أضفنا ${jarsLabel(qty)} ${name} للسلة` : `أضفنا ${name} للسلة`,
-      action: withAction ? { label: "افتح السلة", href: "/order" } : undefined,
+      message: qty > 1 ? `أضفنا ${name} إلى السلة (${jarsLabel(qty)}).` : `أضفنا ${name} إلى السلة.`,
+      action: withAction ? { label: "عرض السلة", href: "/order" } : undefined,
     });
   };
 }
 
-export function AddToCartButton({ slug, label = "أضف للسلة" }: { slug: string; label?: string }) {
+export function AddToCartButton({ slug, label = "أضف إلى السلة" }: { slug: string; label?: string }) {
   const addWithToast = useAddWithToast();
   const [added, setAdded] = useState(false);
   return (
@@ -41,7 +41,7 @@ export function AddToCartButton({ slug, label = "أضف للسلة" }: { slug: s
         setTimeout(() => setAdded(false), 1600);
       }}
     >
-      {added ? "انضافت للسلة" : label}
+      {added ? "أُضيفت إلى السلة" : label}
     </button>
   );
 }
@@ -55,11 +55,11 @@ export function ProductBuyBox({ slug }: { slug: string }) {
   return (
     <div className="buy-box">
       <div className="stepper" role="group" aria-label="الكمية">
-        <button type="button" onClick={() => setQty((q) => Math.max(1, q - 1))} aria-label="قلل الكمية">
+        <button type="button" onClick={() => setQty((q) => Math.max(1, q - 1))} aria-label="إنقاص الكمية">
           −
         </button>
         <output aria-live="polite">{qty}</output>
-        <button type="button" onClick={() => setQty((q) => Math.min(20, q + 1))} aria-label="زيد الكمية">
+        <button type="button" onClick={() => setQty((q) => Math.min(20, q + 1))} aria-label="زيادة الكمية">
           +
         </button>
       </div>
@@ -72,7 +72,7 @@ export function ProductBuyBox({ slug }: { slug: string }) {
           setTimeout(() => setAdded(false), 1600);
         }}
       >
-        {added ? "انضافت للسلة" : "أضف للسلة"}
+        {added ? "أُضيفت إلى السلة" : "أضف إلى السلة"}
       </button>
       <button
         type="button"

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { AccountView } from "@/components/AccountView";
 
 export const metadata: Metadata = {
-  title: "طلباتي",
+  title: "حسابي",
   robots: { index: false },
 };
 

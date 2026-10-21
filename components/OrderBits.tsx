@@ -1,6 +1,7 @@
 // Small pieces shared by "طلباتي" and the admin page.
 
 import { formatIQD } from "@/lib/site";
+import { getProduct } from "@/lib/products";
 import { STATUS_LABELS, type Order, type OrderStatus } from "@/lib/data";
 
 export function StatusChip({ status }: { status: OrderStatus }) {
@@ -9,10 +10,10 @@ export function StatusChip({ status }: { status: OrderStatus }) {
 
 const TRACK: OrderStatus[] = ["NEW", "CONFIRMED", "OUT_FOR_DELIVERY", "DELIVERED"];
 const TRACK_LABELS: Record<string, string> = {
-  NEW: "وصلنا",
-  CONFIRMED: "تأكد",
-  OUT_FOR_DELIVERY: "بالطريق",
-  DELIVERED: "واصل",
+  NEW: "تم الاستلام",
+  CONFIRMED: "مؤكَّد",
+  OUT_FOR_DELIVERY: "قيد التوصيل",
+  DELIVERED: "تم التوصيل",
 };
 
 // Four-step progress for the customer. Cancelled orders show the chip only.
@@ -39,7 +40,7 @@ export function OrderItemsList({ items }: { items: Order["items"] }) {
         .map((i) => (
           <li key={i.slug}>
             <span>
-              {i.nameAr} <small dir="ltr">{i.nameEn}</small>
+              {getProduct(i.slug)?.nameAr ?? i.nameAr} <small dir="ltr">{i.nameEn}</small>
             </span>
             <span className="order-items__qty">× {i.qty}</span>
             <span className="order-items__price">{formatIQD(i.qty * i.price)}</span>

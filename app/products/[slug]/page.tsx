@@ -19,7 +19,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const product = getProduct(slug);
   if (!product) return {};
   const title = `${product.nameEn} Truffles`;
-  const description = `${product.nameAr}: ${product.kcalPerPiece} سعرة معدل القطعة، بدون سكر مضاف. ${formatIQD(product.price)} للعلبة.`;
+  const description = `${product.nameAr}: ${product.kcalPerPiece} سعرة حرارية في المتوسط لكل قطعة، بلا سكر مضاف. ${formatIQD(product.price)} للعلبة.`;
   const images = product.image ? [{ url: product.image, width: 1400, height: 1400, alt: `ÉLUE ${product.nameEn}` }] : undefined;
   return {
     title,
@@ -75,12 +75,12 @@ export default async function ProductPage({ params }: Props) {
           </p>
           <p className="product__kcal">
             <strong dir="ltr">{product.kcalPerPiece} kcal</strong>
-            <span>معدل سعرات القطعة</span>
+            <span>متوسط سعرات القطعة</span>
           </p>
           <p className="product__price">{formatIQD(product.price)} للعلبة</p>
           <ProductBuyBox slug={product.slug} />
 
-          <h2 className="product__subhead">شنو يميّزها؟</h2>
+          <h2 className="product__subhead">ما الذي يميّزها؟</h2>
           <ul className="product__points">
             <li>{product.taste}</li>
             {sharedPoints.map((point) => (
@@ -95,17 +95,17 @@ export default async function ProductPage({ params }: Props) {
           <p>{product.ingredients.join("، ")}.</p>
           {(product.slug === "hazelnut" || product.slug === "peanut-butter") && (
             <p className="product__allergy">
-              <strong>للحساسية:</strong> {nutNote}
+              <strong>تنبيه للحساسية:</strong> {nutNote}
             </p>
           )}
 
           <h2 className="product__subhead">طازجة، ومكانها الثلاجة</h2>
-          <p>ما بيها سكر مضاف ولا مواد حافظة تحفظها، فنحفظها بالبرودة.</p>
+          <p>لا تحتوي على سكر مضاف ولا على مواد حافظة، لذلك نحفظها بالتبريد.</p>
         </div>
       </section>
 
       <section className="section others">
-        <h2>نكهات ثانية</h2>
+        <h2>نكهات أخرى</h2>
         <div className="others__grid">
           {others.map((p) => (
             <Link key={p.slug} href={`/products/${p.slug}`} className="others__item">

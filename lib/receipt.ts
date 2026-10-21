@@ -8,6 +8,8 @@
 
 import { LOGO_PATH, LOGO_VIEWBOX } from "./brand-mark";
 import { formatIQD, site } from "./site";
+import { fullAddress } from "./iraq";
+import { getProduct } from "./products";
 
 export type ReceiptLine = { nameAr: string; nameEn: string; qty: number; price: number; subtotal: number };
 
@@ -142,7 +144,7 @@ function draw(ctx: CanvasRenderingContext2D, d: ReceiptData): number {
 
   // Footer.
   y += 66;
-  text("لمتابعة طلبكم راسلونا على الواتساب", W / 2, y, { size: 27, color: C.ink, align: "center" });
+  text("لمتابعة طلبكم، راسلونا عبر واتساب", W / 2, y, { size: 27, color: C.ink, align: "center" });
   y += 44;
   text(`${site.whatsappDisplay}   ·   ${site.instagramHandle}`, W / 2, y, {
     size: 27,
@@ -213,10 +215,12 @@ export function receiptFilename(orderId: string) {
 export function receiptFromOrder(o: {
   orderNumber: string;
   createdAt: string;
-  items: ({ nameAr: string; nameEn: string; qty: number; price: number } | null)[];
+  items: ({ slug?: string; nameAr: string; nameEn: string; qty: number; price: number } | null)[];
   total: number;
   name: string;
   phone: string; // 9647XXXXXXXXX
+  province?: string | null;
+  area?: string | null;
   address: string;
   note?: string | null;
 }): ReceiptData {
@@ -229,11 +233,17 @@ export function receiptFromOrder(o: {
     time,
     lines: o.items
       .filter((i): i is NonNullable<typeof i> => Boolean(i))
-      .map((i) => ({ nameAr: i.nameAr, nameEn: i.nameEn, qty: i.qty, price: i.price, subtotal: i.qty * i.price })),
+      .map((i) => ({
+        nameAr: getProduct(i.slug ?? "")?.nameAr ?? i.nameAr,
+        nameEn: i.nameEn,
+        qty: i.qty,
+        price: i.price,
+        subtotal: i.qty * i.price,
+      })),
     total: o.total,
     name: o.name,
     phoneDisplay: `${local.slice(0, 4)} ${local.slice(4, 7)} ${local.slice(7)}`,
-    address: o.address,
+    address: fullAddress(o),
     note: o.note || undefined,
   };
 }

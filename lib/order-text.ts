@@ -35,7 +35,7 @@ export function buildWhatsAppText(details: OrderDetails, items: CartItem[], orde
   const { lines, total } = priceCart(items);
   const rows = lines.map((l) => `${l.qty} × ${l.product.nameEn} (${l.product.nameAr})`);
   const text = [
-    orderId ? `مرحباً ÉLUE، هذا طلبي رقم ${orderId}:` : "مرحباً ÉLUE، أريد أطلب:",
+    orderId ? `مرحبًا ÉLUE، هذا طلبي رقم ${orderId}:` : "مرحبًا ÉLUE، أودّ أن أطلب:",
     ...rows,
     `المجموع: ${formatIQD(total)}`,
     "",

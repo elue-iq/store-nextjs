@@ -33,16 +33,16 @@ export const products: Product[] = [
   {
     slug: "dark-chocolate",
     nameEn: "Dark Chocolate",
-    nameAr: "دارك چوكليت",
+    nameAr: "شوكولاتة داكنة",
     kcalPerPiece: 37,
     price: PRICE,
     band: "#2E2926",
     // CONFIRM: wording written to match the peanut butter description.
-    taste: "طعم الدارك چوكليت الغني بقوام كريمي",
+    taste: "طعم الشوكولاتة الداكنة الغني بقوام كريمي",
     // CONFIRM: add this flavor's own points (chocolate origin, cocoa, fats).
     points: [],
     // CONFIRM: taken from the peanut butter description (Belgian chocolate, Dutch cocoa).
-    ingredients: ["خضار", "دارك شوكولاتة بلجيكية", "كاكاو هولندي خام", "بدائل سكر إسبانية المنشأ"],
+    ingredients: ["خضار", "شوكولاتة بلجيكية داكنة", "كاكاو هولندي خام", "بدائل سكر إسبانية المنشأ"],
     image: "/products/dark-chocolate.jpg",
   },
   {
@@ -53,57 +53,57 @@ export const products: Product[] = [
     price: PRICE,
     band: "#9A513C",
     // CONFIRM: the original line was cut off on the old store after "مع لذة ط...".
-    taste: "طعم الوايت چوكليت المميز مع لذة الجزر",
+    taste: "طعم الشوكولاتة البيضاء المميز مع لذة الجزر",
     // CONFIRM: add this flavor's own points.
     points: [],
     // CONFIRM: white chocolate comes from the old store description; confirm the rest.
-    ingredients: ["خضار", "جزر", "وايت چوكليت", "بدائل سكر إسبانية المنشأ"],
+    ingredients: ["خضار", "جزر", "شوكولاتة بيضاء", "بدائل سكر إسبانية المنشأ"],
     image: "/products/carrot.jpg",
   },
   {
     slug: "hazelnut",
     nameEn: "Hazelnut",
-    nameAr: "دارك چوكليت بالبندق",
+    nameAr: "شوكولاتة داكنة بالبندق",
     kcalPerPiece: 43,
     price: PRICE,
     band: "#8A5C35",
     // CONFIRM: wording written to match the peanut butter description.
-    taste: "طعم الدارك چوكليت المميز مع لذة البندق",
+    taste: "طعم الشوكولاتة الداكنة المميز مع لذة البندق",
     // CONFIRM: add this flavor's own points.
     points: [],
     // CONFIRM: based on the peanut butter description with hazelnut in place of peanut.
-    ingredients: ["خضار", "دارك شوكولاتة بلجيكية", "بندق", "كاكاو هولندي خام", "بدائل سكر إسبانية المنشأ"],
+    ingredients: ["خضار", "شوكولاتة بلجيكية داكنة", "بندق", "كاكاو هولندي خام", "بدائل سكر إسبانية المنشأ"],
     image: "/products/hazelnut.jpg",
   },
   {
     slug: "peanut-butter",
     nameEn: "Peanut Butter",
-    nameAr: "دارك چوكليت بالفول السوداني",
+    nameAr: "شوكولاتة داكنة بالفول السوداني",
     kcalPerPiece: 44,
     price: PRICE,
     band: "#7A6736",
-    taste: "طعم الدارك چوكليت المميز مع لذة الفول السوداني المملح",
+    taste: "طعم الشوكولاتة الداكنة المميز مع لذة الفول السوداني المملّح",
     points: [
       "خالية من الزيوت المهدرجة",
-      "دارك شوكولاتة بلجيكية بدون سكر مضاف",
+      "شوكولاتة بلجيكية داكنة بلا سكر مضاف",
       "كاكاو هولندي خام",
       "بدائل سكر إسبانية المنشأ",
     ],
-    ingredients: ["خضار", "دارك شوكولاتة بلجيكية", "فول سوداني مملح", "كاكاو هولندي خام", "بدائل سكر إسبانية المنشأ"],
+    ingredients: ["خضار", "شوكولاتة بلجيكية داكنة", "فول سوداني مملّح", "كاكاو هولندي خام", "بدائل سكر إسبانية المنشأ"],
     image: "/products/peanut-butter.jpg",
   },
 ];
 
 // Points that are true for every flavor.
 export const sharedPoints = [
-  "بدون سكر مضاف، وبدون دهون أو زبدة مضافة",
-  "ما لا يقل عن 60% خضار، وغنية بالألياف",
-  "بدون مواد حافظة",
+  "بلا سكر مضاف، وبلا دهون أو زبدة مضافة",
+  "خضار بنسبة لا تقل عن 60%، وغنية بالألياف",
+  "بلا مواد حافظة",
   "قليلة ومحسوبة السعرات",
 ];
 
 // Flavors that contain nuts, for the allergy note.
-export const nutNote = "نكهة البندق بيها بندق، ونكهة الفول السوداني بيها فول سوداني.";
+export const nutNote = "تحتوي نكهة البندق على البندق، وتحتوي نكهة الفول السوداني على الفول السوداني.";
 
 export function getProduct(slug: string): Product | undefined {
   return products.find((p) => p.slug === slug);

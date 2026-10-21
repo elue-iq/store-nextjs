@@ -12,7 +12,7 @@ import { Footer } from "@/components/Footer";
 import { siteUrl } from "@/lib/site";
 
 const description =
-  "ترافلز شوكولاتة قليلة ومحسوبة السعرات، بدون سكر مضاف. أربع نكهات، وسعرات كل قطعة مكتوبة على العلبة. التوصيل داخل بغداد.";
+  "ترافل شوكولاتة قليل السعرات ومحسوبها، بلا سكر مضاف. أربع نكهات، وسعرات كل قطعة مدوّنة على العلبة. التوصيل داخل بغداد.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl()),

@@ -4,7 +4,8 @@ import { placeOrder } from "../functions/place-order/resource";
 // Orders live in DynamoDB (one table, managed by Amplify).
 //
 // Who can do what:
-//   - A customer can only READ their own orders (the "owner" field).
+//   - A customer can only READ their own orders (the "owner" field), and
+//     read/edit their own CustomerProfile.
 //   - The ADMINS group (ÉLUE team) can read and update every order.
 //   - Nobody creates orders directly: the placeOrder function checks the
 //     cart, prices it from our own product list, saves it, then tells Telegram.
@@ -26,6 +27,8 @@ const schema = a
         orderNumber: a.string().required(),
         phone: a.string().required(),
         name: a.string().required(),
+        province: a.string(),
+        area: a.string(),
         address: a.string().required(),
         note: a.string(),
         source: a.string(),
@@ -40,6 +43,18 @@ const schema = a
       .secondaryIndexes((index) => [index("owner"), index("phone")])
       .authorization((allow) => [allow.ownerDefinedIn("owner").to(["read"]), allow.group("ADMINS")]),
 
+    // The customer's saved delivery details ("معلوماتي" on /account).
+    // One per customer; only they can read or change it, the team can read it.
+    CustomerProfile: a
+      .model({
+        name: a.string().required(),
+        province: a.string().required(),
+        area: a.string().required(),
+        address: a.string().required(),
+        owner: a.string().authorization((allow) => [allow.owner().to(["read", "delete"]), allow.group("ADMINS").to(["read"])]),
+      })
+      .authorization((allow) => [allow.owner(), allow.group("ADMINS").to(["read"])]),
+
     PlaceOrderResult: a.customType({
       id: a.string().required(),
       orderNumber: a.string().required(),
@@ -51,6 +66,8 @@ const schema = a
       .mutation()
       .arguments({
         name: a.string().required(),
+        province: a.string().required(),
+        area: a.string().required(),
         address: a.string().required(),
         note: a.string(),
         source: a.string(),

@@ -7,12 +7,12 @@ import { AddToCartButton } from "@/components/AddToCart";
 
 const ingredients = [
   {
-    title: "خضار، ما لا يقل عن 60%",
-    text: "نحضّرها ونطبخها ونجففها بأيدينا، 12 ساعة على الأقل، قبل ما تصير ترافلز.",
+    title: "خضار بنسبة لا تقل عن 60%",
+    text: "نحضّرها ونطهوها ونجففها بأيدينا مدة لا تقل عن 12 ساعة، قبل أن تصبح ترافل.",
   },
-  { title: "شوكولاتة بلجيكية", text: "دارك شوكولاتة بلجيكية بدون سكر مضاف." },
-  { title: "كاكاو هولندي خام", text: "للطعم الغني والعميق." },
-  { title: "بدائل سكر إسبانية المنشأ", text: "للحلاوة، بدل السكر." },
+  { title: "شوكولاتة بلجيكية", text: "شوكولاتة بلجيكية داكنة بلا سكر مضاف." },
+  { title: "كاكاو هولندي خام", text: "لطعم غني وعميق." },
+  { title: "بدائل سكر إسبانية المنشأ", text: "للتحلية بدلًا من السكر." },
 ];
 
 export default function Home() {
@@ -22,7 +22,7 @@ export default function Home() {
         <div className="hero__media">
           <Image
             src="/hero/truffle-fork.jpg"
-            alt="ترافل ÉLUE دارك چوكليت على شوكة والشوكولاتة تقطر منه"
+            alt="ترافل ÉLUE بالشوكولاتة الداكنة على شوكة، والشوكولاتة تقطر منه"
             fill
             priority
             sizes="(max-width: 900px) 100vw, 50vw"
@@ -33,7 +33,7 @@ export default function Home() {
         <div className="hero__content">
           <h1>متعة الشوكولاتة، بحسابات أذكى</h1>
           <p className="hero__lede">
-            أول براند ترافلز شوكولاتة قليل ومحسوب السعرات بالعراق. بدون سكر مضاف، بدون دهون أو زبدة مضافة، وبدون مواد
+            أول علامة عراقية لترافل الشوكولاتة قليل السعرات ومحسوبها. بلا سكر مضاف، ولا دهون أو زبدة مضافة، ولا مواد
             حافظة.
           </p>
           <div className="hero__actions">
@@ -61,7 +61,7 @@ export default function Home() {
       <section id="flavors" className="section flavors">
         <div className="section__head">
           <h2>النكهات</h2>
-          <p>كل النكهات بنفس السعر: {formatIQD(products[0].price)} للعلبة.</p>
+          <p>جميع النكهات بالسعر نفسه: {formatIQD(products[0].price)} للعلبة.</p>
         </div>
         <div className="flavors__grid">
           {products.map((p, i) => (
@@ -83,14 +83,13 @@ export default function Home() {
 
       <section className="section story">
         <div className="story__copy">
-          <h2>حكاية الترافلز، بطريقتنا</h2>
+          <h2>حكاية الترافل، على طريقتنا</h2>
           <p>
-            من فرنسا، وتحديداً من أواخر القرن التاسع عشر، بدأت حكاية الترافلز: حلوى الشوكولاتة الفاخرة اللي تخطف القلب من
-            أول قطعة.
+            بدأت حكاية الترافل في فرنسا أواخر القرن التاسع عشر: حلوى شوكولاتة فاخرة تأسر القلب من القطعة الأولى.
           </p>
           <p>
-            بـ<span dir="ltr">ÉLUE</span> أعدنا تعريف هاللذّة بطريقتنا. جمعنا الطعم الغني والقوام الكريمي مع السعرات
-            المحسوبة، حتى تستمتعون بكل قطعة وإنتو تعرفون شنو تختارون، وبدون ما تتنازلون عن اختياراتكم الغذائية.
+            وفي <span dir="ltr">ÉLUE</span> أعدنا تعريف هذه اللذّة على طريقتنا، فجمعنا الطعم الغني والقوام الكريمي مع
+            السعرات المحسوبة، لتستمتعوا بكل قطعة وأنتم تعرفون ما تختارون، دون التنازل عن خياراتكم الغذائية.
           </p>
         </div>
         <ul className="story__points">
@@ -103,9 +102,9 @@ export default function Home() {
       <section className="section ingredients" aria-labelledby="ingredients-title">
         <div className="section__head">
           <h2 id="ingredients-title">
-            شنو بداخل <span dir="ltr">ÉLUE</span>
+            ماذا يوجد في <span dir="ltr">ÉLUE</span>؟
           </h2>
-          <p>مكونات قليلة، وكل وحدة إلها سبب.</p>
+          <p>مكونات قليلة، ولكلٍّ منها سبب.</p>
         </div>
         <div className="ingredients__grid">
           {ingredients.map((item) => (
@@ -128,7 +127,7 @@ export default function Home() {
             ))}
           </dl>
           <p className="ingredients__allergy">
-            <strong>للحساسية:</strong> {nutNote}
+            <strong>تنبيه للحساسية:</strong> {nutNote}
           </p>
         </div>
       </section>
@@ -137,34 +136,34 @@ export default function Home() {
         <div className="fridge">
           <div className="fridge__head">
             <h2 id="fridge-title">
-              يخرب برّا البراد،
+              يفسد خارج الثلاجة،
               <br />
               ونقولها بفخر
             </h2>
-            <p className="fridge__lede">لأن الشي اللي يخلي الحلو يعيش أسابيع على الرف، إحنا ما نحطه.</p>
+            <p className="fridge__lede">لأن ما يُبقي الحلوى أسابيع على الرف، لا نضعه فيها.</p>
           </div>
           <div className="fridge__body">
             <p>
-              كل أكل بيه ماي، والماي «الحر» بالأكل هو اللي تعيش عليه البكتيريا والعفن. العلماء يقيسونه بشي اسمه{" "}
-              <strong>النشاط المائي</strong>: كل ما قل الماي الحر، عاش الأكل أطول برّا البراد.
+              يحتوي كل طعام على الماء، والماء «الحر» فيه هو ما تعيش عليه البكتيريا والعفن. ويقيسه العلماء بما يُسمّى{" "}
+              <strong>النشاط المائي</strong>: كلما قلّ الماء الحر، بقي الطعام صالحًا مدة أطول خارج الثلاجة.
             </p>
             <ul className="fridge__list">
               <li>
                 <strong>السكر</strong>
-                <span>يمسك جزيئات الماي ويربطها، فما يبقى ماي حر للبكتيريا. لهذا المربى يعيش شهور.</span>
+                <span>يرتبط بجزيئات الماء فلا يبقى ماء حر للبكتيريا، ولهذا يدوم المربى شهورًا.</span>
               </li>
               <li>
                 <strong>الزبدة والدهون</strong>
-                <span>تاخذ مكان الماي بالوصفة، فيقل الماي من الأساس.</span>
+                <span>تحلّ محل الماء في الوصفة، فتقلّ كميته من الأساس.</span>
               </li>
               <li>
                 <strong>المواد الحافظة</strong>
-                <span>توقف البكتيريا اللي تحاول تعيش على الماي الباقي.</span>
+                <span>تمنع البكتيريا من العيش على ما تبقّى من الماء.</span>
               </li>
             </ul>
             <p className="fridge__close">
-              ترافلز <span dir="ltr">ÉLUE</span> ما بيها سكر مضاف، ولا دهون أو زبدة مضافة، ولا مواد حافظة، وما لا يقل
-              عن 60% منها خضار. ما عدنا شي يحفظها غير البرودة، لهذا مكانها الثلاجة.
+              ترافل <span dir="ltr">ÉLUE</span> خالٍ من السكر المضاف والدهون والزبدة المضافة والمواد الحافظة، ولا تقل نسبة
+              الخضار فيه عن 60%. لا شيء يحفظه سوى البرودة، ولهذا مكانه الثلاجة.
             </p>
           </div>
         </div>
@@ -172,12 +171,12 @@ export default function Home() {
 
       <section className="section" aria-labelledby="kids-title">
         <div className="kids">
-          <h2 id="kids-title">لأطفالكم: حلو بدون حيرة</h2>
+          <h2 id="kids-title">لأطفالكم: حلوى بلا حيرة</h2>
           <div className="kids__body">
-            <p>الأطفال مظلومين ويا الحلو: تنطوهم ويبقى بالكم باللي بيه، ما تنطوهم ويزعلون. حيرة يعرفها كل أهل.</p>
+            <p>يعيش الأهل حيرة مع الحلوى: إن قدّموها لأطفالهم انشغل بالهم بما فيها، وإن منعوها حزن الأطفال. حيرة يعرفها كل بيت.</p>
             <p>
-              ترافلز <span dir="ltr">ÉLUE</span> تخلّص هالحيرة: بدون سكر مضاف، وبدون مواد حافظة، وما لا يقل عن 60% منها
-              خضار نحضّرها بأيدينا. قطعة يفرح بيها طفلكم، وإنتو مطمّنين على كل شي بيها.
+              ترافل <span dir="ltr">ÉLUE</span> يُنهي هذه الحيرة: بلا سكر مضاف، وبلا مواد حافظة، وخضار نحضّرها بأيدينا بنسبة
+              لا تقل عن 60%. قطعة يفرح بها طفلكم، وأنتم مطمئنون إلى كل ما فيها.
             </p>
           </div>
         </div>
@@ -186,19 +185,19 @@ export default function Home() {
       <section id="how" className="section how">
         <h2>طريقة الطلب</h2>
         <ol className="how__steps">
-          <li>اختاروا النكهات وضيفوها للسلة.</li>
-          <li>اكتبوا اسمكم الكامل ورقم الواتساب والعنوان.</li>
-          <li>أكدوا الطلب بالرمز اللي يوصلكم على الواتساب، ونتواصل وياكم للتوصيل.</li>
+          <li>اختاروا النكهات وأضيفوها إلى السلة.</li>
+          <li>سجّلوا الدخول برقم الواتساب، برمز يصلكم مرة واحدة فقط.</li>
+          <li>أكّدوا عنوان التوصيل وأرسلوا الطلب، وسنتواصل معكم لترتيب التوصيل.</li>
         </ol>
         <p className="how__note">{site.paymentNote}.</p>
         <Link className="btn" href="/order">
-          افتح السلة
+          افتحوا السلة
         </Link>
       </section>
 
       <section className="closing">
-        <p className="closing__lead">مو مجرد ترافلز شوكولاتة…</p>
-        <p className="closing__line">هي لحظة إلكم، وقطعة تشاركونها ويا أحبابكم.</p>
+        <p className="closing__lead">ليست مجرد ترافل شوكولاتة…</p>
+        <p className="closing__line">إنها لحظة لكم، وقطعة تتشاركونها مع أحبّائكم.</p>
       </section>
     </>
   );

@@ -11,10 +11,10 @@ export type OrderStatus = NonNullable<Order["status"]>;
 
 export const STATUS_LABELS: Record<OrderStatus, string> = {
   NEW: "جديد",
-  CONFIRMED: "مؤكد",
-  OUT_FOR_DELIVERY: "بالطريق",
-  DELIVERED: "واصل",
-  CANCELLED: "ملغي",
+  CONFIRMED: "مؤكَّد",
+  OUT_FOR_DELIVERY: "قيد التوصيل",
+  DELIVERED: "تم التوصيل",
+  CANCELLED: "ملغى",
 };
 
 export const STATUS_ORDER: OrderStatus[] = ["NEW", "CONFIRMED", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"];
