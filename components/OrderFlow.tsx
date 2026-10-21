@@ -249,8 +249,10 @@ export function OrderFlow() {
       } else if (codeName === "empty_cart") {
         toast({ id: "checkout", tone: "attention", message: "السلة فارغة أو فيها خطأ. ارجعوا للنكهات وضيفوها من جديد." });
       } else if (codeName === "not_signed_in") {
+        // The login on this device is no longer valid: start over with a fresh code.
+        await auth.signOut();
         setStep("details");
-        toast({ id: "checkout", tone: "attention", message: "سجلوا الدخول برقم الواتساب حتى تكملون الطلب." });
+        toast({ id: "checkout", tone: "attention", message: "انتهى تسجيل الدخول. أكدوا رقمكم برمز جديد حتى نكمل الطلب." });
       } else {
         console.error("placeOrder failed", gqlErrors);
         setPlaced({ ...snapshot, orderNumber: "", createdAt: new Date().toISOString() });

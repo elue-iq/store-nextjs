@@ -1,4 +1,5 @@
 import { defineBackend } from "@aws-amplify/backend";
+import { PolicyStatement } from "aws-cdk-lib/aws-iam";
 import { auth } from "./auth/resource";
 import { data } from "./data/resource";
 import { placeOrder } from "./functions/place-order/resource";
@@ -16,3 +17,10 @@ cfnUserPoolClient.accessTokenValidity = 60;
 cfnUserPoolClient.idTokenValidity = 60;
 cfnUserPoolClient.refreshTokenValidity = 180;
 cfnUserPoolClient.tokenValidityUnits = { accessToken: "minutes", idToken: "minutes", refreshToken: "days" };
+
+// placeOrder reads the logged-in customer's WhatsApp number from Cognito.
+const userPool = backend.auth.resources.userPool;
+backend.placeOrder.addEnvironment("USER_POOL_ID", userPool.userPoolId);
+backend.placeOrder.resources.lambda.addToRolePolicy(
+  new PolicyStatement({ actions: ["cognito-idp:AdminGetUser"], resources: [userPool.userPoolArn] }),
+);

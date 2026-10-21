@@ -1,4 +1,5 @@
 import type { AppSyncIdentityCognito } from "aws-lambda";
+import { AdminGetUserCommand, CognitoIdentityProviderClient } from "@aws-sdk/client-cognito-identity-provider";
 import { Amplify } from "aws-amplify";
 import { generateClient } from "aws-amplify/data";
 import { getAmplifyDataClientConfig } from "@aws-amplify/backend/function/runtime";
@@ -18,6 +19,25 @@ import { buildOrderMessage, sendToTelegram } from "../../../lib/telegram";
 const { resourceConfig, libraryOptions } = await getAmplifyDataClientConfig(env);
 Amplify.configure(resourceConfig, libraryOptions);
 const client = generateClient<Schema>({ authMode: "iam" });
+const cognito = new CognitoIdentityProviderClient({});
+
+// The website calls us with the customer's access token, which carries their
+// id but not their phone number, so the number is read from the login record.
+async function customerPhone(identity: AppSyncIdentityCognito | null): Promise<string | null> {
+  if (!identity?.sub || !identity.username) return null;
+  const fromToken = String(identity.claims?.phone_number ?? "");
+  if (/^\+9647\d{9}$/.test(fromToken)) return fromToken.slice(1);
+  try {
+    const user = await cognito.send(
+      new AdminGetUserCommand({ UserPoolId: process.env.USER_POOL_ID, Username: identity.username }),
+    );
+    const phone = user.UserAttributes?.find((a) => a.Name === "phone_number")?.Value ?? "";
+    return /^\+9647\d{9}$/.test(phone) ? phone.slice(1) : null;
+  } catch (err) {
+    console.error("customer lookup failed", err);
+    return null;
+  }
+}
 
 function orderNumber(): string {
   const t = Date.now().toString(36).slice(-5).toUpperCase();
@@ -31,9 +51,8 @@ function baghdadTime(d: Date): string {
 
 export const handler: Schema["placeOrder"]["functionHandler"] = async (event) => {
   const identity = event.identity as AppSyncIdentityCognito | null;
-  const phoneE164 = String(identity?.claims?.phone_number ?? "");
-  if (!identity?.sub || !/^\+9647\d{9}$/.test(phoneE164)) throw new Error("not_signed_in");
-  const phone = phoneE164.slice(1);
+  const phone = await customerPhone(identity);
+  if (!identity || !phone) throw new Error("not_signed_in");
 
   const args = event.arguments;
   const name = cleanName(String(args.name ?? "")).slice(0, 80);
