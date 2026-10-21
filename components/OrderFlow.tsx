@@ -36,6 +36,8 @@ export function OrderFlow() {
   const auth = useAuth();
   const { lines, total } = priceCart(cart.items);
   const signedIn = auth.status === "signedIn";
+  // The shop's own (admin) login is for the orders page, not for ordering as a customer.
+  const teamDevice = signedIn && auth.isAdmin;
 
   const [step, setStep] = useState<Step>("details");
   const [name, setName] = useState("");
@@ -82,7 +84,7 @@ export function OrderFlow() {
 
   // Returning customers: fill name and address from their last order.
   useEffect(() => {
-    if (!signedIn || !auth.owner || prefilled.current) return;
+    if (!signedIn || auth.isAdmin || !auth.owner || prefilled.current) return;
     prefilled.current = true;
     dataClient.models.Order.listOrderByOwner({ owner: auth.owner }, { selectionSet: ["name", "address", "createdAt"] })
       .then(({ data }) => {
@@ -92,7 +94,7 @@ export function OrderFlow() {
         setAddress((v) => v || last.address);
       })
       .catch(() => {});
-  }, [signedIn, auth.owner]);
+  }, [signedIn, auth.isAdmin, auth.owner]);
 
   // ---- PDF ---------------------------------------------------------------
 
@@ -155,6 +157,7 @@ export function OrderFlow() {
   async function submitDetails() {
     const found = checkFields({ name, phone: fieldValue.phone, address });
     if (Object.keys(found).length) return showFieldErrors(found);
+    if (teamDevice) return;
     if (signedIn) return placeNow();
     await sendCode(false);
   }
@@ -402,7 +405,23 @@ export function OrderFlow() {
               {fieldError("name")}
             </label>
 
-            {signedIn ? (
+            {teamDevice ? (
+              <div className="account-phone account-phone--team" role="note">
+                <span>
+                  هذا الجهاز مسجل بحساب الفريق (<span dir="ltr">{phoneDisplay}</span>). الطلب لازم يكون برقم الزبون.
+                </span>
+                <button
+                  type="button"
+                  className="link-button"
+                  onClick={() => {
+                    void auth.signOut();
+                    toast({ id: "checkout", message: "سجّلتوا خروج حساب الفريق. اكتبوا رقم الزبون." });
+                  }}
+                >
+                  تسجيل الخروج والطلب برقم ثاني
+                </button>
+              </div>
+            ) : signedIn ? (
               <div className="account-phone">
                 <span>رقم الواتساب</span>
                 <strong dir="ltr">{phoneDisplay}</strong>
@@ -465,7 +484,7 @@ export function OrderFlow() {
               </span>
               <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={400} />
             </label>
-            <button type="submit" className="btn btn--full" disabled={busy || auth.status === "loading"}>
+            <button type="submit" className="btn btn--full" disabled={busy || auth.status === "loading" || teamDevice}>
               {busy ? "جاري الإرسال…" : signedIn ? "أكدوا الطلب" : "أرسلوا رمز التحقق على الواتساب"}
             </button>
             {!signedIn && (

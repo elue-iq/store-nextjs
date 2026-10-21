@@ -1485,6 +1485,14 @@ p {
   font-weight: 500;
 }
 
+.account-phone--team {
+  display: grid;
+  gap: 0.4rem;
+  background: #fff4ee;
+  color: var(--terracotta-deep);
+  line-height: 1.7;
+}
+
 .account-phone strong {
   color: var(--cocoa);
   font-size: 1.15rem;
