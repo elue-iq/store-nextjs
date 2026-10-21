@@ -2088,3 +2088,83 @@ p {
   background-position: left 0.95rem center;
   cursor: pointer;
 }
+
+/* ---------- Admin app (installable, /admin) ---------- */
+
+body:has(.admin-app) .site-header,
+body:has(.admin-app) .site-footer {
+  display: none;
+}
+
+.admin-bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: calc(env(safe-area-inset-top, 0px) + 0.6rem) var(--gutter) 0.6rem;
+  background: color-mix(in srgb, var(--cream) 92%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--sand);
+}
+
+.admin-bar__brand {
+  display: flex;
+  color: var(--terracotta);
+}
+
+.admin-bar__logo {
+  height: 1.9rem;
+  width: auto;
+}
+
+.admin-page {
+  padding-top: 1.2rem;
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 2.5rem);
+}
+
+.admin-install {
+  position: relative;
+}
+
+.admin-install__help {
+  position: absolute;
+  inset-inline-end: 0;
+  top: calc(100% + 0.6rem);
+  z-index: 30;
+  width: min(20rem, calc(100vw - 2rem));
+  display: grid;
+  gap: 0.6rem;
+  padding: 1rem 1.1rem;
+  border-radius: 14px;
+  background: var(--paper);
+  border: 1px solid var(--sand-deep);
+  box-shadow: 0 12px 30px rgba(59, 42, 35, 0.16);
+  font-size: 0.95rem;
+  line-height: 1.7;
+}
+
+.admin-install__help ol {
+  margin: 0;
+  padding-inline-start: 1.2rem;
+}
+
+.admin-install__share {
+  display: inline-block;
+  width: 1.05rem;
+  height: 1.05rem;
+  vertical-align: -0.15em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+@media (display-mode: standalone) {
+  .admin-app {
+    min-height: 100vh;
+  }
+}

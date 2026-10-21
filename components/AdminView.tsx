@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "./AuthProvider";
 import { useToast } from "./Toast";
 import { LoginPanel } from "./LoginPanel";
@@ -45,6 +45,28 @@ export function AdminView() {
     });
     return () => sub.unsubscribe();
   }, [auth.status, auth.isAdmin]);
+
+  // New orders while the page is open: a short alert, and a badge on the app icon.
+  const seen = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    if (!orders || !synced) return;
+    const ids = new Set(orders.map((o) => o.id));
+    if (seen.current) {
+      const fresh = orders.filter((o) => !seen.current!.has(o.id) && o.status === "NEW");
+      if (fresh.length) {
+        toast({ id: "admin-new", message: `طلب جديد ${fresh[0].orderNumber} من ${fresh[0].name}` });
+        navigator.vibrate?.([120, 80, 120]);
+      }
+    }
+    seen.current = ids;
+  }, [orders, synced, toast]);
+
+  const newCount = orders?.filter((o) => o.status === "NEW").length ?? 0;
+  useEffect(() => {
+    const nav = navigator as Navigator & { setAppBadge?: (n: number) => Promise<void>; clearAppBadge?: () => Promise<void> };
+    if (newCount > 0) nav.setAppBadge?.(newCount).catch(() => {});
+    else nav.clearAppBadge?.().catch(() => {});
+  }, [newCount]);
 
   const today = baghdadDay(new Date().toISOString());
 
