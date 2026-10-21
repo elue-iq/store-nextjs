@@ -3,7 +3,7 @@ import type { Product } from "@/lib/products";
 import { Logo } from "./Logo";
 
 // Product visual.
-// With a photo: the jar photo, with the flavor's label band under it (kcal + no added sugar).
+// With a photo: just the photo, clean.
 // Without a photo: a drawn version of the printed jar label, so the site never shows an empty box.
 
 export function JarLabel({
@@ -40,7 +40,6 @@ export function JarLabel({
             preload={preload}
           />
         </div>
-        {band}
       </div>
     );
   }

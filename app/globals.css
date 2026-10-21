@@ -613,8 +613,6 @@ p {
   flex-direction: column;
   overflow: hidden;
   border-radius: var(--radius-label);
-  background: var(--band);
-  color: var(--cream);
 }
 
 .jar-photo__frame {
