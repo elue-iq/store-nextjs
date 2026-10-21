@@ -17,6 +17,15 @@ export const site = {
   currency: "د.ع",
 };
 
+// The site's public address, used for links shared to Google, WhatsApp and Instagram.
+// On Vercel this follows the production domain automatically (including a custom
+// domain once you add one). Set NEXT_PUBLIC_SITE_URL to override.
+export function siteUrl(): string {
+  if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, "");
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
+  return "http://localhost:3000";
+}
+
 export function formatIQD(amount: number): string {
   return `${amount.toLocaleString("en-US")} ${site.currency}`;
 }

@@ -44,6 +44,26 @@ Put the files in `public/products/` (e.g. `carrot.jpg`, roughly 1200×1500,
 portrait), then set `image: "/products/carrot.jpg"` on that product in
 `lib/products.ts`. Until a photo is set, the site draws the jar label.
 
+## Links for Instagram stories
+
+Each flavor has a short link that opens its product page:
+
+- `/dark-chocolate`, `/carrot`, `/hazelnut`, `/peanut-butter`
+
+Add `?ref=` to see where an order came from in Telegram, e.g.
+`/hazelnut?ref=story-oct` or `/carrot?ref=creatorname`.
+
+## Fonts and SEO
+
+- Fonts are self-hosted from npm (`@fontsource/tajawal`, `@fontsource-variable/bodoni-moda`),
+  so the site makes no request to Google Fonts.
+- Pages are pre-rendered to HTML at build time, so search engines see the full
+  content without running JavaScript.
+- `app/sitemap.ts` and `app/robots.ts` generate `/sitemap.xml` and `/robots.txt`.
+  Product pages include Google product data (price in IQD, photo, availability).
+- The public address comes from Vercel's production domain automatically.
+  Set `NEXT_PUBLIC_SITE_URL` only if you need to override it.
+
 ## How the code check works without a database
 
 `/api/send-code` creates a random code and sends it on WhatsApp. It returns a

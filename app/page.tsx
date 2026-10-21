@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { products, sharedPoints } from "@/lib/products";
 import { formatIQD, site } from "@/lib/site";
@@ -8,30 +9,45 @@ export default function Home() {
   return (
     <>
       <section className="hero">
-        <div className="hero__text">
-          <p className="hero__brand" dir="ltr">ÉLUE Truffles</p>
-          <h1>متعة الشوكولاتة، بحسابات أذكى</h1>
-          <p className="hero__lede">
-            أول براند ترافلز شوكولاتة قليل ومحسوب السعرات بالعراق. أربع نكهات، وسعرات كل قطعة مكتوبة على العلبة.
-          </p>
-          <a className="btn" href="#flavors">
-            اختاروا نكهتكم
-          </a>
+        <div className="hero__media">
+          <Image
+            src="/hero/truffle-fork.jpg"
+            alt="ترافل ÉLUE دارك چوكليت على شوكة والشوكولاتة تقطر منه"
+            fill
+            preload
+            sizes="(max-width: 900px) 100vw, 50vw"
+            className="hero__img"
+          />
         </div>
 
-        <ul className="hero-bands" aria-label="النكهات وسعرات القطعة">
-          {products.map((p) => (
-            <li key={p.slug}>
-              <Link href={`/products/${p.slug}`} style={{ "--band": p.band } as React.CSSProperties} dir="ltr">
-                <span className="hero-bands__name">{p.nameEn}</span>
-                <span className="hero-bands__kcal">
-                  <strong>{p.kcalPerPiece}</strong> kcal
-                  <small>average piece</small>
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <div className="hero__content">
+          <p className="hero__brand" dir="ltr">
+            ÉLUE Chocolate Truffles
+          </p>
+          <h1>متعة الشوكولاتة، بحسابات أذكى</h1>
+          <p className="hero__lede">
+            أول براند ترافلز شوكولاتة قليل ومحسوب السعرات بالعراق. بدون سكر مضاف، وسعرات كل قطعة مكتوبة على العلبة.
+          </p>
+          <div className="hero__actions">
+            <a className="btn btn--light" href="#flavors">
+              اختاروا نكهتكم
+            </a>
+            <a className="btn btn--outline-light" href="#how">
+              طريقة الطلب
+            </a>
+          </div>
+
+          <ul className="hero__flavors" aria-label="النكهات وسعرات القطعة">
+            {products.map((p) => (
+              <li key={p.slug}>
+                <Link href={`/products/${p.slug}`} dir="ltr">
+                  <span>{p.nameEn}</span>
+                  <strong>{p.kcalPerPiece} kcal</strong>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
       </section>
 
       <section id="flavors" className="section flavors">
@@ -99,7 +115,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="section how">
+      <section id="how" className="section how">
         <h2>طريقة الطلب</h2>
         <ol className="how__steps">
           <li>اختاروا النكهات وضيفوها للسلة.</li>

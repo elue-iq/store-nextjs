@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getProduct, products, sharedPoints } from "@/lib/products";
-import { formatIQD } from "@/lib/site";
+import { formatIQD, siteUrl } from "@/lib/site";
 import { JarLabel } from "@/components/JarLabel";
 import { ProductBuyBox } from "@/components/AddToCart";
 
@@ -18,9 +18,15 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const product = getProduct(slug);
   if (!product) return {};
+  const title = `${product.nameEn} Truffles`;
+  const description = `${product.nameAr}: ${product.kcalPerPiece} سعرة معدل القطعة، بدون سكر مضاف. ${formatIQD(product.price)} للعلبة.`;
+  const images = product.image ? [{ url: product.image, width: 1400, height: 1400, alt: `ÉLUE ${product.nameEn}` }] : undefined;
   return {
-    title: `${product.nameEn} Truffles`,
-    description: `${product.nameAr}: ${product.kcalPerPiece} سعرة معدل القطعة، بدون سكر مضاف.`,
+    title,
+    description,
+    alternates: { canonical: `/products/${product.slug}` },
+    openGraph: { title: `ÉLUE ${title}`, description, type: "website", locale: "ar_IQ", images },
+    twitter: { card: "summary_large_image", images: product.image ? [product.image] : undefined },
   };
 }
 
@@ -31,8 +37,30 @@ export default async function ProductPage({ params }: Props) {
 
   const others = products.filter((p) => p.slug !== product.slug);
 
+  // Product details for Google (price, availability, photo).
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: `ÉLUE ${product.nameEn} Chocolate Truffles`,
+    alternateName: product.nameAr,
+    image: product.image ? `${siteUrl()}${product.image}` : undefined,
+    description: `${product.taste}. ${product.kcalPerPiece} kcal average piece, no added sugar.`,
+    brand: { "@type": "Brand", name: "ÉLUE" },
+    offers: {
+      "@type": "Offer",
+      url: `${siteUrl()}/products/${product.slug}`,
+      price: product.price,
+      priceCurrency: "IQD",
+      availability: "https://schema.org/InStock",
+    },
+  };
+
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }}
+      />
       <section className="product">
         <div className="product__visual">
           <JarLabel product={product} size="large" preload />
