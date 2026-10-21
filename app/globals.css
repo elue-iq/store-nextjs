@@ -511,6 +511,50 @@ p {
   max-width: none;
 }
 
+/* Product photo with the flavor's label band under it */
+
+.jar-photo {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: var(--radius-label);
+  background: var(--band);
+  color: var(--cream);
+}
+
+.jar-photo__frame {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  background: #c98a67;
+}
+
+.jar-photo__img {
+  object-fit: cover;
+}
+
+.jar-photo .jar-label__band {
+  padding: 0.55rem 0.75rem 0.65rem;
+}
+
+.jar-photo--large {
+  border-radius: 18px;
+}
+
+.jar-photo--large .jar-label__band {
+  padding: 0.85rem 1.1rem 0.95rem;
+  font-size: clamp(0.82rem, 3.4vw, 1rem);
+}
+
+.jar-photo--large .jar-label__kcal {
+  display: block;
+  white-space: nowrap;
+}
+
+.jar-photo--large .jar-label__sugar {
+  max-width: none;
+  white-space: nowrap;
+}
+
 /* ---------- Flavors ---------- */
 
 .flavors__grid {

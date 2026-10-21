@@ -43,7 +43,7 @@ export default function Home() {
           {products.map((p, i) => (
             <article key={p.slug} className="flavor">
               <Link href={`/products/${p.slug}`} className="flavor__visual" aria-label={`${p.nameAr}: التفاصيل`}>
-                <JarLabel product={p} priority={i < 2} />
+                <JarLabel product={p} preload={i < 2} />
               </Link>
               <div className="flavor__meta">
                 <h3>

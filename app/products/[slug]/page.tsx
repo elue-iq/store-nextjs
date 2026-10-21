@@ -35,7 +35,7 @@ export default async function ProductPage({ params }: Props) {
     <>
       <section className="product">
         <div className="product__visual">
-          <JarLabel product={product} size="large" priority />
+          <JarLabel product={product} size="large" preload />
         </div>
         <div className="product__info">
           <Link href="/#flavors" className="back-link">

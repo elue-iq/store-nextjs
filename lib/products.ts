@@ -38,7 +38,7 @@ export const products: Product[] = [
     taste: "طعم الدارك چوكليت الغني بقوام كريمي",
     // CONFIRM: add this flavor's own points (chocolate origin, cocoa, fats).
     points: [],
-    image: null,
+    image: "/products/dark-chocolate.jpg",
   },
   {
     slug: "carrot",
@@ -51,7 +51,7 @@ export const products: Product[] = [
     taste: "طعم الوايت چوكليت المميز مع لذة الجزر",
     // CONFIRM: add this flavor's own points.
     points: [],
-    image: null,
+    image: "/products/carrot.jpg",
   },
   {
     slug: "hazelnut",
@@ -64,7 +64,7 @@ export const products: Product[] = [
     taste: "طعم الدارك چوكليت المميز مع لذة البندق",
     // CONFIRM: add this flavor's own points.
     points: [],
-    image: null,
+    image: "/products/hazelnut.jpg",
   },
   {
     slug: "peanut-butter",
@@ -80,7 +80,7 @@ export const products: Product[] = [
       "كاكاو هولندي خام",
       "بدائل سكر إسبانية المنشأ",
     ],
-    image: null,
+    image: "/products/peanut-butter.jpg",
   },
 ];
 
