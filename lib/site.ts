@@ -17,11 +17,17 @@ export const site = {
   currency: "د.ع",
 };
 
-// The site's public address, used for links shared to Google, WhatsApp and Instagram.
-// On Vercel this follows the production domain automatically (including a custom
-// domain once you add one). Set NEXT_PUBLIC_SITE_URL to override.
+// The site's public address. Link previews (WhatsApp, Instagram, Telegram,
+// Google) need full https addresses for the image and page, so this must be
+// right on every host:
+// 1. NEXT_PUBLIC_SITE_URL if set (use it for the real domain, e.g. https://elue-iq.com)
+// 2. AWS Amplify: the branch address, from the build's AWS_BRANCH / AWS_APP_ID
+// 3. Vercel: the production domain
 export function siteUrl(): string {
   if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, "");
+  if (process.env.AWS_APP_ID && process.env.AWS_BRANCH) {
+    return `https://${process.env.AWS_BRANCH.replace(/[^a-zA-Z0-9-]/g, "-")}.${process.env.AWS_APP_ID}.amplifyapp.com`;
+  }
   if (process.env.VERCEL_PROJECT_PRODUCTION_URL) return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
   return "http://localhost:3000";
 }
