@@ -64,6 +64,23 @@ Add `?ref=` to see where an order came from in Telegram, e.g.
 - The public address comes from Vercel's production domain automatically.
   Set `NEXT_PUBLIC_SITE_URL` only if you need to override it.
 
+## Checkout details
+
+- **Code:** 4 digits, valid for 5 minutes, sent on WhatsApp by OTPIQ. WhatsApp
+  fixes the wording of verification messages, so only the code can change.
+- **Wrong tries:** after 5 wrong codes the customer must request a new code.
+  This counter is kept in server memory (no database), so it's best-effort.
+  The firm limit is a Vercel Firewall rule (free on every plan):
+  Firewall → Configure → New Rule → if Request Path equals `/api/place-order`
+  → Rate Limit, Fixed Window 60s, 10 requests, key: IP → Default (429).
+- **Full name:** two words or more, letters only (`lib/validate.ts`, checked
+  in the browser and again on the server).
+- **Order summary PDF:** made in the browser after a successful order
+  (`lib/receipt.ts`) and saved automatically; the success screen also has a
+  download button and a WhatsApp button with the order already written.
+- **Alerts:** `components/Toast.tsx`. Cocoa for done, terracotta for
+  "needs your attention".
+
 ## How the code check works without a database
 
 `/api/send-code` creates a random code and sends it on WhatsApp. It returns a

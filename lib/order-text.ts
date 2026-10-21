@@ -29,12 +29,13 @@ export type OrderDetails = {
   note?: string;
 };
 
-// Plain text, used for the WhatsApp fallback message.
-export function buildWhatsAppText(details: OrderDetails, items: CartItem[]): string {
+// Plain text for WhatsApp. With an order number it's the "follow your order"
+// message sent after ordering; without one it's the fallback order message.
+export function buildWhatsAppText(details: OrderDetails, items: CartItem[], orderId?: string): string {
   const { lines, total } = priceCart(items);
   const rows = lines.map((l) => `${l.qty} × ${l.product.nameEn} (${l.product.nameAr})`);
   const text = [
-    "مرحباً ÉLUE، أريد أطلب:",
+    orderId ? `مرحباً ÉLUE، هذا طلبي رقم ${orderId}:` : "مرحباً ÉLUE، أريد أطلب:",
     ...rows,
     `المجموع: ${formatIQD(total)}`,
     "",

@@ -3,16 +3,40 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "./CartProvider";
+import { useToast } from "./Toast";
+import { getProduct } from "@/lib/products";
+
+// "علبة"، "علبتين"، "3 علب"، "11 علبة"
+export function jarsLabel(n: number): string {
+  if (n === 1) return "علبة";
+  if (n === 2) return "علبتين";
+  if (n <= 10) return `${n} علب`;
+  return `${n} علبة`;
+}
+
+function useAddWithToast() {
+  const { add } = useCart();
+  const toast = useToast();
+  return (slug: string, qty: number, withAction = true) => {
+    add(slug, qty);
+    const name = getProduct(slug)?.nameAr ?? "";
+    toast({
+      id: "cart",
+      message: qty > 1 ? `أضفنا ${jarsLabel(qty)} ${name} للسلة` : `أضفنا ${name} للسلة`,
+      action: withAction ? { label: "افتح السلة", href: "/order" } : undefined,
+    });
+  };
+}
 
 export function AddToCartButton({ slug, label = "أضف للسلة" }: { slug: string; label?: string }) {
-  const { add } = useCart();
+  const addWithToast = useAddWithToast();
   const [added, setAdded] = useState(false);
   return (
     <button
       type="button"
       className="btn btn--quiet"
       onClick={() => {
-        add(slug, 1);
+        addWithToast(slug, 1);
         setAdded(true);
         setTimeout(() => setAdded(false), 1600);
       }}
@@ -23,7 +47,7 @@ export function AddToCartButton({ slug, label = "أضف للسلة" }: { slug: s
 }
 
 export function ProductBuyBox({ slug }: { slug: string }) {
-  const { add } = useCart();
+  const addWithToast = useAddWithToast();
   const router = useRouter();
   const [qty, setQty] = useState(1);
   const [added, setAdded] = useState(false);
@@ -43,7 +67,7 @@ export function ProductBuyBox({ slug }: { slug: string }) {
         type="button"
         className="btn btn--quiet"
         onClick={() => {
-          add(slug, qty);
+          addWithToast(slug, qty);
           setAdded(true);
           setTimeout(() => setAdded(false), 1600);
         }}
@@ -54,7 +78,7 @@ export function ProductBuyBox({ slug }: { slug: string }) {
         type="button"
         className="btn"
         onClick={() => {
-          add(slug, qty);
+          addWithToast(slug, qty, false);
           router.push("/order");
         }}
       >

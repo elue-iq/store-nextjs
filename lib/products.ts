@@ -18,9 +18,12 @@ export type Product = {
   band: string;
   // First line of the product description: what it tastes like.
   taste: string;
-  // Flavor-specific points. Shared points (no added sugar, vegetables, calculated
-  // calories) are added on the product page for every flavor.
+  // Flavor-specific points. Shared points (no added sugar or fat, vegetables,
+  // no preservatives, calculated calories) are added on the product page for every flavor.
   points: string[];
+  // Main ingredients of this flavor, shown on the product page and in the
+  // ingredients section. Names only, no quantities.
+  ingredients: string[];
   image: string | null;
 };
 
@@ -38,6 +41,8 @@ export const products: Product[] = [
     taste: "طعم الدارك چوكليت الغني بقوام كريمي",
     // CONFIRM: add this flavor's own points (chocolate origin, cocoa, fats).
     points: [],
+    // CONFIRM: taken from the peanut butter description (Belgian chocolate, Dutch cocoa).
+    ingredients: ["خضار", "دارك شوكولاتة بلجيكية", "كاكاو هولندي خام", "بدائل سكر إسبانية المنشأ"],
     image: "/products/dark-chocolate.jpg",
   },
   {
@@ -51,6 +56,8 @@ export const products: Product[] = [
     taste: "طعم الوايت چوكليت المميز مع لذة الجزر",
     // CONFIRM: add this flavor's own points.
     points: [],
+    // CONFIRM: white chocolate comes from the old store description; confirm the rest.
+    ingredients: ["خضار", "جزر", "وايت چوكليت", "بدائل سكر إسبانية المنشأ"],
     image: "/products/carrot.jpg",
   },
   {
@@ -64,6 +71,8 @@ export const products: Product[] = [
     taste: "طعم الدارك چوكليت المميز مع لذة البندق",
     // CONFIRM: add this flavor's own points.
     points: [],
+    // CONFIRM: based on the peanut butter description with hazelnut in place of peanut.
+    ingredients: ["خضار", "دارك شوكولاتة بلجيكية", "بندق", "كاكاو هولندي خام", "بدائل سكر إسبانية المنشأ"],
     image: "/products/hazelnut.jpg",
   },
   {
@@ -75,21 +84,26 @@ export const products: Product[] = [
     band: "#7A6736",
     taste: "طعم الدارك چوكليت المميز مع لذة الفول السوداني المملح",
     points: [
-      "بدون زبدة أو دهون مضافة، وخالية من الزيوت المهدرجة",
+      "خالية من الزيوت المهدرجة",
       "دارك شوكولاتة بلجيكية بدون سكر مضاف",
       "كاكاو هولندي خام",
       "بدائل سكر إسبانية المنشأ",
     ],
+    ingredients: ["خضار", "دارك شوكولاتة بلجيكية", "فول سوداني مملح", "كاكاو هولندي خام", "بدائل سكر إسبانية المنشأ"],
     image: "/products/peanut-butter.jpg",
   },
 ];
 
 // Points that are true for every flavor.
 export const sharedPoints = [
-  "بدون سكر مضاف",
+  "بدون سكر مضاف، وبدون دهون أو زبدة مضافة",
   "ما لا يقل عن 60% خضار، وغنية بالألياف",
-  "سعرات محسوبة لكل قطعة، حتى تعرفون شنو تختارون",
+  "بدون مواد حافظة",
+  "قليلة ومحسوبة السعرات",
 ];
+
+// Flavors that contain nuts, for the allergy note.
+export const nutNote = "نكهة البندق بيها بندق، ونكهة الفول السوداني بيها فول سوداني.";
 
 export function getProduct(slug: string): Product | undefined {
   return products.find((p) => p.slug === slug);

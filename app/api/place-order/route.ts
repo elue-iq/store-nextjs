@@ -3,12 +3,14 @@ import { formatIraqiMobile, normalizeIraqiMobile, toLatinDigits } from "@/lib/ph
 import { priceCart, type CartItem } from "@/lib/order-text";
 import { formatIQD, site } from "@/lib/site";
 import { verifyOtpToken } from "@/lib/server/otp";
+import { CODE_LENGTH, checkFields, cleanName } from "@/lib/validate";
 import { escapeHtml, sendToTelegram } from "@/lib/server/telegram";
 
 // POST { token, code, name, phone, address, note?, items, source? }
-//  200 { orderId }                 -> Telegram confirmed the message
-//  400 { error: "code_invalid" | "code_expired" | "invalid_order" }
-//  502 { error: "send_failed", orderId } -> show the WhatsApp fallback
+//  200 { orderId, time }                  -> Telegram confirmed the message
+//  400 { error: "code_invalid" | "code_expired" | "code_locked" }
+//  400 { error: "invalid_order", fields? }  -> fields = { name?, phone?, address? } messages
+//  502 { error: "send_failed", orderId, time } -> show the WhatsApp fallback
 
 type Body = {
   token?: unknown;
@@ -34,25 +36,27 @@ export async function POST(req: Request) {
   const body = (await req.json().catch(() => ({}))) as Body;
 
   const phone = normalizeIraqiMobile(String(body.phone ?? ""));
-  const code = toLatinDigits(clean(body.code, 6));
+  const code = toLatinDigits(clean(body.code, CODE_LENGTH));
   const token = clean(body.token, 2000);
-  if (!phone || !token || !/^\d{6}$/.test(code)) {
+  if (!phone || !token || !new RegExp(`^\\d{${CODE_LENGTH}}$`).test(code)) {
     return NextResponse.json({ error: "code_invalid" }, { status: 400 });
   }
 
   const check = verifyOtpToken(token, phone, code);
   if (check === "expired") return NextResponse.json({ error: "code_expired" }, { status: 400 });
+  if (check === "locked") return NextResponse.json({ error: "code_locked" }, { status: 400 });
   if (check !== "ok") return NextResponse.json({ error: "code_invalid" }, { status: 400 });
 
-  const name = clean(body.name, 80);
+  const name = cleanName(clean(body.name, 80));
   const address = clean(body.address, 400);
   const note = clean(body.note, 400);
   const source = clean(body.source, 200);
   const items = Array.isArray(body.items) ? (body.items.slice(0, 10) as CartItem[]) : [];
   const { lines, total } = priceCart(items);
 
-  if (!name || address.length < 5 || lines.length === 0) {
-    return NextResponse.json({ error: "invalid_order" }, { status: 400 });
+  const fields = checkFields({ name, phone: String(body.phone ?? ""), address });
+  if (Object.keys(fields).length > 0 || lines.length === 0) {
+    return NextResponse.json({ error: "invalid_order", fields }, { status: 400 });
   }
 
   const orderId = makeOrderId();
@@ -91,13 +95,13 @@ export async function POST(req: Request) {
   if (!process.env.TELEGRAM_BOT_TOKEN || !process.env.TELEGRAM_CHAT_ID) {
     if (process.env.NODE_ENV !== "production") {
       console.log(`[dev] Order that would go to Telegram:\n${message}`);
-      return NextResponse.json({ orderId });
+      return NextResponse.json({ orderId, time });
     }
     console.error("TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID is missing");
-    return NextResponse.json({ error: "send_failed", orderId }, { status: 502 });
+    return NextResponse.json({ error: "send_failed", orderId, time }, { status: 502 });
   }
 
   const sent = await sendToTelegram(message);
-  if (sent) return NextResponse.json({ orderId });
-  return NextResponse.json({ error: "send_failed", orderId }, { status: 502 });
+  if (sent) return NextResponse.json({ orderId, time });
+  return NextResponse.json({ error: "send_failed", orderId, time }, { status: 502 });
 }

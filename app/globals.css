@@ -13,6 +13,8 @@
   --ink: #3b2a23;
   --muted: #6e584c;
   --olive: #626a50;
+  --sage: #e3e2d2;
+  --sage-deep: #4f563f;
   --error: #8f2f1f;
 
   --font-ar: "Cairo Variable", "Cairo", system-ui, -apple-system, "Segoe UI", Tahoma, sans-serif;
@@ -361,13 +363,6 @@ p {
   }
 }
 
-.hero__brand {
-  font-family: var(--font-display);
-  font-style: italic;
-  font-size: clamp(1.15rem, 2vw, 1.45rem);
-  color: var(--cream);
-  opacity: 0.92;
-}
 
 .hero h1 {
   color: var(--paper);
@@ -663,10 +658,12 @@ p {
   }
 }
 
+/* Each card is a column; the name/price block grows so every
+   "add to cart" button sits on the same line, even when a name wraps. */
 .flavor {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 0.75rem;
-  align-content: start;
 }
 
 .flavor__visual {
@@ -677,6 +674,9 @@ p {
 .flavor__meta {
   display: grid;
   gap: 0.1rem;
+  align-content: start;
+  flex: 1;
+  padding-bottom: 0.6rem;
 }
 
 .flavor__meta h3 a {
@@ -689,6 +689,7 @@ p {
 }
 
 .flavor .btn {
+  margin-top: auto;
   min-height: 2.6rem;
   padding: 0.4rem 1rem;
   font-size: 0.95rem;
@@ -731,38 +732,183 @@ p {
   color: var(--cocoa);
 }
 
-.calc {
+/* ---------- Ingredients ---------- */
+
+.ingredients__grid {
   display: grid;
-  gap: 0.9rem;
-  max-width: calc(62ch + 2 * var(--gutter));
+  gap: 1.6rem;
 }
 
-.calc p {
-  color: var(--muted);
-}
-
-.notes {
-  display: grid;
-  gap: 2rem;
-}
-
-@media (min-width: 900px) {
-  .notes {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 3rem;
+@media (min-width: 560px) {
+  .ingredients__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 2rem;
   }
 }
 
-.note {
+@media (min-width: 900px) {
+  .ingredients__grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.ingredient {
   display: grid;
-  gap: 0.5rem;
+  gap: 0.4rem;
   align-content: start;
   padding-top: 1.1rem;
   border-top: 3px solid var(--terracotta);
 }
 
-.note p {
+.ingredient p {
   color: var(--muted);
+}
+
+.ingredients__flavors {
+  margin-top: 2.8rem;
+}
+
+.ingredients__flavors h3 {
+  margin-bottom: 0.6rem;
+}
+
+.ingredients__flavors dl {
+  margin: 0;
+  border-top: 1.5px solid var(--cocoa);
+}
+
+.ingredients__flavors dl > div {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.85rem 0;
+  border-bottom: 1px solid var(--sand-deep);
+}
+
+@media (min-width: 700px) {
+  .ingredients__flavors dl > div {
+    grid-template-columns: minmax(10rem, 16rem) 1fr;
+    gap: 1.5rem;
+  }
+}
+
+.ingredients__flavors dt {
+  font-weight: 600;
+}
+
+.ingredients__flavors dt a {
+  text-decoration: none;
+}
+
+.ingredients__flavors dd {
+  margin: 0;
+  color: var(--muted);
+}
+
+.ingredients__allergy,
+.product__allergy {
+  margin-top: 1rem;
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+.ingredients__allergy strong,
+.product__allergy strong {
+  color: var(--cocoa);
+}
+
+/* ---------- Fridge card ---------- */
+
+.fridge {
+  display: grid;
+  gap: 2rem;
+  padding: clamp(1.75rem, 5vw, 3.5rem);
+  border-radius: 18px;
+  background: var(--terracotta-deep);
+  color: var(--paper);
+}
+
+@media (min-width: 900px) {
+  .fridge {
+    grid-template-columns: 1fr 1.2fr;
+    gap: 4rem;
+  }
+}
+
+.fridge h2 {
+  color: var(--paper);
+  font-size: clamp(1.9rem, 4vw, 3rem);
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.fridge__lede {
+  margin-top: 1rem;
+  font-size: 1.12rem;
+  opacity: 0.92;
+}
+
+.fridge__body {
+  display: grid;
+  gap: 1.2rem;
+  align-content: start;
+}
+
+.fridge__list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fridge__list li {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.85rem 0;
+  border-top: 1px solid color-mix(in srgb, var(--paper) 30%, transparent);
+}
+
+.fridge__list strong {
+  font-size: 1.05rem;
+}
+
+.fridge__list span {
+  opacity: 0.92;
+}
+
+.fridge__close {
+  padding-top: 1.1rem;
+  border-top: 1px solid color-mix(in srgb, var(--paper) 30%, transparent);
+  font-weight: 600;
+}
+
+/* ---------- Kids ---------- */
+
+.kids {
+  display: grid;
+  gap: 1.2rem;
+  padding: clamp(1.75rem, 5vw, 3.5rem);
+  border-radius: 18px;
+  background: var(--sage);
+}
+
+@media (min-width: 900px) {
+  .kids {
+    grid-template-columns: 1fr 1.2fr;
+    gap: 4rem;
+    align-items: start;
+  }
+}
+
+.kids h2 {
+  color: var(--sage-deep);
+  font-size: clamp(1.7rem, 3.4vw, 2.5rem);
+  font-weight: 700;
+}
+
+.kids__body {
+  display: grid;
+  gap: 0.9rem;
+  font-size: 1.08rem;
 }
 
 /* ---------- How to order ---------- */
@@ -1120,18 +1266,80 @@ p {
   text-align: left;
 }
 
-.code-input {
-  font-size: 1.6rem !important;
-  letter-spacing: 0.5em;
-  text-align: center !important;
+.order-form .has-error input,
+.order-form .has-error textarea {
+  border-color: var(--terracotta-deep);
+  background: #fff9f5;
 }
 
-.form-error {
-  padding: 0.7rem 0.9rem;
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--error) 9%, var(--paper));
-  color: var(--error);
-  font-size: 0.95rem;
+.field-error,
+.field-hint {
+  font-size: 0.9rem;
+  font-weight: 500;
+  line-height: 1.6;
+}
+
+.field-error {
+  color: var(--terracotta-deep);
+}
+
+.field-error::before {
+  content: "";
+  display: inline-block;
+  width: 0.45rem;
+  height: 0.45rem;
+  margin-inline-end: 0.45rem;
+  border-radius: 50%;
+  background: currentColor;
+  vertical-align: 0.12em;
+}
+
+.field-error--center {
+  text-align: center;
+}
+
+.field-hint {
+  color: var(--olive);
+}
+
+.sent-to {
+  display: grid;
+  gap: 0.15rem;
+  justify-items: start;
+  padding: 0.9rem 1rem;
+  border-radius: 12px;
+  background: var(--cream);
+}
+
+.sent-to__number {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--cocoa);
+  letter-spacing: 0.02em;
+}
+
+.code-boxes {
+  display: flex;
+  justify-content: center;
+  gap: 0.7rem;
+  margin: 0.4rem 0;
+}
+
+.order-form .code-box {
+  width: 3.7rem;
+  height: 4.2rem;
+  padding: 0;
+  border-radius: 12px;
+  font-size: 1.9rem;
+  font-weight: 700;
+  text-align: center;
+  color: var(--cocoa);
+  caret-color: var(--terracotta-deep);
+}
+
+.order-form .code-box[aria-invalid="true"] {
+  border-color: var(--terracotta-deep);
+  background: #fff9f5;
 }
 
 .dev-note {
@@ -1164,4 +1372,136 @@ p {
 
 .order-result h2 {
   font-size: clamp(1.6rem, 3.5vw, 2.2rem);
+}
+
+.order-result__id {
+  font-size: 1.15rem;
+}
+
+.order-result__id strong {
+  color: var(--terracotta-deep);
+  font-size: 1.35rem;
+}
+
+.order-result__muted {
+  color: var(--muted);
+}
+
+.order-result__actions {
+  display: grid;
+  gap: 0.7rem;
+  width: min(100%, 26rem);
+  margin-top: 0.4rem;
+}
+
+.order-result__home {
+  justify-self: center;
+  margin-top: 0.3rem;
+}
+
+/* ---------- Alerts (top of screen) ---------- */
+
+.toasts {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  inset-inline: 12px;
+  z-index: 100;
+  display: grid;
+  gap: 0.5rem;
+  justify-items: center;
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  width: min(100%, 28rem);
+  padding: 0.7rem 0.75rem 0.7rem 0.6rem;
+  border-radius: 14px;
+  color: var(--paper);
+  box-shadow: 0 10px 30px rgba(59, 42, 35, 0.22);
+  pointer-events: auto;
+  animation: toast-in 0.22s ease-out;
+}
+
+.toast--done {
+  background: var(--cocoa);
+}
+
+.toast--attention {
+  background: var(--terracotta-deep);
+}
+
+.toast__icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 50%;
+  background: var(--paper);
+  font-weight: 800;
+  line-height: 1;
+}
+
+.toast--done .toast__icon {
+  color: var(--cocoa);
+}
+
+.toast--attention .toast__icon {
+  color: var(--terracotta-deep);
+}
+
+.toast__message {
+  flex: 1;
+  font-size: 0.97rem;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.toast__action {
+  flex: none;
+  padding: 0.3rem 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--paper) 60%, transparent);
+  border-radius: 999px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.toast__close {
+  flex: none;
+  width: 1.8rem;
+  height: 1.8rem;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  font-size: 1.3rem;
+  line-height: 1;
+  opacity: 0.8;
+  cursor: pointer;
+}
+
+.toast__close:hover {
+  opacity: 1;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation: none;
+  }
 }

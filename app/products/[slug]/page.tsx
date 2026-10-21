@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getProduct, products, sharedPoints } from "@/lib/products";
+import { getProduct, nutNote, products, sharedPoints } from "@/lib/products";
 import { formatIQD, siteUrl } from "@/lib/site";
 import { JarLabel } from "@/components/JarLabel";
 import { ProductBuyBox } from "@/components/AddToCart";
@@ -91,8 +91,16 @@ export default async function ProductPage({ params }: Props) {
             ))}
           </ul>
 
+          <h2 className="product__subhead">المكونات الرئيسية</h2>
+          <p>{product.ingredients.join("، ")}.</p>
+          {(product.slug === "hazelnut" || product.slug === "peanut-butter") && (
+            <p className="product__allergy">
+              <strong>للحساسية:</strong> {nutNote}
+            </p>
+          )}
+
           <h2 className="product__subhead">طازجة، ومكانها الثلاجة</h2>
-          <p>ما نحفظها بالسكر ولا بالمواد الحافظة، نحفظها بالبرودة.</p>
+          <p>ما بيها سكر مضاف ولا مواد حافظة تحفظها، فنحفظها بالبرودة.</p>
         </div>
       </section>
 

@@ -1,9 +1,19 @@
 import Image from "next/image";
 import Link from "next/link";
-import { products, sharedPoints } from "@/lib/products";
+import { nutNote, products, sharedPoints } from "@/lib/products";
 import { formatIQD, site } from "@/lib/site";
 import { JarLabel } from "@/components/JarLabel";
 import { AddToCartButton } from "@/components/AddToCart";
+
+const ingredients = [
+  {
+    title: "خضار، ما لا يقل عن 60%",
+    text: "نحضّرها ونطبخها ونجففها بأيدينا، 12 ساعة على الأقل، قبل ما تصير ترافلز.",
+  },
+  { title: "شوكولاتة بلجيكية", text: "دارك شوكولاتة بلجيكية بدون سكر مضاف." },
+  { title: "كاكاو هولندي خام", text: "للطعم الغني والعميق." },
+  { title: "بدائل سكر إسبانية المنشأ", text: "للحلاوة، بدل السكر." },
+];
 
 export default function Home() {
   return (
@@ -21,12 +31,10 @@ export default function Home() {
         </div>
 
         <div className="hero__content">
-          <p className="hero__brand" dir="ltr">
-            ÉLUE Chocolate Truffles
-          </p>
           <h1>متعة الشوكولاتة، بحسابات أذكى</h1>
           <p className="hero__lede">
-            أول براند ترافلز شوكولاتة قليل ومحسوب السعرات بالعراق. بدون سكر مضاف، وسعرات كل قطعة مكتوبة على العلبة.
+            أول براند ترافلز شوكولاتة قليل ومحسوب السعرات بالعراق. بدون سكر مضاف، بدون دهون أو زبدة مضافة، وبدون مواد
+            حافظة.
           </p>
           <div className="hero__actions">
             <a className="btn btn--light" href="#flavors">
@@ -92,26 +100,86 @@ export default function Home() {
         </ul>
       </section>
 
-      <section className="section calc">
-        <h2>ليش مكتوب «معدل القطعة»؟</h2>
-        <p>
-          نحسب سعرات الوصفة كاملة، مكوّن مكوّن، ونقسمها على عدد القطع. أوزان القطع متقاربة بس مو متطابقة، لهذا نكتب
-          المعدّل بدل رقم ثابت لكل قطعة.
-        </p>
+      <section className="section ingredients" aria-labelledby="ingredients-title">
+        <div className="section__head">
+          <h2 id="ingredients-title">
+            شنو بداخل <span dir="ltr">ÉLUE</span>
+          </h2>
+          <p>مكونات قليلة، وكل وحدة إلها سبب.</p>
+        </div>
+        <div className="ingredients__grid">
+          {ingredients.map((item) => (
+            <div key={item.title} className="ingredient">
+              <h3>{item.title}</h3>
+              <p>{item.text}</p>
+            </div>
+          ))}
+        </div>
+        <div className="ingredients__flavors">
+          <h3>مكونات كل نكهة</h3>
+          <dl>
+            {products.map((p) => (
+              <div key={p.slug}>
+                <dt>
+                  <Link href={`/products/${p.slug}`}>{p.nameAr}</Link>
+                </dt>
+                <dd>{p.ingredients.join("، ")}</dd>
+              </div>
+            ))}
+          </dl>
+          <p className="ingredients__allergy">
+            <strong>للحساسية:</strong> {nutNote}
+          </p>
+        </div>
       </section>
 
-      <section className="section notes">
-        <div className="note">
-          <h3>12 ساعة على الأقل، بكل حب</h3>
-          <p>نحضّر الخضار ونطبخها ونجففها بأيدينا قبل ما تصير ترافلز.</p>
+      <section className="section" aria-labelledby="fridge-title">
+        <div className="fridge">
+          <div className="fridge__head">
+            <h2 id="fridge-title">
+              يخرب برّا البراد،
+              <br />
+              ونقولها بفخر
+            </h2>
+            <p className="fridge__lede">لأن الشي اللي يخلي الحلو يعيش أسابيع على الرف، إحنا ما نحطه.</p>
+          </div>
+          <div className="fridge__body">
+            <p>
+              كل أكل بيه ماي، والماي «الحر» بالأكل هو اللي تعيش عليه البكتيريا والعفن. العلماء يقيسونه بشي اسمه{" "}
+              <strong>النشاط المائي</strong>: كل ما قل الماي الحر، عاش الأكل أطول برّا البراد.
+            </p>
+            <ul className="fridge__list">
+              <li>
+                <strong>السكر</strong>
+                <span>يمسك جزيئات الماي ويربطها، فما يبقى ماي حر للبكتيريا. لهذا المربى يعيش شهور.</span>
+              </li>
+              <li>
+                <strong>الزبدة والدهون</strong>
+                <span>تاخذ مكان الماي بالوصفة، فيقل الماي من الأساس.</span>
+              </li>
+              <li>
+                <strong>المواد الحافظة</strong>
+                <span>توقف البكتيريا اللي تحاول تعيش على الماي الباقي.</span>
+              </li>
+            </ul>
+            <p className="fridge__close">
+              ترافلز <span dir="ltr">ÉLUE</span> ما بيها سكر مضاف، ولا دهون أو زبدة مضافة، ولا مواد حافظة، وما لا يقل
+              عن 60% منها خضار. ما عدنا شي يحفظها غير البرودة، لهذا مكانها الثلاجة.
+            </p>
+          </div>
         </div>
-        <div className="note">
-          <h3>طازجة، ومكانها الثلاجة</h3>
-          <p>ما نحفظها بالسكر ولا بالمواد الحافظة، نحفظها بالبرودة.</p>
-        </div>
-        <div className="note">
-          <h3>خيار تطمّنون بيه لعائلتكم</h3>
-          <p>اهتمينا بكل تفصيلة فيها، من المكونات إلى السعرات، حتى تقدمونها لعائلتكم وإنتو مرتاحين.</p>
+      </section>
+
+      <section className="section" aria-labelledby="kids-title">
+        <div className="kids">
+          <h2 id="kids-title">لأطفالكم: حلو بدون حيرة</h2>
+          <div className="kids__body">
+            <p>الأطفال مظلومين ويا الحلو: تنطوهم ويبقى بالكم باللي بيه، ما تنطوهم ويزعلون. حيرة يعرفها كل أهل.</p>
+            <p>
+              ترافلز <span dir="ltr">ÉLUE</span> تخلّص هالحيرة: بدون سكر مضاف، وبدون مواد حافظة، وما لا يقل عن 60% منها
+              خضار نحضّرها بأيدينا. قطعة يفرح بيها طفلكم، وإنتو مطمّنين على كل شي بيها.
+            </p>
+          </div>
         </div>
       </section>
 
@@ -119,7 +187,7 @@ export default function Home() {
         <h2>طريقة الطلب</h2>
         <ol className="how__steps">
           <li>اختاروا النكهات وضيفوها للسلة.</li>
-          <li>اكتبوا اسمكم ورقم الواتساب والعنوان.</li>
+          <li>اكتبوا اسمكم الكامل ورقم الواتساب والعنوان.</li>
           <li>أكدوا الطلب بالرمز اللي يوصلكم على الواتساب، ونتواصل وياكم للتوصيل.</li>
         </ol>
         <p className="how__note">{site.paymentNote}.</p>
