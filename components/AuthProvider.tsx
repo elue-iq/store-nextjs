@@ -14,12 +14,9 @@ import { logOut } from "@/lib/auth-flow";
 // AWS credentials) is left out on purpose: fetching those credentials is an
 // extra network step that can fail, and a failure there must never look like
 // "logged out".
-const config = JSON.parse(JSON.stringify(outputs)) as typeof outputs & {
-  auth: { identity_pool_id?: string; unauthenticated_identities_enabled?: boolean };
-};
-delete config.auth.identity_pool_id;
-config.auth.unauthenticated_identities_enabled = false;
-Amplify.configure(config);
+const auth: Record<string, unknown> = { ...outputs.auth, unauthenticated_identities_enabled: false };
+delete auth.identity_pool_id;
+Amplify.configure({ ...outputs, auth } as typeof outputs);
 
 type Identity = { phone: string; owner: string; isAdmin: boolean };
 
