@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { formatIraqiMobile, normalizeIraqiMobile, toLatinDigits } from "@/lib/phone";
 import { priceCart, type CartItem } from "@/lib/order-text";
-import { formatIQD } from "@/lib/site";
+import { formatIQD, site } from "@/lib/site";
 import { verifyOtpToken } from "@/lib/server/otp";
 import { escapeHtml, sendToTelegram } from "@/lib/server/telegram";
 
@@ -56,24 +56,33 @@ export async function POST(req: Request) {
   }
 
   const orderId = makeOrderId();
-  const time = new Intl.DateTimeFormat("en-GB", {
+  // e.g. 2026-10-21 18:36 (Baghdad time)
+  const time = new Intl.DateTimeFormat("sv-SE", {
     timeZone: "Asia/Baghdad",
     dateStyle: "short",
     timeStyle: "short",
   }).format(new Date());
+  const jars = lines.reduce((n, l) => n + l.qty, 0);
+
+  // Telegram shows this message right-to-left. Numbers, phone and English
+  // flavor names are wrapped in Unicode isolates so they don't get reversed
+  // (without this, 0771 633 5533 shows as 5533 633 0771).
+  const ltr = (s: string) => `⁦${s}⁩`;
 
   const message = [
-    `<b>طلب جديد ${orderId}</b>`,
+    `<b>طلب جديد ${ltr(orderId)}</b>`,
     "",
-    ...lines.map((l) => `${l.qty} × ${escapeHtml(l.product.nameEn)} — ${formatIQD(l.subtotal)}`),
+    ...lines.map((l) => `• ${ltr(`${l.qty} × ${escapeHtml(l.product.nameEn)}`)} — ${formatIQD(l.subtotal)}`),
+    `عدد العلب: ${jars}`,
     `<b>المجموع: ${formatIQD(total)}</b>`,
+    site.paymentNote,
     "",
     `الاسم: ${escapeHtml(name)}`,
-    `الرقم: <a href="https://wa.me/${phone}">${formatIraqiMobile(phone)}</a>`,
+    `الرقم: <a href="https://wa.me/${phone}">${ltr(formatIraqiMobile(phone))}</a>`,
     `العنوان: ${escapeHtml(address)}`,
     note ? `ملاحظة: ${escapeHtml(note)}` : null,
-    source ? `المصدر: ${escapeHtml(source)}` : null,
-    `الوقت: ${time}`,
+    source ? `المصدر: ${ltr(escapeHtml(source))}` : null,
+    `الوقت: ${ltr(time)}`,
   ]
     .filter((line) => line !== null)
     .join("\n");
