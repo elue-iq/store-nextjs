@@ -6,6 +6,7 @@ import "@fontsource-variable/bodoni-moda/opsz-italic.css";
 import "./globals.css";
 import { CartProvider } from "@/components/CartProvider";
 import { ToastProvider } from "@/components/Toast";
+import { AuthProvider } from "@/components/AuthProvider";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { siteUrl } from "@/lib/site";
@@ -38,11 +39,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="ar" dir="rtl">
       <body>
         <ToastProvider>
-          <CartProvider>
-            <Header />
-            <main>{children}</main>
-            <Footer />
-          </CartProvider>
+          <AuthProvider>
+            <CartProvider>
+              <Header />
+              <main>{children}</main>
+              <Footer />
+            </CartProvider>
+          </AuthProvider>
         </ToastProvider>
       </body>
     </html>

@@ -24,7 +24,7 @@ export default function Home() {
             src="/hero/truffle-fork.jpg"
             alt="ترافل ÉLUE دارك چوكليت على شوكة والشوكولاتة تقطر منه"
             fill
-            preload
+            priority
             sizes="(max-width: 900px) 100vw, 50vw"
             className="hero__img"
           />

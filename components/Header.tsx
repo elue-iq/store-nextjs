@@ -14,6 +14,7 @@ export function Header() {
         </Link>
         <nav className="site-header__nav" aria-label="القائمة">
           <Link href="/#flavors">النكهات</Link>
+          <Link href="/account">طلباتي</Link>
           <Link href="/order" className="cart-link">
             السلة
             <span className="cart-link__count" aria-label={`${count} قطع في السلة`}>

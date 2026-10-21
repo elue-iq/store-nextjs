@@ -37,7 +37,7 @@ export function JarLabel({
             fill
             sizes={size === "large" ? "(max-width: 900px) 100vw, 50vw" : "(max-width: 900px) 50vw, 25vw"}
             className="jar-photo__img"
-            preload={preload}
+            priority={preload}
           />
         </div>
       </div>

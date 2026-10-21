@@ -1,0 +1,76 @@
+// Telegram order message. Used by the place-order function (AWS Lambda).
+// Plain TypeScript with relative imports only, so it bundles into the function.
+
+import { formatIraqiMobile } from "./phone";
+import { formatIQD, site } from "./site";
+import type { OrderLine } from "./order-text";
+
+export function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// Telegram shows the message right-to-left. Numbers, the phone and English
+// flavor names are wrapped in Unicode isolates so they keep their order.
+const ltr = (s: string) => `⁦${s}⁩`;
+
+export function buildOrderMessage(o: {
+  orderNumber: string;
+  time: string;
+  lines: OrderLine[];
+  total: number;
+  name: string;
+  phone: string; // 9647XXXXXXXXX
+  address: string;
+  note?: string | null;
+  source?: string | null;
+  returning: boolean;
+}): string {
+  const jars = o.lines.reduce((n, l) => n + l.qty, 0);
+  return [
+    `<b>طلب جديد ${ltr(o.orderNumber)}</b>${o.returning ? " · زبون راجع" : ""}`,
+    "",
+    ...o.lines.map((l) => `• ${ltr(`${l.qty} × ${escapeHtml(l.product.nameEn)}`)} — ${formatIQD(l.subtotal)}`),
+    `عدد العلب: ${jars}`,
+    `<b>المجموع: ${formatIQD(o.total)}</b>`,
+    site.paymentNote,
+    "",
+    `الاسم: ${escapeHtml(o.name)}`,
+    `الرقم: <a href="https://wa.me/${o.phone}">${ltr(formatIraqiMobile(o.phone))}</a>`,
+    `العنوان: ${escapeHtml(o.address)}`,
+    o.note ? `ملاحظة: ${escapeHtml(o.note)}` : null,
+    o.source ? `المصدر: ${ltr(escapeHtml(o.source))}` : null,
+    `الوقت: ${ltr(o.time)}`,
+  ]
+    .filter((line) => line !== null)
+    .join("\n");
+}
+
+const RETRY_DELAYS_MS = [0, 800, 2000];
+
+export async function sendToTelegram(token: string, chatId: string, html: string): Promise<boolean> {
+  if (!token || !chatId) return false;
+  for (const delay of RETRY_DELAYS_MS) {
+    if (delay) await new Promise((r) => setTimeout(r, delay));
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: html,
+          parse_mode: "HTML",
+          link_preview_options: { is_disabled: true },
+        }),
+        signal: AbortSignal.timeout(8_000),
+      });
+      if (res.ok) return true;
+      if (res.status >= 400 && res.status < 500 && res.status !== 429) {
+        console.error("Telegram rejected the message:", res.status, await res.text().catch(() => ""));
+        return false;
+      }
+    } catch (err) {
+      console.error("Telegram request failed:", err);
+    }
+  }
+  return false;
+}

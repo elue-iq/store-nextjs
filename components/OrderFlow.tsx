@@ -4,22 +4,25 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useCart } from "./CartProvider";
 import { useToast } from "./Toast";
+import { useAuth } from "./AuthProvider";
 import { jarsLabel } from "./AddToCart";
 import { CodeInput, type CodeInputHandle } from "./CodeInput";
 import { buildWhatsAppText, priceCart, type CartItem } from "@/lib/order-text";
-import { formatIraqiMobile, normalizeIraqiMobile, toLatinDigits } from "@/lib/phone";
+import { formatIraqiMobile, normalizeIraqiMobile } from "@/lib/phone";
 import { formatIQD, site } from "@/lib/site";
 import { CODE_LENGTH, ltr, addressError, checkFields, cleanName, nameError, phoneError, type Field, type FieldErrors } from "@/lib/validate";
-import type { ReceiptData } from "@/lib/receipt";
+import { confirmLoginCode, sendLoginCode } from "@/lib/auth-flow";
+import { dataClient, errorCode, errorFields, newestFirst } from "@/lib/data";
 
 type Step = "details" | "code" | "sent" | "failed";
 
 type Placed = {
-  orderId: string;
-  time: string;
+  orderNumber: string;
+  createdAt: string;
   items: CartItem[];
+  total: number;
   name: string;
-  phoneDisplay: string;
+  phone: string;
   address: string;
   note: string;
 };
@@ -27,44 +30,12 @@ type Placed = {
 const RESEND_SECONDS = 60;
 const FIELD_ORDER: Field[] = ["name", "phone", "address"];
 
-async function postJson(url: string, body: unknown): Promise<{ status: number; data: Record<string, unknown> }> {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-  return { status: res.status, data };
-}
-
-function baghdadNow(): string {
-  return new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Baghdad", dateStyle: "short", timeStyle: "short" }).format(new Date());
-}
-
-function toReceipt(p: Placed): ReceiptData {
-  const { lines, total } = priceCart(p.items);
-  return {
-    orderId: p.orderId,
-    time: p.time,
-    lines: lines.map((l) => ({
-      nameAr: l.product.nameAr,
-      nameEn: l.product.nameEn,
-      qty: l.qty,
-      price: l.product.price,
-      subtotal: l.subtotal,
-    })),
-    total,
-    name: p.name,
-    phoneDisplay: p.phoneDisplay,
-    address: p.address,
-    note: p.note || undefined,
-  };
-}
-
 export function OrderFlow() {
   const cart = useCart();
   const toast = useToast();
+  const auth = useAuth();
   const { lines, total } = priceCart(cart.items);
+  const signedIn = auth.status === "signedIn";
 
   const [step, setStep] = useState<Step>("details");
   const [name, setName] = useState("");
@@ -73,17 +44,15 @@ export function OrderFlow() {
   const [note, setNote] = useState("");
   const [errors, setErrors] = useState<FieldErrors>({});
 
-  const [token, setToken] = useState("");
   const [code, setCode] = useState("");
   const [codeError, setCodeError] = useState("");
-  const [devCode, setDevCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [resendIn, setResendIn] = useState(0);
 
   const [placed, setPlaced] = useState<Placed | null>(null);
   const [pdfSaved, setPdfSaved] = useState(false);
-  const pdfBlob = useRef<Blob | null>(null);
   const autoSaveStarted = useRef(false);
+  const prefilled = useRef(false);
 
   const inputs = {
     name: useRef<HTMLInputElement>(null),
@@ -93,7 +62,8 @@ export function OrderFlow() {
   const codeBoxes = useRef<CodeInputHandle>(null);
   const focusPhoneNext = useRef(false);
 
-  const phone = normalizeIraqiMobile(phoneInput);
+  // Logged-in customers order with their account number; others type it.
+  const phone = signedIn ? auth.phone : normalizeIraqiMobile(phoneInput);
   const phoneDisplay = phone ? formatIraqiMobile(phone) : "";
 
   useEffect(() => {
@@ -110,29 +80,44 @@ export function OrderFlow() {
     }
   });
 
-  // ---- PDF ---------------------------------------------------------------
+  // Returning customers: fill name and address from their last order.
+  useEffect(() => {
+    if (!signedIn || !auth.owner || prefilled.current) return;
+    prefilled.current = true;
+    dataClient.models.Order.listOrderByOwner({ owner: auth.owner }, { selectionSet: ["name", "address", "createdAt"] })
+      .then(({ data }) => {
+        const last = [...(data ?? [])].sort(newestFirst)[0];
+        if (!last) return;
+        setName((v) => v || last.name);
+        setAddress((v) => v || last.address);
+      })
+      .catch(() => {});
+  }, [signedIn, auth.owner]);
 
-  const getPdf = useCallback(async (p: Placed) => {
-    if (pdfBlob.current) return pdfBlob.current;
-    const { buildReceiptPdf } = await import("@/lib/receipt");
-    pdfBlob.current = await buildReceiptPdf(toReceipt(p));
-    return pdfBlob.current;
-  }, []);
+  // ---- PDF ---------------------------------------------------------------
 
   const savePdf = useCallback(
     async (p: Placed, automatic: boolean) => {
       try {
-        const blob = await getPdf(p);
-        const { downloadBlob, receiptFilename } = await import("@/lib/receipt");
-        downloadBlob(blob, receiptFilename(p.orderId));
+        const { lines: priced } = priceCart(p.items);
+        const { saveOrderPdf } = await import("@/lib/receipt");
+        await saveOrderPdf({
+          orderNumber: p.orderNumber,
+          createdAt: p.createdAt,
+          items: priced.map((l) => ({ nameAr: l.product.nameAr, nameEn: l.product.nameEn, qty: l.qty, price: l.product.price })),
+          total: p.total,
+          name: p.name,
+          phone: p.phone,
+          address: p.address,
+          note: p.note,
+        });
         setPdfSaved(true);
-        // The automatic save replaces the "order received" alert so the screen stays clear.
         toast({ id: automatic ? "checkout" : "pdf", message: automatic ? "حفظنا ملخص طلبكم على جهازكم (PDF)" : "نزّلنا ملخص الطلب (PDF)" });
       } catch {
         if (!automatic) toast({ id: "pdf", tone: "attention", message: "ما گدرنا نجهز الملف هسه. حاولوا مرة ثانية." });
       }
     },
-    [getPdf, toast],
+    [toast],
   );
 
   useEffect(() => {
@@ -145,7 +130,7 @@ export function OrderFlow() {
   // ---- Fields ------------------------------------------------------------
 
   const fieldCheck: Record<Field, (v: string) => string | null> = { name: nameError, phone: phoneError, address: addressError };
-  const fieldValue: Record<Field, string> = { name, phone: phoneInput, address };
+  const fieldValue: Record<Field, string> = { name, phone: signedIn ? auth.phone : phoneInput, address };
 
   function recheck(field: Field, value: string, always: boolean) {
     if (!always && !errors[field]) return;
@@ -167,43 +152,40 @@ export function OrderFlow() {
 
   // ---- Actions -----------------------------------------------------------
 
-  async function sendCode(isResend: boolean) {
-    if (!isResend) {
-      const found = checkFields({ name, phone: phoneInput, address });
-      if (Object.keys(found).length) return showFieldErrors(found);
-    }
-    if (!phone) return;
+  async function submitDetails() {
+    const found = checkFields({ name, phone: fieldValue.phone, address });
+    if (Object.keys(found).length) return showFieldErrors(found);
+    if (signedIn) return placeNow();
+    await sendCode(false);
+  }
 
+  async function sendCode(isResend: boolean) {
+    if (!phone) return;
     setBusy(true);
-    try {
-      const { status, data } = await postJson("/api/send-code", { phone });
-      if (status === 200 && typeof data.token === "string") {
-        setToken(data.token);
-        setDevCode(typeof data.devCode === "string" ? data.devCode : "");
-        setCode("");
-        setCodeError("");
-        setStep("code");
-        setResendIn(RESEND_SECONDS);
-        toast({ id: "checkout", message: isResend ? "أرسلنا رمز جديد على الواتساب" : `أرسلنا الرمز على الواتساب للرقم ${ltr(phoneDisplay)}` });
-        codeBoxes.current?.clear();
-      } else if (status === 429) {
-        toast({ id: "checkout", tone: "attention", message: `طلبتوا رموز كثيرة لهذا الرقم. حاولوا بعد ${Number(data.waitMinutes) || 10} دقائق.` });
-      } else if (data.error === "invalid_phone") {
-        setStep("details");
-        showFieldErrors({ phone: phoneError("x") ?? "" });
-      } else {
-        toast({ id: "checkout", tone: "attention", message: "ما گدرنا نرسل الرمز هسه. تأكدوا من الرقم وحاولوا بعد شوية." });
-      }
-    } catch {
-      toast({ id: "checkout", tone: "attention", message: "ماكو اتصال بالإنترنت. تأكدوا من الاتصال وحاولوا مرة ثانية." });
-    } finally {
-      setBusy(false);
+    const result = await sendLoginCode(phone);
+    setBusy(false);
+    if (result === "sent") {
+      setCode("");
+      setCodeError("");
+      setStep("code");
+      setResendIn(RESEND_SECONDS);
+      codeBoxes.current?.clear();
+      toast({
+        id: "checkout",
+        message: isResend ? "أرسلنا رمز جديد على الواتساب" : `أرسلنا الرمز على الواتساب للرقم ${ltr(phoneDisplay)}`,
+      });
+    } else if (result === "rate_limited") {
+      toast({ id: "checkout", tone: "attention", message: "طلبتوا رموز كثيرة لهذا الرقم. حاولوا بعد 10 دقائق." });
+    } else if (result === "invalid_phone") {
+      setStep("details");
+      showFieldErrors({ phone: phoneError("x") ?? "" });
+    } else {
+      toast({ id: "checkout", tone: "attention", message: "ما گدرنا نرسل الرمز هسه. تأكدوا من الرقم وحاولوا بعد شوية." });
     }
   }
 
   function changeNumber() {
     setStep("details");
-    setToken("");
     setCode("");
     setCodeError("");
     setResendIn(0);
@@ -211,70 +193,70 @@ export function OrderFlow() {
     toast({ id: "checkout", message: "عدّلوا رقم الواتساب وأرسلوا رمز جديد" });
   }
 
-  async function placeOrder(codeValue: string) {
-    const digits = toLatinDigits(codeValue).replace(/\D/g, "");
-    if (digits.length !== CODE_LENGTH) {
-      setCodeError(`الرمز يتكون من ${CODE_LENGTH} أرقام.`);
-      return;
+  async function confirmCode(value: string) {
+    if (busy || value.length !== CODE_LENGTH) return;
+    setBusy(true);
+    const result = await confirmLoginCode(value);
+    setBusy(false);
+    if (result === "ok") {
+      await auth.refresh();
+      await placeNow();
+    } else if (result === "wrong") {
+      setCodeError("الرمز غير صحيح. تأكدوا منه وجربوا مرة ثانية.");
+      codeBoxes.current?.clear();
+      toast({ id: "checkout", tone: "attention", message: "الرمز غير صحيح" });
+    } else {
+      setCodeError("انتهت صلاحية الرمز أو جربتوه أكثر من مرة. اطلبوا رمز جديد.");
+      setResendIn(0);
+      codeBoxes.current?.clear();
+      toast({ id: "checkout", tone: "attention", message: "اطلبوا رمز جديد حتى تكملون" });
     }
-    if (busy) return;
+  }
 
-    const snapshot: Omit<Placed, "orderId" | "time"> = {
+  async function placeNow() {
+    const snapshot = {
       items: cart.items,
+      total,
       name: cleanName(name),
-      phoneDisplay,
+      phone: phone ?? "",
       address: address.trim(),
       note: note.trim(),
     };
-
     setBusy(true);
-    setCodeError("");
     try {
-      const { status, data } = await postJson("/api/place-order", {
-        token,
-        code: digits,
+      const { data, errors: gqlErrors } = await dataClient.mutations.placeOrder({
         name: snapshot.name,
-        phone,
         address: snapshot.address,
-        note: snapshot.note,
-        items: cart.items,
-        source: cart.source,
+        note: snapshot.note || undefined,
+        source: cart.source || undefined,
+        items: JSON.stringify(cart.items),
       });
-      const orderId = typeof data.orderId === "string" ? data.orderId : "";
-      const time = typeof data.time === "string" ? data.time : baghdadNow();
-
-      if (status === 200 && orderId) {
-        setPlaced({ ...snapshot, orderId, time });
+      if (data?.orderNumber) {
+        setPlaced({ ...snapshot, orderNumber: data.orderNumber, createdAt: data.createdAt });
         setStep("sent");
         cart.clear();
-        toast({ id: "checkout", message: `وصلنا طلبكم رقم ${ltr(orderId)}` });
+        toast({ id: "checkout", message: `وصلنا طلبكم رقم ${ltr(data.orderNumber)}` });
         window.scrollTo({ top: 0 });
-      } else if (data.error === "code_invalid") {
-        setCodeError("الرمز غير صحيح. تأكدوا منه وجربوا مرة ثانية.");
-        toast({ id: "checkout", tone: "attention", message: "الرمز غير صحيح" });
-        codeBoxes.current?.clear();
-      } else if (data.error === "code_expired") {
-        setCodeError("انتهت صلاحية الرمز. اطلبوا رمز جديد.");
-        setResendIn(0);
-        toast({ id: "checkout", tone: "attention", message: "انتهت صلاحية الرمز" });
-      } else if (data.error === "code_locked" || status === 429) {
-        setCodeError("جربتوا الرمز أكثر من مرة. اطلبوا رمز جديد.");
-        setResendIn(0);
-        codeBoxes.current?.clear();
-        toast({ id: "checkout", tone: "attention", message: "اطلبوا رمز جديد حتى تكملون" });
-      } else if (data.error === "invalid_order") {
+        return;
+      }
+      const codeName = errorCode(gqlErrors);
+      if (codeName === "invalid_fields") {
         setStep("details");
-        const fields = (data.fields ?? {}) as FieldErrors;
-        if (Object.keys(fields).length) showFieldErrors(fields);
-        else toast({ id: "checkout", tone: "attention", message: "السلة فارغة أو فيها خطأ. ارجعوا للنكهات وضيفوها من جديد." });
+        showFieldErrors(errorFields(gqlErrors) as FieldErrors);
+      } else if (codeName === "empty_cart") {
+        toast({ id: "checkout", tone: "attention", message: "السلة فارغة أو فيها خطأ. ارجعوا للنكهات وضيفوها من جديد." });
+      } else if (codeName === "not_signed_in") {
+        setStep("details");
+        toast({ id: "checkout", tone: "attention", message: "سجلوا الدخول برقم الواتساب حتى تكملون الطلب." });
       } else {
-        setPlaced({ ...snapshot, orderId, time });
+        console.error("placeOrder failed", gqlErrors);
+        setPlaced({ ...snapshot, orderNumber: "", createdAt: new Date().toISOString() });
         setStep("failed");
         toast({ id: "checkout", tone: "attention", message: "نكمل طلبكم على الواتساب" });
       }
-    } catch {
-      // No response at all (network dropped). The order may not have arrived.
-      setPlaced({ ...snapshot, orderId: "", time: baghdadNow() });
+    } catch (err) {
+      console.error("placeOrder failed", err);
+      setPlaced({ ...snapshot, orderNumber: "", createdAt: new Date().toISOString() });
       setStep("failed");
       toast({ id: "checkout", tone: "attention", message: "نكمل طلبكم على الواتساب" });
     } finally {
@@ -290,17 +272,19 @@ export function OrderFlow() {
   // ---- Screens -----------------------------------------------------------
 
   if (step === "sent" && placed) {
+    const details = { name: placed.name, phoneDisplay: formatIraqiMobile(placed.phone), address: placed.address, note: placed.note };
     const followUp = `https://wa.me/${site.whatsappNumber}?text=${encodeURIComponent(
-      buildWhatsAppText(placed, placed.items, placed.orderId),
+      buildWhatsAppText(details, placed.items, placed.orderNumber),
     )}`;
     return (
       <div className="order-result">
         <h2>وصلنا طلبكم</h2>
         <p className="order-result__id">
-          رقم الطلب <strong dir="ltr">{placed.orderId}</strong>
+          رقم الطلب <strong dir="ltr">{placed.orderNumber}</strong>
         </p>
         <p>
-          فريقنا راح يتواصل وياكم على الواتساب على الرقم <span dir="ltr">{placed.phoneDisplay}</span> لتأكيد التوصيل.
+          فريقنا راح يتواصل وياكم على الواتساب على الرقم <span dir="ltr">{details.phoneDisplay}</span> لتأكيد التوصيل.
+          تكدرون تتابعون حالة الطلب من صفحة «طلباتي».
         </p>
         <p className="order-result__muted">
           {pdfSaved
@@ -308,8 +292,11 @@ export function OrderFlow() {
             : "تكدرون تنزّلون ملخص الطلب (PDF) حتى يبقى عندكم رقم الطلب وتفاصيله."}
         </p>
         <div className="order-result__actions">
-          <a className="btn btn--full" href={followUp} target="_blank" rel="noopener noreferrer">
-            تابعوا طلبكم على الواتساب
+          <Link className="btn btn--full" href="/account">
+            تابعوا طلبكم بصفحة طلباتي
+          </Link>
+          <a className="btn btn--quiet btn--full" href={followUp} target="_blank" rel="noopener noreferrer">
+            راسلونا على الواتساب
           </a>
           <button type="button" className="btn btn--quiet btn--full" onClick={() => void savePdf(placed, false)}>
             تحميل ملخص الطلب (PDF)
@@ -334,7 +321,12 @@ export function OrderFlow() {
   }
 
   const fallbackHref = placed
-    ? `https://wa.me/${site.whatsappNumber}?text=${encodeURIComponent(buildWhatsAppText(placed, placed.items))}`
+    ? `https://wa.me/${site.whatsappNumber}?text=${encodeURIComponent(
+        buildWhatsAppText(
+          { name: placed.name, phoneDisplay: placed.phone ? formatIraqiMobile(placed.phone) : "", address: placed.address, note: placed.note },
+          placed.items,
+        ),
+      )}`
     : `https://wa.me/${site.whatsappNumber}`;
 
   const fieldProps = (field: Field) => ({
@@ -387,7 +379,7 @@ export function OrderFlow() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              void sendCode(false);
+              void submitDetails();
             }}
             noValidate
           >
@@ -409,29 +401,48 @@ export function OrderFlow() {
               />
               {fieldError("name")}
             </label>
-            <label className={errors.phone ? "has-error" : undefined}>
-              رقم الواتساب
-              <input
-                ref={inputs.phone}
-                value={phoneInput}
-                onChange={(e) => {
-                  setPhoneInput(e.target.value);
-                  recheck("phone", e.target.value, false);
-                }}
-                inputMode="tel"
-                autoComplete="tel"
-                dir="ltr"
-                placeholder="07XX XXX XXXX"
-                required
-                {...fieldProps("phone")}
-              />
-              {fieldError("phone") ??
-                (phone && (
-                  <span className="field-hint">
-                    راح نرسل رمز التحقق على <span dir="ltr">{phoneDisplay}</span>
-                  </span>
-                ))}
-            </label>
+
+            {signedIn ? (
+              <div className="account-phone">
+                <span>رقم الواتساب</span>
+                <strong dir="ltr">{phoneDisplay}</strong>
+                <button
+                  type="button"
+                  className="link-button"
+                  onClick={() => {
+                    void auth.signOut();
+                    toast({ id: "checkout", message: "سجّلتوا الخروج. اكتبوا الرقم الجديد." });
+                  }}
+                >
+                  مو رقمكم؟ غيّروه
+                </button>
+              </div>
+            ) : (
+              <label className={errors.phone ? "has-error" : undefined}>
+                رقم الواتساب
+                <input
+                  ref={inputs.phone}
+                  value={phoneInput}
+                  onChange={(e) => {
+                    setPhoneInput(e.target.value);
+                    recheck("phone", e.target.value, false);
+                  }}
+                  inputMode="tel"
+                  autoComplete="tel"
+                  dir="ltr"
+                  placeholder="07XX XXX XXXX"
+                  required
+                  {...fieldProps("phone")}
+                />
+                {fieldError("phone") ??
+                  (phone && (
+                    <span className="field-hint">
+                      راح نرسل رمز التحقق على <span dir="ltr">{phoneDisplay}</span>
+                    </span>
+                  ))}
+              </label>
+            )}
+
             <label className={errors.address ? "has-error" : undefined}>
               العنوان وأقرب نقطة دالة
               <textarea
@@ -454,9 +465,12 @@ export function OrderFlow() {
               </span>
               <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={400} />
             </label>
-            <button type="submit" className="btn btn--full" disabled={busy}>
-              {busy ? "جاري الإرسال…" : "أرسلوا رمز التحقق على الواتساب"}
+            <button type="submit" className="btn btn--full" disabled={busy || auth.status === "loading"}>
+              {busy ? "جاري الإرسال…" : signedIn ? "أكدوا الطلب" : "أرسلوا رمز التحقق على الواتساب"}
             </button>
+            {!signedIn && (
+              <p className="hint">نتأكد من الرقم مرة وحدة بس. بعدها تبقون مسجلين على هذا الجهاز وتشوفون طلباتكم.</p>
+            )}
           </form>
         )}
 
@@ -464,7 +478,7 @@ export function OrderFlow() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              void placeOrder(code);
+              void confirmCode(code);
             }}
             noValidate
           >
@@ -479,11 +493,6 @@ export function OrderFlow() {
               </button>
             </div>
             <p className="hint">{site.codeSenderNote}</p>
-            {devCode && (
-              <p className="dev-note">
-                وضع التطوير (OTPIQ غير مربوط): الرمز هو <strong dir="ltr">{devCode}</strong>
-              </p>
-            )}
             <CodeInput
               ref={codeBoxes}
               length={CODE_LENGTH}
@@ -492,7 +501,7 @@ export function OrderFlow() {
                 setCode(v);
                 if (codeError) setCodeError("");
               }}
-              onComplete={(v) => void placeOrder(v)}
+              onComplete={(v) => void confirmCode(v)}
               disabled={busy}
               invalid={Boolean(codeError)}
               describedBy={codeError ? "code-error" : undefined}
@@ -517,11 +526,11 @@ export function OrderFlow() {
         {step === "failed" && (
           <div className="order-failed" role="alert">
             <h2>نكمل طلبكم على الواتساب</h2>
-            <p>صار تأخير بإرسال الطلب لفريقنا. طلبكم محفوظ بهذا الجهاز ومكتوب جاهز، دوسوا الزر وأرسلوه علينا مباشرة.</p>
+            <p>صار خلل بإرسال الطلب. طلبكم محفوظ بهذا الجهاز ومكتوب جاهز، دوسوا الزر وأرسلوه علينا مباشرة.</p>
             <a className="btn btn--full" href={fallbackHref} target="_blank" rel="noopener noreferrer">
               أرسلوا الطلب على الواتساب
             </a>
-            <button type="button" className="btn btn--quiet btn--full" disabled={busy} onClick={() => void placeOrder(code)}>
+            <button type="button" className="btn btn--quiet btn--full" disabled={busy} onClick={() => void placeNow()}>
               {busy ? "جاري الإرسال…" : "حاولوا مرة ثانية"}
             </button>
           </div>

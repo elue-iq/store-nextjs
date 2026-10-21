@@ -7,3 +7,7 @@ out
 *.tsbuildinfo
 next-env.d.ts
 .vercel
+
+# Amplify (generated at build time by `ampx pipeline-deploy`)
+amplify_outputs.json
+.amplify

@@ -208,3 +208,37 @@ export function downloadBlob(blob: Blob, filename: string) {
 export function receiptFilename(orderId: string) {
   return `ELUE-${orderId}.pdf`;
 }
+
+// Builds the PDF data from a saved order (checkout success, "طلباتي").
+export function receiptFromOrder(o: {
+  orderNumber: string;
+  createdAt: string;
+  items: ({ nameAr: string; nameEn: string; qty: number; price: number } | null)[];
+  total: number;
+  name: string;
+  phone: string; // 9647XXXXXXXXX
+  address: string;
+  note?: string | null;
+}): ReceiptData {
+  const time = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Baghdad", dateStyle: "short", timeStyle: "short" }).format(
+    new Date(o.createdAt),
+  );
+  const local = `0${o.phone.slice(3)}`;
+  return {
+    orderId: o.orderNumber,
+    time,
+    lines: o.items
+      .filter((i): i is NonNullable<typeof i> => Boolean(i))
+      .map((i) => ({ nameAr: i.nameAr, nameEn: i.nameEn, qty: i.qty, price: i.price, subtotal: i.qty * i.price })),
+    total: o.total,
+    name: o.name,
+    phoneDisplay: `${local.slice(0, 4)} ${local.slice(4, 7)} ${local.slice(7)}`,
+    address: o.address,
+    note: o.note || undefined,
+  };
+}
+
+export async function saveOrderPdf(o: Parameters<typeof receiptFromOrder>[0]) {
+  const blob = await buildReceiptPdf(receiptFromOrder(o));
+  downloadBlob(blob, receiptFilename(o.orderNumber));
+}
