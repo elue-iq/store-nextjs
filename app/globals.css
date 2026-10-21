@@ -15,7 +15,7 @@
   --olive: #626a50;
   --error: #8f2f1f;
 
-  --font-ar: "Tajawal", system-ui, -apple-system, "Segoe UI", Tahoma, sans-serif;
+  --font-ar: "Cairo Variable", "Cairo", system-ui, -apple-system, "Segoe UI", Tahoma, sans-serif;
   --font-display: "Bodoni Moda Variable", "Bodoni Moda", "Didot", "Bodoni 72", Georgia, serif;
 
   --gutter: clamp(1rem, 4vw, 2.5rem);

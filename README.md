@@ -55,7 +55,7 @@ Add `?ref=` to see where an order came from in Telegram, e.g.
 
 ## Fonts and SEO
 
-- Fonts are self-hosted from npm (`@fontsource/tajawal`, `@fontsource-variable/bodoni-moda`),
+- Fonts are self-hosted from npm (`@fontsource-variable/cairo`, `@fontsource-variable/bodoni-moda`),
   so the site makes no request to Google Fonts.
 - Pages are pre-rendered to HTML at build time, so search engines see the full
   content without running JavaScript.

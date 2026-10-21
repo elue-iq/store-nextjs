@@ -1,9 +1,6 @@
 import type { Metadata, Viewport } from "next";
-// Fonts are self-hosted (no request to Google): Tajawal for Arabic, Bodoni Moda for English display.
-import "@fontsource/tajawal/300.css";
-import "@fontsource/tajawal/400.css";
-import "@fontsource/tajawal/500.css";
-import "@fontsource/tajawal/700.css";
+// Fonts are self-hosted (no request to Google): Cairo for Arabic, Bodoni Moda for English display.
+import "@fontsource-variable/cairo/wght.css";
 import "@fontsource-variable/bodoni-moda/opsz.css";
 import "@fontsource-variable/bodoni-moda/opsz-italic.css";
 import "./globals.css";
