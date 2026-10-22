@@ -3,7 +3,6 @@
 import { useImperativeHandle, useRef, type Ref } from "react";
 import { DELIVERY_PROVINCES, PROVINCES } from "@/lib/iraq";
 import {
-  addressError,
   areaError,
   nameError,
   provinceError,
@@ -13,17 +12,17 @@ import {
 } from "@/lib/validate";
 
 type DeliveryField = Exclude<Field, "phone">;
-const ORDER: DeliveryField[] = ["name", "province", "area", "address"];
+const ORDER: DeliveryField[] = ["name", "province", "area"];
 const CHECKS: Record<DeliveryField, (v: string) => string | null> = {
   name: nameError,
   province: provinceError,
   area: areaError,
-  address: addressError,
+  address: () => null,
 };
 
 export type DeliveryFieldsHandle = { focusFirstError: (errors: FieldErrors) => void };
 
-// Name, governorate, area and address. Used on "معلوماتي" and at checkout.
+// Name, governorate and area. Used on "معلوماتي" and at checkout.
 export function DeliveryFields({
   values,
   errors,
@@ -43,7 +42,7 @@ export function DeliveryFields({
     name: useRef<HTMLInputElement>(null),
     province: useRef<HTMLSelectElement>(null),
     area: useRef<HTMLInputElement>(null),
-    address: useRef<HTMLTextAreaElement>(null),
+    address: useRef<HTMLInputElement>(null),
   };
 
   useImperativeHandle(ref, () => ({
@@ -144,20 +143,6 @@ export function DeliveryFields({
         </p>
       )}
 
-      <label className={errors.address ? "has-error" : undefined}>
-        تفاصيل العنوان وأقرب نقطة دالة
-        <textarea
-          ref={inputs.address}
-          value={values.address}
-          onChange={(e) => set("address", e.target.value)}
-          autoComplete="street-address"
-          rows={3}
-          maxLength={400}
-          placeholder="الشارع، رقم الدار أو العمارة، وأقرب نقطة دالة"
-          {...a11y("address")}
-        />
-        {error("address")}
-      </label>
     </>
   );
 }

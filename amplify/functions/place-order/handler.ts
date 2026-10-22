@@ -1,3 +1,4 @@
+import { setDefaultResultOrder } from "node:dns";
 import type { AppSyncIdentityCognito } from "aws-lambda";
 import { AdminGetUserCommand, CognitoIdentityProviderClient } from "@aws-sdk/client-cognito-identity-provider";
 import { Amplify } from "aws-amplify";
@@ -15,6 +16,10 @@ import { buildOrderMessage, sendToTelegram } from "../../../lib/telegram";
 // 3. Saves the order in DynamoDB.            <- the order is safe from here on
 // 4. Sends it to the Telegram group (3 tries). If Telegram fails the order is
 //    still saved and shows on /admin.
+
+// Lambda has no IPv6 route to the internet; connecting to Telegram over IPv6
+// first made some requests hang until they timed out.
+setDefaultResultOrder("ipv4first");
 
 const { resourceConfig, libraryOptions } = await getAmplifyDataClientConfig(env);
 Amplify.configure(resourceConfig, libraryOptions);

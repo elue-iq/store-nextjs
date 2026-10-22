@@ -53,6 +53,8 @@ export function addressError(raw: string): string | null {
   return null;
 }
 
+// "address" (street details) is no longer asked for; kept so older orders and
+// profiles that have it still show it.
 export type DeliveryInfo = { name: string; province: string; area: string; address: string };
 
 export function checkDelivery(v: DeliveryInfo): FieldErrors {
@@ -61,7 +63,6 @@ export function checkDelivery(v: DeliveryInfo): FieldErrors {
     ["name", nameError(v.name)],
     ["province", provinceError(v.province)],
     ["area", areaError(v.area)],
-    ["address", addressError(v.address)],
   ];
   for (const [field, message] of checks) if (message) errors[field] = message;
   return errors;

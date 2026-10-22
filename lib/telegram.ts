@@ -48,12 +48,22 @@ export function buildOrderMessage(o: {
     .join("\n");
 }
 
-const RETRY_DELAYS_MS = [0, 800, 2000];
+// Up to 3 tries within a fixed time budget, so a slow Telegram never delays
+// the customer's confirmation: the order is already saved before this runs.
+const RETRY_DELAYS_MS = [0, 500, 1000];
 
-export async function sendToTelegram(token: string, chatId: string, html: string): Promise<boolean> {
+export async function sendToTelegram(
+  token: string,
+  chatId: string,
+  html: string,
+  budgetMs = 9_000,
+): Promise<boolean> {
   if (!token || !chatId) return false;
+  const deadline = Date.now() + budgetMs;
   for (const delay of RETRY_DELAYS_MS) {
     if (delay) await new Promise((r) => setTimeout(r, delay));
+    const left = deadline - Date.now();
+    if (left < 1_000) break;
     try {
       const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
         method: "POST",
@@ -64,7 +74,7 @@ export async function sendToTelegram(token: string, chatId: string, html: string
           parse_mode: "HTML",
           link_preview_options: { is_disabled: true },
         }),
-        signal: AbortSignal.timeout(8_000),
+        signal: AbortSignal.timeout(Math.min(4_000, left)),
       });
       if (res.ok) return true;
       if (res.status >= 400 && res.status < 500 && res.status !== 429) {
