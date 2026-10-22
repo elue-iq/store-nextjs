@@ -22,7 +22,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/" },
   openGraph: {
     title: "ÉLUE — Chocolate Truffles",
-    description: "متعة الشوكولاتة، بحسابات أذكى",
+    description: "سعرات قليلة ومتعة أكبر",
     url: "/",
     locale: "ar_IQ",
     type: "website",
