@@ -48,6 +48,9 @@ export function AdminOrderForm({
   const [busy, setBusy] = useState(false);
 
   // Existing lines keep the price they were sold at; new lines use today's price.
+  const oldQty: Record<string, number> = Object.fromEntries(
+    (order?.items ?? []).filter(Boolean).map((i) => [i!.slug, i!.qty]),
+  );
   const oldPrice = Object.fromEntries((order?.items ?? []).filter(Boolean).map((i) => [i!.slug, i!.price]));
   const lines = products
     .filter((p) => (qty[p.slug] ?? 0) > 0)
@@ -76,21 +79,41 @@ export function AdminOrderForm({
     setBusy(true);
 
     if (order) {
+      // Send only what was changed here, so a change saved meanwhile on another
+      // phone (e.g. the cashier number) is never overwritten with an old value.
+      const items = lines.map((l) => ({
+        slug: l.product.slug,
+        nameAr: l.product.nameAr,
+        nameEn: l.product.nameEn,
+        qty: l.qty,
+        price: l.price,
+      }));
+      const before = {
+        phone: order.phone,
+        name: order.name,
+        province: order.province ?? "",
+        area: order.area ?? "",
+        address: order.address,
+        note: order.note ?? null,
+        cashierOrderId: order.cashierOrderId ?? null,
+      };
+      const after = { phone: customerPhone, ...info, note: note.trim() || null, cashierOrderId: cashier.trim() || null };
+      const changes: Record<string, unknown> = {};
+      for (const key of Object.keys(after) as (keyof typeof after)[]) {
+        if (after[key] !== before[key]) changes[key] = after[key];
+      }
+      const sameItems =
+        JSON.stringify(items.map((i) => [i.slug, i.qty])) ===
+        JSON.stringify(products.filter((p) => oldQty[p.slug]).map((p) => [p.slug, oldQty[p.slug]]));
+      if (!sameItems) Object.assign(changes, { items, jars, total });
+      if (!Object.keys(changes).length) {
+        setBusy(false);
+        onDone(order.orderNumber);
+        return;
+      }
       const { errors: gqlErrors } = await dataClient.models.Order.update({
         id: order.id,
-        phone: customerPhone,
-        ...info,
-        note: note.trim() || null,
-        cashierOrderId: cashier.trim() || null,
-        items: lines.map((l) => ({
-          slug: l.product.slug,
-          nameAr: l.product.nameAr,
-          nameEn: l.product.nameEn,
-          qty: l.qty,
-          price: l.price,
-        })),
-        jars,
-        total,
+        ...changes,
         editedBy: auth.phone,
         editedAt: new Date().toISOString(),
       });
