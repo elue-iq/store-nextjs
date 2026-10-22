@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "./AuthProvider";
 import { useCart } from "./CartProvider";
+import { useStock } from "./StockProvider";
 import { useToast } from "./Toast";
 import { LoginPanel } from "./LoginPanel";
 import { OrderItemsList, StatusTrack } from "./OrderBits";
@@ -99,6 +100,7 @@ function MyOrders() {
   const cart = useCart();
   const toast = useToast();
   const router = useRouter();
+  const stock = useStock();
   const [orders, setOrders] = useState<Order[] | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -123,14 +125,27 @@ function MyOrders() {
 
   function reorder(o: Order) {
     let added = 0;
+    const skipped: string[] = [];
     for (const i of o.items) {
-      if (i && getProduct(i.slug)) {
-        cart.add(i.slug, i.qty);
-        added += i.qty;
+      const product = i && getProduct(i.slug);
+      if (!i || !product) continue;
+      if (!stock.isAvailable(i.slug)) {
+        skipped.push(product.nameAr);
+        continue;
       }
+      cart.add(i.slug, i.qty);
+      added += i.qty;
     }
-    if (!added) return;
-    toast({ id: "checkout", message: "أضفنا الطلب نفسه إلى السلة." });
+    if (!added) {
+      toast({ id: "checkout", tone: "attention", message: "نفدت كمية نكهات هذا الطلب حاليًا." });
+      return;
+    }
+    toast({
+      id: "checkout",
+      message: skipped.length
+        ? `أضفنا الطلب إلى السلة، عدا ${skipped.join(" و")} لنفاد الكمية.`
+        : "أضفنا الطلب نفسه إلى السلة.",
+    });
     router.push("/order");
   }
 

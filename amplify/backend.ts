@@ -1,5 +1,7 @@
 import { defineBackend } from "@aws-amplify/backend";
 import { PolicyStatement } from "aws-cdk-lib/aws-iam";
+import { RemovalPolicy, Stack } from "aws-cdk-lib";
+import { AttributeType, BillingMode, Table } from "aws-cdk-lib/aws-dynamodb";
 import { auth } from "./auth/resource";
 import { data } from "./data/resource";
 import { placeOrder } from "./functions/place-order/resource";
@@ -24,3 +26,13 @@ backend.placeOrder.addEnvironment("USER_POOL_ID", userPool.userPoolId);
 backend.placeOrder.resources.lambda.addToRolePolicy(
   new PolicyStatement({ actions: ["cognito-idp:AdminGetUser"], resources: [userPool.userPoolArn] }),
 );
+
+// Sequential order numbers (EL-0001, EL-0002, ...): one counter row, increased
+// atomically by placeOrder. Kept even if the backend is ever removed.
+const counters = new Table(Stack.of(backend.placeOrder.resources.lambda), "OrderCounters", {
+  partitionKey: { name: "id", type: AttributeType.STRING },
+  billingMode: BillingMode.PAY_PER_REQUEST,
+  removalPolicy: RemovalPolicy.RETAIN,
+});
+counters.grantReadWriteData(backend.placeOrder.resources.lambda);
+backend.placeOrder.addEnvironment("COUNTERS_TABLE", counters.tableName);

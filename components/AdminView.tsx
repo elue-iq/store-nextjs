@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "./AuthProvider";
 import { useToast } from "./Toast";
 import { LoginPanel } from "./LoginPanel";
+import { AdminStock } from "./AdminStock";
 import { jarsLabel } from "./AddToCart";
 import { OrderItemsList, StatusChip } from "./OrderBits";
 import { baghdadTime, dataClient, newestFirst, STATUS_LABELS, STATUS_ORDER, type Order, type OrderStatus } from "@/lib/data";
@@ -168,6 +169,8 @@ export function AdminView() {
           <dd>{stats.counts.NEW}</dd>
         </div>
       </dl>
+
+      <AdminStock />
 
       <div className="admin-tools">
         <div className="admin-filters" role="group" aria-label="فلترة حسب الحالة">

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCart } from "./CartProvider";
 import { useToast } from "./Toast";
 import { getProduct } from "@/lib/products";
+import { useStock } from "./StockProvider";
 
 // "علبة واحدة"، "علبتان"، "3 علب"، "11 علبة"
 export function jarsLabel(n: number): string {
@@ -31,6 +32,14 @@ function useAddWithToast() {
 export function AddToCartButton({ slug, label = "أضف إلى السلة" }: { slug: string; label?: string }) {
   const addWithToast = useAddWithToast();
   const [added, setAdded] = useState(false);
+  const { isAvailable } = useStock();
+  if (!isAvailable(slug)) {
+    return (
+      <button type="button" className="btn btn--quiet btn--soldout" disabled>
+        نفدت الكمية حاليًا
+      </button>
+    );
+  }
   return (
     <button
       type="button"
@@ -51,6 +60,15 @@ export function ProductBuyBox({ slug }: { slug: string }) {
   const router = useRouter();
   const [qty, setQty] = useState(1);
   const [added, setAdded] = useState(false);
+  const { isAvailable } = useStock();
+
+  if (!isAvailable(slug)) {
+    return (
+      <div className="buy-box">
+        <p className="soldout-note">نفدت الكمية حاليًا. نعمل على توفيرها قريبًا، ويمكنكم اختيار نكهة أخرى.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="buy-box">

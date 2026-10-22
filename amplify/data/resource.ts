@@ -55,6 +55,16 @@ const schema = a
       })
       .authorization((allow) => [allow.owner(), allow.group("ADMINS").to(["read"])]),
 
+    // Stock switch per flavor, set by the team on /admin. No row = available.
+    // Everyone can read it (the shop shows «نفدت الكمية»); only ADMINS change it.
+    ProductSetting: a
+      .model({
+        slug: a.string().required(),
+        available: a.boolean().required(),
+      })
+      .identifier(["slug"])
+      .authorization((allow) => [allow.publicApiKey().to(["read"]), allow.group("ADMINS")]),
+
     PlaceOrderResult: a.customType({
       id: a.string().required(),
       orderNumber: a.string().required(),
@@ -85,5 +95,9 @@ export const data = defineData({
   schema,
   authorizationModes: {
     defaultAuthorizationMode: "userPool",
+    // Public read of ProductSetting only. Amplify API keys last up to 365 days:
+    // to renew, redeploy after changing expiresInDays (the shop treats a
+    // failed read as "available", and orders are still checked on the server).
+    apiKeyAuthorizationMode: { expiresInDays: 365 },
   },
 });

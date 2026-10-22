@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useCart } from "./CartProvider";
 import { useToast } from "./Toast";
 import { useAuth } from "./AuthProvider";
+import { useStock } from "./StockProvider";
 import { jarsLabel } from "./AddToCart";
 import { LoginPanel } from "./LoginPanel";
 import { DeliveryFields, type DeliveryFieldsHandle } from "./DeliveryFields";
@@ -31,8 +32,10 @@ export function OrderFlow() {
   const cart = useCart();
   const toast = useToast();
   const auth = useAuth();
+  const stock = useStock();
   const { lines, total } = priceCart(cart.items);
   const signedIn = auth.status === "signedIn";
+  const soldOutLines = lines.filter((l) => !stock.isAvailable(l.product.slug));
   // The shop's own (admin) login is for the orders page, not for ordering as a customer.
   const teamDevice = signedIn && auth.isAdmin;
 
@@ -116,6 +119,14 @@ export function OrderFlow() {
 
   async function placeOrder() {
     if (busy || teamDevice) return;
+    if (soldOutLines.length) {
+      toast({
+        id: "checkout",
+        tone: "attention",
+        message: `نفدت كمية ${soldOutLines.map((l) => l.product.nameAr).join(" و")}. أزيلوها من السلة لإتمام الطلب.`,
+      });
+      return;
+    }
     const found = checkDelivery(delivery);
     if (Object.keys(found).length) return showErrors(found);
     const info = cleanDelivery(delivery);
@@ -149,6 +160,13 @@ export function OrderFlow() {
       const code = errorCode(gqlErrors);
       if (code === "invalid_fields") {
         showErrors(errorFields(gqlErrors) as FieldErrors);
+      } else if (code === "out_of_stock") {
+        await stock.refresh();
+        toast({
+          id: "checkout",
+          tone: "attention",
+          message: "نفدت كمية بعض النكهات في سلتكم قبل قليل. أزيلوها من السلة ثم أكّدوا الطلب.",
+        });
       } else if (code === "empty_cart") {
         toast({ id: "checkout", tone: "attention", message: "السلة فارغة أو فيها خطأ. عودوا إلى النكهات وأضيفوها من جديد." });
       } else if (code === "not_signed_in") {
@@ -253,6 +271,7 @@ export function OrderFlow() {
               <span className="order-lines__name">
                 {l.product.nameAr}
                 <small dir="ltr">{l.product.kcalPerPiece} kcal average piece</small>
+                {!stock.isAvailable(l.product.slug) && <strong className="order-lines__soldout">نفدت الكمية حاليًا</strong>}
               </span>
               <span className="stepper stepper--small" role="group" aria-label={`كمية ${l.product.nameAr}`}>
                 <button type="button" onClick={() => changeQty(l.product.slug, l.product.nameAr, l.qty - 1)} aria-label="إنقاص الكمية">
@@ -367,7 +386,12 @@ export function OrderFlow() {
               <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={400} />
             </label>
 
-            <button type="submit" className="btn btn--full" disabled={busy}>
+            {soldOutLines.length > 0 && (
+              <p className="field-note" role="alert">
+                نفدت كمية {soldOutLines.map((l) => l.product.nameAr).join(" و")} حاليًا. أزيلوها من السلة لإتمام الطلب.
+              </p>
+            )}
+            <button type="submit" className="btn btn--full" disabled={busy || soldOutLines.length > 0}>
               {busy ? "جارٍ إرسال الطلب…" : `تأكيد الطلب · ${formatIQD(total)}`}
             </button>
           </form>

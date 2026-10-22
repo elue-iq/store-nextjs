@@ -1,6 +1,7 @@
 import { setDefaultResultOrder } from "node:dns";
 import type { AppSyncIdentityCognito } from "aws-lambda";
 import { AdminGetUserCommand, CognitoIdentityProviderClient } from "@aws-sdk/client-cognito-identity-provider";
+import { DynamoDBClient, UpdateItemCommand } from "@aws-sdk/client-dynamodb";
 import { Amplify } from "aws-amplify";
 import { generateClient } from "aws-amplify/data";
 import { getAmplifyDataClientConfig } from "@aws-amplify/backend/function/runtime";
@@ -44,10 +45,28 @@ async function customerPhone(identity: AppSyncIdentityCognito | null): Promise<s
   }
 }
 
-function orderNumber(): string {
-  const t = Date.now().toString(36).slice(-5).toUpperCase();
-  const r = Math.random().toString(36).slice(2, 4).toUpperCase();
-  return `EL-${t}${r}`;
+const dynamo = new DynamoDBClient({});
+
+// Next order number: EL-0001, EL-0002, ... (atomic, never repeats).
+async function nextOrderNumber(): Promise<string> {
+  const res = await dynamo.send(
+    new UpdateItemCommand({
+      TableName: process.env.COUNTERS_TABLE,
+      Key: { id: { S: "order" } },
+      UpdateExpression: "ADD #n :one",
+      ExpressionAttributeNames: { "#n": "value" },
+      ExpressionAttributeValues: { ":one": { N: "1" } },
+      ReturnValues: "UPDATED_NEW",
+    }),
+  );
+  const n = Number(res.Attributes?.value?.N ?? "0");
+  return `EL-${String(n).padStart(4, "0")}`;
+}
+
+// Flavors the team has switched to «نفدت الكمية» on /admin.
+async function unavailableSlugs(): Promise<Set<string>> {
+  const { data } = await client.models.ProductSetting.list({ limit: 100 });
+  return new Set((data ?? []).filter((s) => !s.available).map((s) => s.slug));
 }
 
 function baghdadTime(d: Date): string {
@@ -84,11 +103,15 @@ export const handler: Schema["placeOrder"]["functionHandler"] = async (event) =>
   if (Object.keys(fields).length) throw new Error(`invalid_fields:${JSON.stringify(fields)}`);
   if (!lines.length) throw new Error("empty_cart");
 
+  const soldOut = await unavailableSlugs();
+  const missing = lines.filter((l) => soldOut.has(l.product.slug)).map((l) => l.product.slug);
+  if (missing.length) throw new Error(`out_of_stock:${missing.join(",")}`);
+
   const owner = `${identity.sub}::${identity.username}`;
   const previous = await client.models.Order.listOrderByOwner({ owner }, { limit: 1, selectionSet: ["id"] });
   const returning = (previous.data?.length ?? 0) > 0;
 
-  const number = orderNumber();
+  const number = await nextOrderNumber();
   const { data: order, errors } = await client.models.Order.create({
     orderNumber: number,
     phone,

@@ -2168,3 +2168,140 @@ body:has(.admin-app) .site-footer {
     min-height: 100vh;
   }
 }
+
+/* ---------- Stock ---------- */
+
+.btn--soldout:disabled {
+  opacity: 1;
+  cursor: not-allowed;
+  border-color: var(--sand-deep);
+  color: var(--muted);
+}
+
+.soldout-note {
+  padding: 0.8rem 1rem;
+  border-radius: 12px;
+  background: var(--sand);
+  color: var(--cocoa);
+  line-height: 1.7;
+}
+
+.order-lines__soldout {
+  justify-self: start;
+  margin-top: 0.2rem;
+  padding: 0.05rem 0.55rem;
+  border-radius: var(--radius-control);
+  background: var(--terracotta-deep);
+  color: var(--cream);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.admin-section {
+  margin-bottom: 1.6rem;
+}
+
+.admin-section > summary {
+  cursor: pointer;
+  font-size: 1.15rem;
+  font-weight: 700;
+  padding: 0.4rem 0;
+}
+
+.stock-list {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0.8rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 760px) {
+  .stock-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.stock-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--sand);
+  border-radius: 12px;
+  background: var(--paper);
+}
+
+.stock-item__name {
+  display: grid;
+  font-weight: 600;
+}
+
+.stock-item__name small {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.stock-switch {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.stock-switch button {
+  min-height: 2.3rem;
+  padding: 0.3rem 0.85rem;
+  border: 1.5px solid var(--sand-deep);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.stock-switch button[aria-pressed="true"].is-on {
+  border-color: var(--sage-deep);
+  background: var(--sage-deep);
+  color: var(--cream);
+}
+
+.stock-switch button[aria-pressed="true"].is-off {
+  border-color: var(--terracotta-deep);
+  background: var(--terracotta-deep);
+  color: var(--cream);
+}
+
+.stock-switch button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.admin-section__meta {
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-weight: 400;
+}
+
+.stock-switch {
+  flex: none;
+}
+
+.stock-switch button {
+  white-space: nowrap;
+}
+
+.stock-item__name {
+  min-width: 0;
+}
+
+@media (max-width: 420px) {
+  .stock-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .stock-switch button {
+    flex: 1;
+  }
+}
