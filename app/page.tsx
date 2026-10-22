@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { nutNote, products, sharedPoints } from "@/lib/products";
-import { formatIQD, site } from "@/lib/site";
+import { formatIQD } from "@/lib/site";
 import { JarLabel } from "@/components/JarLabel";
 import { AddToCartButton } from "@/components/AddToCart";
 
@@ -31,17 +31,13 @@ export default function Home() {
         </div>
 
         <div className="hero__content">
-          <h1>متعة الشوكولاتة، بحسابات أذكى</h1>
+          <h1>سعرات قليلة ومتعة أكبر</h1>
           <p className="hero__lede">
-            أول علامة عراقية لترافل الشوكولاتة قليل السعرات ومحسوبها. بلا سكر مضاف، ولا دهون أو زبدة مضافة، ولا مواد
-            حافظة.
+            أول براند عراقي جوكلت ترافلز بدون سكر مضاف.
           </p>
           <div className="hero__actions">
             <a className="btn btn--light" href="#flavors">
-              اختاروا نكهتكم
-            </a>
-            <a className="btn btn--outline-light" href="#how">
-              طريقة الطلب
+              اطلب الان
             </a>
           </div>
 
@@ -61,7 +57,6 @@ export default function Home() {
       <section id="flavors" className="section flavors">
         <div className="section__head">
           <h2>النكهات</h2>
-          <p>جميع النكهات بالسعر نفسه: {formatIQD(products[0].price)} للعلبة.</p>
         </div>
         <div className="flavors__grid">
           {products.map((p, i) => (
@@ -83,13 +78,10 @@ export default function Home() {
 
       <section className="section story">
         <div className="story__copy">
-          <h2>حكاية الترافل، على طريقتنا</h2>
+          <p>بدأت قصة الترافل بفرنسا قبل أكثر من 100 سنة، وانتشرت بسبب قوامها اللي يذوب بالفم.</p>
           <p>
-            بدأت حكاية الترافل في فرنسا أواخر القرن التاسع عشر: حلوى شوكولاتة فاخرة تأسر القلب من القطعة الأولى.
-          </p>
-          <p>
-            وفي <span dir="ltr">ÉLUE</span> أعدنا تعريف هذه اللذّة على طريقتنا، فجمعنا الطعم الغني والقوام الكريمي مع
-            السعرات المحسوبة، لتستمتعوا بكل قطعة وأنتم تعرفون ما تختارون، دون التنازل عن خياراتكم الغذائية.
+            وبـ<span dir="ltr">ÉLUE</span> عدنا تعريف هاي اللذّة على طريقتنا، فجمعنا الطعم الغني والقوام الكريمي مع
+            السعرات المحسوبة.
           </p>
         </div>
         <ul className="story__points">
@@ -115,17 +107,6 @@ export default function Home() {
           ))}
         </div>
         <div className="ingredients__flavors">
-          <h3>مكونات كل نكهة</h3>
-          <dl>
-            {products.map((p) => (
-              <div key={p.slug}>
-                <dt>
-                  <Link href={`/products/${p.slug}`}>{p.nameAr}</Link>
-                </dt>
-                <dd>{p.ingredients.join("، ")}</dd>
-              </div>
-            ))}
-          </dl>
           <p className="ingredients__allergy">
             <strong>تنبيه للحساسية:</strong> {nutNote}
           </p>
@@ -135,35 +116,12 @@ export default function Home() {
       <section className="section" aria-labelledby="fridge-title">
         <div className="fridge">
           <div className="fridge__head">
-            <h2 id="fridge-title">
-              يفسد خارج الثلاجة،
-              <br />
-              ونقولها بفخر
-            </h2>
-            <p className="fridge__lede">لأن ما يُبقي الحلوى أسابيع على الرف، لا نضعه فيها.</p>
+            <h2 id="fridge-title">بكل فخر!</h2>
+            <p className="fridge__lede">الترافل يتلف برّا الثلاجة… بس ليش؟</p>
           </div>
           <div className="fridge__body">
-            <p>
-              يحتوي كل طعام على الماء، والماء «الحر» فيه هو ما تعيش عليه البكتيريا والعفن. ويقيسه العلماء بما يُسمّى{" "}
-              <strong>النشاط المائي</strong>: كلما قلّ الماء الحر، بقي الطعام صالحًا مدة أطول خارج الثلاجة.
-            </p>
-            <ul className="fridge__list">
-              <li>
-                <strong>السكر</strong>
-                <span>يرتبط بجزيئات الماء فلا يبقى ماء حر للبكتيريا، ولهذا يدوم المربى شهورًا.</span>
-              </li>
-              <li>
-                <strong>الزبدة والدهون</strong>
-                <span>تحلّ محل الماء في الوصفة، فتقلّ كميته من الأساس.</span>
-              </li>
-              <li>
-                <strong>المواد الحافظة</strong>
-                <span>تمنع البكتيريا من العيش على ما تبقّى من الماء.</span>
-              </li>
-            </ul>
             <p className="fridge__close">
-              ترافل <span dir="ltr">ÉLUE</span> خالٍ من السكر المضاف والدهون والزبدة المضافة والمواد الحافظة، ولا تقل نسبة
-              الخضار فيه عن 60%. لا شيء يحفظه سوى البرودة، ولهذا مكانه الثلاجة.
+              لأن ما بيه سكر مضاف، ولا دهون، ولا مواد حافظة، وهي نفسها الأشياء اللي تخلّي الأكل يصمد برّا الثلاجة.
             </p>
           </div>
         </div>
@@ -171,33 +129,21 @@ export default function Home() {
 
       <section className="section" aria-labelledby="kids-title">
         <div className="kids">
-          <h2 id="kids-title">لأطفالكم: حلوى بلا حيرة</h2>
+          <h2 id="kids-title">لأطفالكم: بدون حيرة</h2>
           <div className="kids__body">
-            <p>يعيش الأهل حيرة مع الحلوى: إن قدّموها لأطفالهم انشغل بالهم بما فيها، وإن منعوها حزن الأطفال. حيرة يعرفها كل بيت.</p>
+            <p>كل أهل يعرفون هالحيرة: تنطي طفلك حلو ويبقى بالك بشنو بيه، ما تنطيه ويزعل.</p>
             <p>
-              ترافل <span dir="ltr">ÉLUE</span> يُنهي هذه الحيرة: بلا سكر مضاف، وبلا مواد حافظة، وخضار نحضّرها بأيدينا بنسبة
-              لا تقل عن 60%. قطعة يفرح بها طفلكم، وأنتم مطمئنون إلى كل ما فيها.
+              ترافل <span dir="ltr">ÉLUE</span> يخلّص هالحيرة: بدون سكر مضاف، بدون مواد حافظة، وبيه خضار بنسبة ما تقل عن
+              60% نحضّرها بإيدينا. قطعة يفرح بيها طفلك، وإنت مرتاح من كل شي بيها.
             </p>
           </div>
         </div>
       </section>
 
-      <section id="how" className="section how">
-        <h2>طريقة الطلب</h2>
-        <ol className="how__steps">
-          <li>اختاروا النكهات وأضيفوها إلى السلة.</li>
-          <li>سجّلوا الدخول برقم الواتساب، برمز يصلكم مرة واحدة فقط.</li>
-          <li>أكّدوا عنوان التوصيل وأرسلوا الطلب، وسنتواصل معكم لترتيب التوصيل.</li>
-        </ol>
-        <p className="how__note">{site.paymentNote}.</p>
-        <Link className="btn" href="/order">
-          افتحوا السلة
-        </Link>
-      </section>
-
-      <section className="closing">
-        <p className="closing__lead">ليست مجرد ترافل شوكولاتة…</p>
-        <p className="closing__line">إنها لحظة لكم، وقطعة تتشاركونها مع أحبّائكم.</p>
+      <section className="section cta">
+        <a className="btn" href="#flavors">
+          اطلب الان
+        </a>
       </section>
     </>
   );

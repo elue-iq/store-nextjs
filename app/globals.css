@@ -2655,3 +2655,8 @@ body:has(.admin-app) .site-footer {
 .admin-tools {
   grid-template-columns: minmax(0, 1fr);
 }
+
+.cta {
+  display: flex;
+  justify-content: center;
+}
