@@ -6,7 +6,8 @@ import { useToast } from "./Toast";
 import { LoginPanel } from "./LoginPanel";
 import { AdminStock } from "./AdminStock";
 import { jarsLabel } from "./AddToCart";
-import { OrderItemsList, StatusChip } from "./OrderBits";
+import { OrderItemsList, StatusChip, StatusTrack } from "./OrderBits";
+import { formatPoints, pointsFor } from "@/lib/loyalty";
 import { baghdadTime, dataClient, newestFirst, STATUS_LABELS, STATUS_ORDER, type Order, type OrderStatus } from "@/lib/data";
 import { formatIraqiMobile, toLatinDigits } from "@/lib/phone";
 import { formatIQD } from "@/lib/site";
@@ -172,7 +173,7 @@ export function AdminView() {
   // ---- Order screen -------------------------------------------------------
 
   if (selected) {
-    const order = orders?.find((o) => o.id === selected);
+    const order = orders?.find((o) => o.orderNumber === selected || o.id === selected);
     return (
       <div className="admin-screen admin-screen--detail">
         <div className="admin-nav">
@@ -276,7 +277,7 @@ export function AdminView() {
             <button
               type="button"
               className={`order-row order-row--${o.status.toLowerCase()}`}
-              onClick={() => openOrder(o.id)}
+              onClick={() => openOrder(o.orderNumber)}
             >
               <span className="order-row__main">
                 <span className="order-row__top">
@@ -338,9 +339,11 @@ function OrderDetail({ order: o, today }: { order: Order; today: string }) {
 
   return (
     <article className={`order-detail order-detail--${o.status.toLowerCase()}`}>
-      <section className="order-detail__block order-detail__status">
-        <StatusChip status={o.status} />
-        <span dir="ltr">{shortTime(o.createdAt, today)}</span>
+      <section className="order-detail__block">
+        <StatusTrack status={o.status} />
+        <span className="order-detail__muted" dir="ltr">
+          {shortTime(o.createdAt, today)}
+        </span>
       </section>
 
       <section className="order-detail__block">
@@ -372,6 +375,13 @@ function OrderDetail({ order: o, today }: { order: Order; today: string }) {
           <span>المجموع · {jarsLabel(o.jars)}</span>
           <strong>{formatIQD(o.total)}</strong>
         </p>
+        {o.status !== "CANCELLED" && (
+          <p className="order-detail__points">
+            {o.status === "DELIVERED"
+              ? `أُضيفت ${formatPoints(pointsFor(o.total))} نقطة إلى رصيد العميل.`
+              : `تُضاف ${formatPoints(pointsFor(o.total))} نقطة للعميل بعد التوصيل.`}
+          </p>
+        )}
         {(o.source || o.telegramSent === false) && (
           <p className="order-card__meta">
             {o.source && <span dir="ltr">{o.source}</span>}

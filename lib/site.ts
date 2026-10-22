@@ -15,6 +15,8 @@ export const site = {
   // Change this once ELUE's own WhatsApp number is connected in OTPIQ.
   codeSenderNote: "يصلك الرمز في رسالة واتساب باسم Premium Technology، وهي خدمة التحقق التي نستخدمها.",
   currency: "د.ع",
+  // Public address used in links the server sends (Telegram).
+  address: "https://elue-iq.com",
 };
 
 // The site's public address. Link previews (WhatsApp, Instagram, Telegram,

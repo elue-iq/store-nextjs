@@ -99,19 +99,29 @@ export function AccountView() {
     }
   }, []);
 
-  if (auth.status === "loading") return <p className="panel-loading">لحظة من فضلك…</p>;
+  // A team member opening a customer's order link goes to the same order in the admin app.
+  const redirectToAdmin = auth.status === "signedIn" && auth.isAdmin && Boolean(selected);
+  useEffect(() => {
+    if (redirectToAdmin && selected) window.location.replace(`/admin?order=${encodeURIComponent(selected)}`);
+  }, [redirectToAdmin, selected]);
+
+  if (auth.status === "loading" || redirectToAdmin) return <p className="panel-loading">لحظة من فضلك…</p>;
 
   if (auth.status === "signedOut") {
     return (
       <LoginPanel
         title="تسجيل الدخول"
-        intro="سجّل الدخول برقم الواتساب لمتابعة طلباتك وحفظ معلومات التوصيل. يصلك رمز التحقق عبر واتساب."
+        intro={
+          selected
+            ? "سجّل الدخول برقم الواتساب لعرض هذا الطلب. يصلك رمز التحقق عبر واتساب."
+            : "سجّل الدخول برقم الواتساب لمتابعة طلباتك وحفظ معلومات التوصيل. يصلك رمز التحقق عبر واتساب."
+        }
       />
     );
   }
 
   if (selected) {
-    const order = orders?.find((o) => o.id === selected);
+    const order = orders?.find((o) => o.orderNumber === selected || o.id === selected);
     return (
       <div className="account admin-screen--detail">
         <div className="admin-nav admin-nav--shop">
@@ -240,7 +250,7 @@ function MyOrders({
     <ul className="order-rows">
       {orders.map((o) => (
         <li key={o.id}>
-          <button type="button" className={`order-row order-row--${o.status.toLowerCase()}`} onClick={() => onOpen(o.id)}>
+          <button type="button" className={`order-row order-row--${o.status.toLowerCase()}`} onClick={() => onOpen(o.orderNumber)}>
             <span className="order-row__main">
               <span className="order-row__top">
                 <strong dir="ltr">{o.orderNumber}</strong>
@@ -345,8 +355,18 @@ function MyOrderDetail({ order: o }: { order: Order }) {
         <button type="button" className="btn btn--full" onClick={reorder}>
           اطلب الطلب نفسه
         </button>
-        <button type="button" className="btn btn--quiet btn--full" onClick={() => void pdf()}>
-          ملخص الطلب (PDF)
+        <a
+          className="btn btn--quiet btn--full"
+          href={`https://wa.me/${site.whatsappNumber}?text=${encodeURIComponent(
+            `مرحبًا ÉLUE، عندي سؤال عن طلبي ${o.orderNumber}:\n${window.location.origin}/account?order=${encodeURIComponent(o.orderNumber)}`,
+          )}`}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          اسألنا عن هذا الطلب عبر واتساب
+        </a>
+        <button type="button" className="link-button order-detail__pdf" onClick={() => void pdf()}>
+          تنزيل ملخص الطلب (PDF)
         </button>
       </div>
     </article>

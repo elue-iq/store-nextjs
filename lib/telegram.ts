@@ -43,6 +43,8 @@ export function buildOrderMessage(o: {
     o.note ? `ملاحظة: ${escapeHtml(o.note)}` : null,
     o.source ? `المصدر: ${ltr(escapeHtml(o.source))}` : null,
     `الوقت: ${ltr(o.time)}`,
+    "",
+    `<a href="${site.address}/admin?order=${encodeURIComponent(o.orderNumber)}">فتح الطلب في لوحة الطلبات</a>`,
   ]
     .filter((line) => line !== null)
     .join("\n");
