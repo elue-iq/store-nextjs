@@ -6,9 +6,12 @@ import { placeOrder } from "../functions/place-order/resource";
 // Who can do what:
 //   - A customer can only READ their own orders (the "owner" field), and
 //     read/edit their own CustomerProfile.
-//   - The ADMINS group (ÉLUE team) can read and update every order.
+//   - The ADMINS group (ÉLUE team) can read and update every order. Customers
+//     can never change an order: changes go through the team.
 //   - Nobody creates orders directly: the placeOrder function checks the
 //     cart, prices it from our own product list, saves it, then tells Telegram.
+//     The team can also place an order for a customer (placeOrder with customerPhone).
+//   - Team-only fields (cashier number, who created/edited) are hidden from customers.
 
 const schema = a
   .schema({
@@ -37,6 +40,13 @@ const schema = a
         total: a.integer().required(),
         status: a.ref("OrderStatus").required(),
         telegramSent: a.boolean(),
+        // Number of the same order in the cashier system, typed in by the team.
+        cashierOrderId: a.string().authorization((allow) => [allow.group("ADMINS")]),
+        // Team member's WhatsApp number when the team placed the order for the customer.
+        createdBy: a.string().authorization((allow) => [allow.group("ADMINS")]),
+        // Last team member who changed the order (details or status), and when.
+        editedBy: a.string().authorization((allow) => [allow.group("ADMINS")]),
+        editedAt: a.datetime().authorization((allow) => [allow.group("ADMINS")]),
         owner: a.string().authorization((allow) => [allow.ownerDefinedIn("owner").to(["read"]), allow.group("ADMINS")]),
       })
       // Fast lookups: a customer's orders, and orders by phone number (admin search).
@@ -82,6 +92,9 @@ const schema = a
         note: a.string(),
         source: a.string(),
         items: a.json().required(),
+        // Team only: place the order for this customer (WhatsApp number).
+        customerPhone: a.string(),
+        cashierOrderId: a.string(),
       })
       .returns(a.ref("PlaceOrderResult"))
       .authorization((allow) => [allow.authenticated()])

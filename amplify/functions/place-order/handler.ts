@@ -1,6 +1,6 @@
 import { setDefaultResultOrder } from "node:dns";
 import type { AppSyncIdentityCognito } from "aws-lambda";
-import { AdminGetUserCommand, CognitoIdentityProviderClient } from "@aws-sdk/client-cognito-identity-provider";
+import { AdminGetUserCommand, CognitoIdentityProviderClient, ListUsersCommand } from "@aws-sdk/client-cognito-identity-provider";
 import { DynamoDBClient, UpdateItemCommand } from "@aws-sdk/client-dynamodb";
 import { Amplify } from "aws-amplify";
 import { generateClient } from "aws-amplify/data";
@@ -9,6 +9,7 @@ import { env } from "$amplify/env/place-order";
 import type { Schema } from "../../data/resource";
 import { priceCart, type CartItem } from "../../../lib/order-text";
 import { checkDelivery, cleanDelivery } from "../../../lib/validate";
+import { normalizeIraqiMobile } from "../../../lib/phone";
 import { buildOrderMessage, sendToTelegram } from "../../../lib/telegram";
 
 // placeOrder: the only way an order is created.
@@ -45,6 +46,23 @@ async function customerPhone(identity: AppSyncIdentityCognito | null): Promise<s
   }
 }
 
+// The customer's account ("sub::username", the order's owner) for a WhatsApp
+// number, so an order the team places shows in the customer's «طلباتي».
+// null when the customer has never logged in.
+async function ownerForPhone(phone: string): Promise<string | null> {
+  try {
+    const res = await cognito.send(
+      new ListUsersCommand({ UserPoolId: process.env.USER_POOL_ID, Filter: `phone_number = "+${phone}"`, Limit: 1 }),
+    );
+    const user = res.Users?.[0];
+    const sub = user?.Attributes?.find((a) => a.Name === "sub")?.Value;
+    return user?.Username && sub ? `${sub}::${user.Username}` : null;
+  } catch (err) {
+    console.error("customer search failed", err);
+    return null;
+  }
+}
+
 const dynamo = new DynamoDBClient({});
 
 // Next order number: EL-0001, EL-0002, ... (atomic, never repeats).
@@ -75,10 +93,17 @@ function baghdadTime(d: Date): string {
 
 export const handler: Schema["placeOrder"]["functionHandler"] = async (event) => {
   const identity = event.identity as AppSyncIdentityCognito | null;
-  const phone = await customerPhone(identity);
-  if (!identity || !phone) throw new Error("not_signed_in");
+  const callerPhone = await customerPhone(identity);
+  if (!identity || !callerPhone) throw new Error("not_signed_in");
 
   const args = event.arguments;
+  // The team placing an order for a customer.
+  const isTeam = (identity.groups ?? []).includes("ADMINS");
+  const forCustomer = Boolean(String(args.customerPhone ?? "").trim());
+  if (forCustomer && !isTeam) throw new Error("forbidden");
+  const phone = forCustomer ? normalizeIraqiMobile(String(args.customerPhone)) : callerPhone;
+  if (!phone) throw new Error('invalid_fields:{"phone":"رقم الواتساب غير صحيح."}');
+  const cashierOrderId = isTeam ? String(args.cashierOrderId ?? "").trim().slice(0, 60) || null : null;
   const { name, province, area, address } = cleanDelivery({
     name: String(args.name ?? ""),
     province: String(args.province ?? ""),
@@ -103,12 +128,13 @@ export const handler: Schema["placeOrder"]["functionHandler"] = async (event) =>
   if (Object.keys(fields).length) throw new Error(`invalid_fields:${JSON.stringify(fields)}`);
   if (!lines.length) throw new Error("empty_cart");
 
-  const soldOut = await unavailableSlugs();
+  // The team may still take an order for a flavor marked sold out (e.g. stock on the way).
+  const soldOut = forCustomer ? new Set<string>() : await unavailableSlugs();
   const missing = lines.filter((l) => soldOut.has(l.product.slug)).map((l) => l.product.slug);
   if (missing.length) throw new Error(`out_of_stock:${missing.join(",")}`);
 
-  const owner = `${identity.sub}::${identity.username}`;
-  const previous = await client.models.Order.listOrderByOwner({ owner }, { limit: 1, selectionSet: ["id"] });
+  const owner = forCustomer ? await ownerForPhone(phone) : `${identity.sub}::${identity.username}`;
+  const previous = await client.models.Order.listOrderByPhone({ phone }, { limit: 1, selectionSet: ["id"] });
   const returning = (previous.data?.length ?? 0) > 0;
 
   const number = await nextOrderNumber();
@@ -132,6 +158,8 @@ export const handler: Schema["placeOrder"]["functionHandler"] = async (event) =>
     total,
     status: "NEW",
     telegramSent: false,
+    cashierOrderId,
+    createdBy: forCustomer ? callerPhone : null,
     owner,
   });
   if (!order || errors?.length) {
@@ -152,6 +180,8 @@ export const handler: Schema["placeOrder"]["functionHandler"] = async (event) =>
     note,
     source,
     returning,
+    createdBy: forCustomer ? callerPhone : null,
+    cashierOrderId,
   });
   const telegramSent = await sendToTelegram(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_CHAT_ID, message);
   if (telegramSent) await client.models.Order.update({ id: order.id, telegramSent: true });

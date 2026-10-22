@@ -5,6 +5,7 @@ import { useAuth } from "./AuthProvider";
 import { useToast } from "./Toast";
 import { LoginPanel } from "./LoginPanel";
 import { AdminStock } from "./AdminStock";
+import { AdminOrderForm } from "./AdminOrderForm";
 import { jarsLabel } from "./AddToCart";
 import { OrderItemsList, StatusChip, StatusTrack } from "./OrderBits";
 import { formatPoints, pointsFor } from "@/lib/loyalty";
@@ -30,8 +31,27 @@ type Sort = "newest" | "oldest";
 // The admin works like a phone app: a compact list of orders, and tapping one
 // pushes its own screen (?order=<id>). Back works with the «رجوع» button,
 // the iPhone swipe-back gesture and the Android back button.
+// "new" = the screen for placing an order for a customer (?new=1).
 function orderFromUrl(): string | null {
-  return new URLSearchParams(window.location.search).get("order");
+  const params = new URLSearchParams(window.location.search);
+  return params.has("new") ? "new" : params.get("order");
+}
+
+function screenUrl(id: string): string {
+  return id === "new" ? "/admin?new=1" : `/admin?order=${encodeURIComponent(id)}`;
+}
+
+// First load of every order (pages of 200). Live changes then come from observeQuery.
+async function loadAllOrders(): Promise<Order[]> {
+  const all: Order[] = [];
+  let nextToken: string | null | undefined;
+  do {
+    const res = await dataClient.models.Order.list({ limit: 200, nextToken });
+    if (res.errors?.length) throw new Error(res.errors.map((e) => e.message).join(" | "));
+    all.push(...res.data);
+    nextToken = res.nextToken;
+  } while (nextToken);
+  return all.sort(newestFirst);
 }
 
 export function AdminView() {
@@ -40,6 +60,8 @@ export function AdminView() {
   const [orders, setOrders] = useState<Order[] | null>(null);
   const [synced, setSynced] = useState(false);
   const [failed, setFailed] = useState(false);
+  // Shown on screen so a loading problem can be reported with a screenshot.
+  const [loadError, setLoadError] = useState("");
   const [filter, setFilter] = useState<Filter>("ALL");
   const [sort, setSort] = useState<Sort>("newest");
   const [query, setQuery] = useState("");
@@ -61,7 +83,7 @@ export function AdminView() {
 
   const openOrder = useCallback((id: string) => {
     listScroll.current = window.scrollY;
-    window.history.pushState({ order: id }, "", `/admin?order=${encodeURIComponent(id)}`);
+    window.history.pushState({ order: id }, "", screenUrl(id));
     setSelected(id);
     window.scrollTo({ top: 0 });
   }, []);
@@ -81,18 +103,36 @@ export function AdminView() {
 
   useEffect(() => {
     if (auth.status !== "signedIn" || !auth.isAdmin) return;
+    let alive = true;
+    const started = Date.now();
+    loadAllOrders()
+      .then((list) => alive && setOrders((prev) => prev ?? list))
+      .catch((err) => {
+        console.error("admin orders list failed", err);
+        if (alive) setLoadError(`list: ${err instanceof Error ? err.message : String(err)}`);
+      });
+    const slow = setTimeout(() => {
+      if (alive) setLoadError((e) => e || `لم يصل رد من الخادم خلال ${Math.round((Date.now() - started) / 1000)} ثانية.`);
+    }, 15_000);
     const sub = dataClient.models.Order.observeQuery().subscribe({
       next: ({ items, isSynced }) => {
-        setOrders([...items].sort(newestFirst));
+        // observeQuery's first, unsynced batch can be empty: keep the full list until it syncs.
+        if (isSynced || items.length) setOrders([...items].sort(newestFirst));
         setSynced(isSynced);
         setFailed(false);
+        setLoadError("");
       },
       error: (err) => {
         console.error("admin orders failed", err);
         setFailed(true);
+        setLoadError((e) => e || `live: ${JSON.stringify(err).slice(0, 300)}`);
       },
     });
-    return () => sub.unsubscribe();
+    return () => {
+      alive = false;
+      clearTimeout(slow);
+      sub.unsubscribe();
+    };
   }, [auth.status, auth.isAdmin]);
 
   // New orders while the app is open: a short alert, and a badge on the app icon.
@@ -140,6 +180,7 @@ export function AdminView() {
       if (!q) return true;
       return (
         o.orderNumber.toLowerCase().includes(q) ||
+        (o.cashierOrderId ?? "").toLowerCase().includes(q) ||
         o.name.toLowerCase().includes(q) ||
         fullAddress(o).toLowerCase().includes(q) ||
         (qDigits.length >= 3 && o.phone.includes(qDigits))
@@ -172,6 +213,34 @@ export function AdminView() {
 
   // ---- Order screen -------------------------------------------------------
 
+  if (selected === "new") {
+    return (
+      <div className="admin-screen admin-screen--detail">
+        <div className="admin-nav">
+          <button type="button" className="admin-nav__back" onClick={backToList}>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M9 5l7 7-7 7" />
+            </svg>
+            الطلبات
+          </button>
+          <strong className="admin-nav__title">طلب جديد لعميل</strong>
+        </div>
+        <AdminOrderForm
+          onCancel={backToList}
+          onDone={(number) => {
+            // Don't wait for the live update: fetch the list so the new order is there.
+            void loadAllOrders()
+              .then(setOrders)
+              .catch(() => {});
+            window.history.replaceState({ order: number }, "", screenUrl(number));
+            setSelected(number);
+            window.scrollTo({ top: 0 });
+          }}
+        />
+      </div>
+    );
+  }
+
   if (selected) {
     const order = orders?.find((o) => o.orderNumber === selected || o.id === selected);
     return (
@@ -190,7 +259,7 @@ export function AdminView() {
           )}
         </div>
         {order ? (
-          <OrderDetail key={order.id} order={order} today={today} />
+          <OrderDetail key={order.id} order={order} today={today} me={auth.phone} />
         ) : orders === null ? (
           <p className="panel-loading">جارٍ تحميل الطلب…</p>
         ) : (
@@ -238,12 +307,15 @@ export function AdminView() {
       <AdminStock />
 
       <div className="admin-tools">
+        <button type="button" className="btn btn--full admin-new" onClick={() => openOrder("new")}>
+          + طلب جديد لعميل
+        </button>
         <input
           className="admin-search"
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="ابحث بالرقم أو الاسم أو الهاتف"
+          placeholder="ابحث بالرقم أو الاسم أو الهاتف أو رقم الكاشير"
           aria-label="بحث"
         />
         <div className="admin-tools__row">
@@ -262,9 +334,14 @@ export function AdminView() {
         </div>
       </div>
 
-      {failed && (
+      {(failed || (loadError && orders === null)) && (
         <p className="panel-note" role="alert">
-          انقطع الاتصال بقائمة الطلبات. حدّث الصفحة.
+          {orders === null ? "تعذّر تحميل الطلبات." : "انقطع الاتصال بقائمة الطلبات. حدّث الصفحة."}
+          {loadError && (
+            <span className="panel-note__detail" dir="ltr">
+              {loadError}
+            </span>
+          )}
         </p>
       )}
 
@@ -285,6 +362,10 @@ export function AdminView() {
                   <StatusChip status={o.status} />
                 </span>
                 <span className="order-row__name">{o.name}</span>
+                <span className={o.cashierOrderId ? "order-row__cashier" : "order-row__cashier is-missing"}>
+                  {o.cashierOrderId ? <>كاشير: <span dir="ltr">{o.cashierOrderId}</span></> : "بلا رقم كاشير"}
+                  {o.createdBy && " · أنشأه الفريق"}
+                </span>
                 <span className="order-row__sub">
                   {[o.province, o.area].filter(Boolean).join("، ") || fullAddress(o)}
                 </span>
@@ -304,9 +385,29 @@ export function AdminView() {
   );
 }
 
-function OrderDetail({ order: o, today }: { order: Order; today: string }) {
+function OrderDetail({ order: o, today, me }: { order: Order; today: string; me: string }) {
   const toast = useToast();
   const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [cashier, setCashier] = useState(o.cashierOrderId ?? "");
+  const cashierChanged = cashier.trim() !== (o.cashierOrderId ?? "");
+
+  async function saveCashier() {
+    setSaving(true);
+    const { errors } = await dataClient.models.Order.update({
+      id: o.id,
+      cashierOrderId: cashier.trim() || null,
+      editedBy: me,
+      editedAt: new Date().toISOString(),
+    });
+    setSaving(false);
+    if (errors?.length) {
+      console.error("cashier id failed", errors);
+      toast({ id: "admin", tone: "attention", message: "تعذّر حفظ رقم الكاشير. حاول مجددًا." });
+    } else {
+      toast({ id: "admin", message: `${o.orderNumber}: حُفظ رقم الكاشير.` });
+    }
+  }
   const [confirmCancel, setConfirmCancel] = useState(false);
   const local = formatIraqiMobile(o.phone);
 
@@ -318,7 +419,12 @@ function OrderDetail({ order: o, today }: { order: Order; today: string }) {
     }
     setConfirmCancel(false);
     setSaving(true);
-    const { errors } = await dataClient.models.Order.update({ id: o.id, status });
+    const { errors } = await dataClient.models.Order.update({
+      id: o.id,
+      status,
+      editedBy: me,
+      editedAt: new Date().toISOString(),
+    });
     setSaving(false);
     if (errors?.length) {
       console.error("status update failed", errors);
@@ -337,6 +443,19 @@ function OrderDetail({ order: o, today }: { order: Order; today: string }) {
     }
   }
 
+  if (editing) {
+    return (
+      <AdminOrderForm
+        order={o}
+        onCancel={() => setEditing(false)}
+        onDone={() => {
+          setEditing(false);
+          window.scrollTo({ top: 0 });
+        }}
+      />
+    );
+  }
+
   return (
     <article className={`order-detail order-detail--${o.status.toLowerCase()}`}>
       <section className="order-detail__block">
@@ -344,6 +463,29 @@ function OrderDetail({ order: o, today }: { order: Order; today: string }) {
         <span className="order-detail__muted" dir="ltr">
           {shortTime(o.createdAt, today)}
         </span>
+      </section>
+
+      <section className="order-detail__block">
+        <h2>رقم طلب الكاشير</h2>
+        <form
+          className="cashier-field"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (cashierChanged) void saveCashier();
+          }}
+        >
+          <input
+            value={cashier}
+            onChange={(e) => setCashier(e.target.value)}
+            dir="ltr"
+            maxLength={60}
+            placeholder="أدخل رقم الطلب في نظام الكاشير"
+            aria-label={`رقم طلب الكاشير للطلب ${o.orderNumber}`}
+          />
+          <button type="submit" className="btn btn--small" disabled={saving || !cashierChanged}>
+            حفظ
+          </button>
+        </form>
       </section>
 
       <section className="order-detail__block">
@@ -407,6 +549,29 @@ function OrderDetail({ order: o, today }: { order: Order; today: string }) {
           ))}
         </div>
       </section>
+
+      <div className="order-detail__actions">
+        <button type="button" className="btn btn--quiet btn--full" onClick={() => setEditing(true)}>
+          تعديل الطلب
+        </button>
+      </div>
+
+      <p className="order-detail__audit">
+        {o.createdBy ? (
+          <>
+            أنشأه الفريق: <span dir="ltr">{formatIraqiMobile(o.createdBy)}</span>
+          </>
+        ) : (
+          "طلبه العميل من الموقع"
+        )}
+        {o.editedBy && o.editedAt && (
+          <>
+            <br />
+            آخر تعديل: <span dir="ltr">{formatIraqiMobile(o.editedBy)}</span> ·{" "}
+            <span dir="ltr">{shortTime(o.editedAt, today)}</span>
+          </>
+        )}
+      </p>
 
       <button type="button" className="link-button order-detail__pdf" onClick={() => void pdf()}>
         تنزيل ملخص الطلب (PDF)

@@ -2724,3 +2724,96 @@ body:has(.admin-app) .site-footer {
   gap: 0.6rem;
   margin-bottom: 1rem;
 }
+
+/* ---------- Admin: cashier number, team orders, editing ---------- */
+
+.cashier-field {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.cashier-field input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--sand-deep);
+  border-radius: var(--radius-panel);
+  background: var(--paper);
+  font: inherit;
+}
+
+.cashier-field input:focus {
+  outline: 2px solid var(--terracotta);
+  outline-offset: 1px;
+}
+
+.order-row__cashier {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.order-row__cashier.is-missing {
+  color: var(--terracotta);
+}
+
+.order-detail__audit {
+  margin: 0.4rem 0 1rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.8;
+  text-align: center;
+}
+
+.order-detail__hint {
+  margin: 0;
+  text-align: center;
+}
+
+.admin-new {
+  margin-bottom: 0.2rem;
+}
+
+.admin-order-form {
+  max-width: none;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.admin-order-form__items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.admin-order-form__items li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--sand);
+}
+
+.admin-order-form__items small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.panel-note__detail {
+  display: block;
+  margin-top: 0.4rem;
+  font-size: 0.78rem;
+  word-break: break-word;
+  opacity: 0.8;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

@@ -21,13 +21,37 @@ import { EMPTY_DELIVERY, loadProfile, saveProfile, type Profile } from "@/lib/pr
 
 type Tab = "orders" | "details";
 
+const CUSTOMER_FIELDS = [
+  "id",
+  "orderNumber",
+  "phone",
+  "name",
+  "province",
+  "area",
+  "address",
+  "note",
+  "source",
+  "items.*",
+  "jars",
+  "total",
+  "status",
+  "telegramSent",
+  "owner",
+  "createdAt",
+  "updatedAt",
+] as const;
+
 async function loadMyOrders(owner: string): Promise<Order[]> {
   const all: Order[] = [];
   let nextToken: string | null | undefined;
   do {
-    const res = await dataClient.models.Order.listOrderByOwner({ owner }, { limit: 100, nextToken });
+    // Only the fields a customer may read (the team-only ones would come back as errors).
+    const res = await dataClient.models.Order.listOrderByOwner(
+      { owner },
+      { limit: 100, nextToken, selectionSet: CUSTOMER_FIELDS },
+    );
     if (res.errors?.length) throw new Error(res.errors[0].message);
-    all.push(...res.data);
+    all.push(...(res.data as unknown as Order[]));
     nextToken = res.nextToken;
   } while (nextToken);
   return all.sort(newestFirst);
@@ -355,6 +379,7 @@ function MyOrderDetail({ order: o }: { order: Order }) {
         <button type="button" className="btn btn--full" onClick={reorder}>
           اطلب الطلب نفسه
         </button>
+        <p className="hint order-detail__hint">لتعديل الطلب أو إلغائه، راسلنا عبر واتساب.</p>
         <a
           className="btn btn--quiet btn--full"
           href={`https://wa.me/${site.whatsappNumber}?text=${encodeURIComponent(

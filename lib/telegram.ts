@@ -27,6 +27,8 @@ export function buildOrderMessage(o: {
   note?: string | null;
   source?: string | null;
   returning: boolean;
+  createdBy?: string | null; // team member who placed it for the customer
+  cashierOrderId?: string | null;
 }): string {
   const jars = o.lines.reduce((n, l) => n + l.qty, 0);
   return [
@@ -43,6 +45,8 @@ export function buildOrderMessage(o: {
     o.note ? `ملاحظة: ${escapeHtml(o.note)}` : null,
     o.source ? `المصدر: ${ltr(escapeHtml(o.source))}` : null,
     `الوقت: ${ltr(o.time)}`,
+    o.createdBy ? `أنشأه الفريق: ${ltr(formatIraqiMobile(o.createdBy))}` : null,
+    o.cashierOrderId ? `رقم الكاشير: ${ltr(escapeHtml(o.cashierOrderId))}` : null,
     "",
     `<a href="${site.address}/admin?order=${encodeURIComponent(o.orderNumber)}">فتح الطلب في لوحة الطلبات</a>`,
   ]
