@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "./AuthProvider";
 import { useToast } from "./Toast";
 import { LoginPanel } from "./LoginPanel";
@@ -17,7 +17,21 @@ const baghdadDay = (iso: string) =>
     new Date(iso),
   );
 
+// "14:05" for today, "10-21 14:05" for earlier days.
+function shortTime(iso: string, today: string): string {
+  const full = baghdadTime(iso); // YYYY-MM-DD HH:mm
+  return baghdadDay(iso) === today ? full.slice(11) : full.slice(5);
+}
+
 type Filter = "ALL" | OrderStatus;
+type Sort = "newest" | "oldest";
+
+// The admin works like a phone app: a compact list of orders, and tapping one
+// pushes its own screen (?order=<id>). Back works with the «رجوع» button,
+// the iPhone swipe-back gesture and the Android back button.
+function orderFromUrl(): string | null {
+  return new URLSearchParams(window.location.search).get("order");
+}
 
 export function AdminView() {
   const auth = useAuth();
@@ -26,11 +40,44 @@ export function AdminView() {
   const [synced, setSynced] = useState(false);
   const [failed, setFailed] = useState(false);
   const [filter, setFilter] = useState<Filter>("ALL");
+  const [sort, setSort] = useState<Sort>("newest");
   const [query, setQuery] = useState("");
-  const [saving, setSaving] = useState<string | null>(null);
-  const [confirmCancel, setConfirmCancel] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
+  const listScroll = useRef(0);
 
-  // Live list: new orders and status changes appear without refreshing.
+  // ---- Navigation (list <-> order screen) --------------------------------
+
+  useEffect(() => {
+    setSelected(orderFromUrl());
+    const onPop = () => {
+      const id = orderFromUrl();
+      setSelected(id);
+      if (!id) requestAnimationFrame(() => window.scrollTo({ top: listScroll.current }));
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  const openOrder = useCallback((id: string) => {
+    listScroll.current = window.scrollY;
+    window.history.pushState({ order: id }, "", `/admin?order=${encodeURIComponent(id)}`);
+    setSelected(id);
+    window.scrollTo({ top: 0 });
+  }, []);
+
+  const backToList = useCallback(() => {
+    if (window.history.state?.order) {
+      window.history.back(); // the popstate handler shows the list again
+    } else {
+      // Opened directly on an order (e.g. a shared link): go to the list.
+      window.history.replaceState(null, "", "/admin");
+      setSelected(null);
+      window.scrollTo({ top: 0 });
+    }
+  }, []);
+
+  // ---- Live orders --------------------------------------------------------
+
   useEffect(() => {
     if (auth.status !== "signedIn" || !auth.isAdmin) return;
     const sub = dataClient.models.Order.observeQuery().subscribe({
@@ -47,7 +94,7 @@ export function AdminView() {
     return () => sub.unsubscribe();
   }, [auth.status, auth.isAdmin]);
 
-  // New orders while the page is open: a short alert, and a badge on the app icon.
+  // New orders while the app is open: a short alert, and a badge on the app icon.
   const seen = useRef<Set<string> | null>(null);
   useEffect(() => {
     if (!orders || !synced) return;
@@ -87,7 +134,7 @@ export function AdminView() {
   const shown = useMemo(() => {
     const q = toLatinDigits(query).trim().toLowerCase();
     const qDigits = q.replace(/\D/g, "").replace(/^0+/, "");
-    return (orders ?? []).filter((o) => {
+    const list = (orders ?? []).filter((o) => {
       if (filter !== "ALL" && o.status !== filter) return false;
       if (!q) return true;
       return (
@@ -97,7 +144,10 @@ export function AdminView() {
         (qDigits.length >= 3 && o.phone.includes(qDigits))
       );
     });
-  }, [orders, filter, query]);
+    return sort === "newest" ? list : [...list].reverse();
+  }, [orders, filter, query, sort]);
+
+  // ---- Access -------------------------------------------------------------
 
   if (auth.status === "loading") return <p className="panel-loading">لحظة من فضلكم…</p>;
 
@@ -119,26 +169,40 @@ export function AdminView() {
     );
   }
 
-  async function setStatus(o: Order, status: OrderStatus) {
-    if (o.status === status) return;
-    if (status === "CANCELLED" && confirmCancel !== o.id) {
-      setConfirmCancel(o.id);
-      return;
-    }
-    setConfirmCancel(null);
-    setSaving(o.id);
-    const { errors } = await dataClient.models.Order.update({ id: o.id, status });
-    setSaving(null);
-    if (errors?.length) {
-      console.error("status update failed", errors);
-      toast({ id: "admin", tone: "attention", message: `تعذّر حفظ حالة الطلب ${o.orderNumber}. حاولوا مجددًا.` });
-    } else {
-      toast({ id: "admin", message: `${o.orderNumber}: ${STATUS_LABELS[status]}` });
-    }
+  // ---- Order screen -------------------------------------------------------
+
+  if (selected) {
+    const order = orders?.find((o) => o.id === selected);
+    return (
+      <div className="admin-screen admin-screen--detail">
+        <div className="admin-nav">
+          <button type="button" className="admin-nav__back" onClick={backToList}>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M9 5l7 7-7 7" />
+            </svg>
+            الطلبات
+          </button>
+          {order && (
+            <strong className="admin-nav__title" dir="ltr">
+              {order.orderNumber}
+            </strong>
+          )}
+        </div>
+        {order ? (
+          <OrderDetail key={order.id} order={order} today={today} />
+        ) : orders === null ? (
+          <p className="panel-loading">جارٍ تحميل الطلب…</p>
+        ) : (
+          <p className="hint">لم نجد هذا الطلب.</p>
+        )}
+      </div>
+    );
   }
 
+  // ---- List ---------------------------------------------------------------
+
   return (
-    <div className="admin">
+    <div className="admin-screen">
       <div className="panel-head">
         <div>
           <h1>لوحة الطلبات</h1>
@@ -173,22 +237,28 @@ export function AdminView() {
       <AdminStock />
 
       <div className="admin-tools">
-        <div className="admin-filters" role="group" aria-label="فلترة حسب الحالة">
-          {(["ALL", ...STATUS_ORDER] as Filter[]).map((f) => (
-            <button key={f} type="button" aria-pressed={filter === f} onClick={() => setFilter(f)}>
-              {f === "ALL" ? "الكل" : STATUS_LABELS[f]}
-              <span>{f === "ALL" ? (orders?.length ?? 0) : stats.counts[f]}</span>
-            </button>
-          ))}
-        </div>
         <input
           className="admin-search"
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="ابحثوا برقم الهاتف أو الاسم أو المنطقة أو رقم الطلب"
+          placeholder="ابحثوا بالرقم أو الاسم أو الهاتف"
           aria-label="بحث"
         />
+        <div className="admin-tools__row">
+          <div className="admin-filters" role="group" aria-label="فلترة حسب الحالة">
+            {(["ALL", ...STATUS_ORDER] as Filter[]).map((f) => (
+              <button key={f} type="button" aria-pressed={filter === f} onClick={() => setFilter(f)}>
+                {f === "ALL" ? "الكل" : STATUS_LABELS[f]}
+                <span>{f === "ALL" ? (orders?.length ?? 0) : stats.counts[f]}</span>
+              </button>
+            ))}
+          </div>
+          <select className="admin-sort" value={sort} onChange={(e) => setSort(e.target.value as Sort)} aria-label="الترتيب">
+            <option value="newest">الأحدث أولًا</option>
+            <option value="oldest">الأقدم أولًا</option>
+          </select>
+        </div>
       </div>
 
       {failed && (
@@ -200,63 +270,137 @@ export function AdminView() {
       {orders === null && !failed && <p className="panel-loading">جارٍ تحميل الطلبات…</p>}
       {orders && shown.length === 0 && <p className="hint">لا توجد طلبات هنا.</p>}
 
-      <ul className="order-cards order-cards--admin">
-        {shown.map((o) => {
-          const local = formatIraqiMobile(o.phone);
-          return (
-            <li key={o.id} className={`order-card order-card--${o.status.toLowerCase()}`}>
-              <div className="order-card__head">
-                <strong dir="ltr" className="order-card__number">
-                  {o.orderNumber}
-                </strong>
-                <StatusChip status={o.status} />
-                <span className="order-card__time" dir="ltr">
-                  {baghdadTime(o.createdAt)}
+      <ul className="order-rows">
+        {shown.map((o) => (
+          <li key={o.id}>
+            <button
+              type="button"
+              className={`order-row order-row--${o.status.toLowerCase()}`}
+              onClick={() => openOrder(o.id)}
+            >
+              <span className="order-row__main">
+                <span className="order-row__top">
+                  <strong dir="ltr">{o.orderNumber}</strong>
+                  <StatusChip status={o.status} />
                 </span>
-              </div>
-
-              <div className="order-card__who">
-                <strong>{o.name}</strong>
-                <a href={`https://wa.me/${o.phone}`} target="_blank" rel="noopener noreferrer" dir="ltr">
-                  {local}
-                </a>
-              </div>
-              <p className="order-card__address">{fullAddress(o)}</p>
-              {o.note && <p className="order-card__note">ملاحظة: {o.note}</p>}
-
-              <OrderItemsList items={o.items} />
-              <p className="order-card__total">
-                <span>
-                  المجموع · {jarsLabel(o.jars)}
+                <span className="order-row__name">{o.name}</span>
+                <span className="order-row__sub">
+                  {[o.province, o.area].filter(Boolean).join("، ") || fullAddress(o)}
                 </span>
+              </span>
+              <span className="order-row__side">
                 <strong>{formatIQD(o.total)}</strong>
-              </p>
-
-              {(o.source || o.telegramSent === false) && (
-                <p className="order-card__meta">
-                  {o.source && <span dir="ltr">{o.source}</span>}
-                  {o.telegramSent === false && <span className="order-card__warn">لم يُرسل إلى تيليغرام</span>}
-                </p>
-              )}
-
-              <div className="status-buttons" role="group" aria-label={`حالة الطلب ${o.orderNumber}`}>
-                {STATUS_ORDER.map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    aria-pressed={o.status === s}
-                    disabled={saving === o.id}
-                    className={s === "CANCELLED" && confirmCancel === o.id ? "is-confirm" : undefined}
-                    onClick={() => void setStatus(o, s)}
-                  >
-                    {s === "CANCELLED" && confirmCancel === o.id ? "تأكيد الإلغاء؟" : STATUS_LABELS[s]}
-                  </button>
-                ))}
-              </div>
-            </li>
-          );
-        })}
+                <span dir="ltr">{shortTime(o.createdAt, today)}</span>
+              </span>
+              <svg className="order-row__chevron" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M15 5l-7 7 7 7" />
+              </svg>
+            </button>
+          </li>
+        ))}
       </ul>
     </div>
+  );
+}
+
+function OrderDetail({ order: o, today }: { order: Order; today: string }) {
+  const toast = useToast();
+  const [saving, setSaving] = useState(false);
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const local = formatIraqiMobile(o.phone);
+
+  async function setStatus(status: OrderStatus) {
+    if (o.status === status) return;
+    if (status === "CANCELLED" && !confirmCancel) {
+      setConfirmCancel(true);
+      return;
+    }
+    setConfirmCancel(false);
+    setSaving(true);
+    const { errors } = await dataClient.models.Order.update({ id: o.id, status });
+    setSaving(false);
+    if (errors?.length) {
+      console.error("status update failed", errors);
+      toast({ id: "admin", tone: "attention", message: `تعذّر حفظ حالة الطلب ${o.orderNumber}. حاولوا مجددًا.` });
+    } else {
+      toast({ id: "admin", message: `${o.orderNumber}: ${STATUS_LABELS[status]}` });
+    }
+  }
+
+  async function pdf() {
+    try {
+      const { saveOrderPdf } = await import("@/lib/receipt");
+      await saveOrderPdf(o);
+    } catch {
+      toast({ id: "pdf", tone: "attention", message: "تعذّر تجهيز الملف الآن. حاولوا مجددًا." });
+    }
+  }
+
+  return (
+    <article className={`order-detail order-detail--${o.status.toLowerCase()}`}>
+      <section className="order-detail__block order-detail__status">
+        <StatusChip status={o.status} />
+        <span dir="ltr">{shortTime(o.createdAt, today)}</span>
+      </section>
+
+      <section className="order-detail__block">
+        <h2>العميل</h2>
+        <p className="order-detail__name">{o.name}</p>
+        <p className="order-detail__phone" dir="ltr">
+          {local}
+        </p>
+        <div className="order-detail__contact">
+          <a className="btn btn--small" href={`https://wa.me/${o.phone}`} target="_blank" rel="noopener noreferrer">
+            واتساب
+          </a>
+          <a className="btn btn--quiet btn--small" href={`tel:+${o.phone}`}>
+            اتصال
+          </a>
+        </div>
+      </section>
+
+      <section className="order-detail__block">
+        <h2>التوصيل</h2>
+        <p>{fullAddress(o)}</p>
+        {o.note && <p className="order-card__note">ملاحظة: {o.note}</p>}
+      </section>
+
+      <section className="order-detail__block">
+        <h2>الطلب</h2>
+        <OrderItemsList items={o.items} />
+        <p className="order-card__total">
+          <span>المجموع · {jarsLabel(o.jars)}</span>
+          <strong>{formatIQD(o.total)}</strong>
+        </p>
+        {(o.source || o.telegramSent === false) && (
+          <p className="order-card__meta">
+            {o.source && <span dir="ltr">{o.source}</span>}
+            {o.telegramSent === false && <span className="order-card__warn">لم يُرسل إلى تيليغرام</span>}
+          </p>
+        )}
+      </section>
+
+      <section className="order-detail__block">
+        <h2>تغيير الحالة</h2>
+        <div className="status-grid" role="group" aria-label={`حالة الطلب ${o.orderNumber}`}>
+          {STATUS_ORDER.map((s) => (
+            <button
+              key={s}
+              type="button"
+              aria-pressed={o.status === s}
+              disabled={saving}
+              className={s === "CANCELLED" && confirmCancel ? "is-confirm" : undefined}
+              onClick={() => void setStatus(s)}
+            >
+              {s === "CANCELLED" && confirmCancel ? "تأكيد الإلغاء؟" : STATUS_LABELS[s]}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <button type="button" className="link-button order-detail__pdf" onClick={() => void pdf()}>
+        تنزيل ملخص الطلب (PDF)
+      </button>
+    </article>
   );
 }

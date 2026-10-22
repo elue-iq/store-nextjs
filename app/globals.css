@@ -2327,3 +2327,331 @@ body:has(.admin-app) .site-footer {
     flex: 1;
   }
 }
+
+/* ---------- Admin: list + order screen ---------- */
+
+.admin-screen--detail {
+  animation: admin-push 0.22s ease-out;
+}
+
+@keyframes admin-push {
+  from {
+    opacity: 0;
+    transform: translateX(-18px); /* RTL: the new screen slides in from the left */
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-screen--detail {
+    animation: none;
+  }
+}
+
+.admin-nav {
+  position: sticky;
+  top: calc(env(safe-area-inset-top, 0px) + 3.2rem);
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: -0.4rem calc(var(--gutter) * -1) 1rem;
+  padding: 0.55rem var(--gutter);
+  background: color-mix(in srgb, var(--cream) 94%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--sand);
+}
+
+.admin-nav__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  min-height: 2.6rem;
+  padding: 0 0.2rem;
+  border: 0;
+  background: none;
+  color: var(--terracotta-deep);
+  font: inherit;
+  font-weight: 600;
+  font-size: 1.05rem;
+  cursor: pointer;
+}
+
+.admin-nav__back svg {
+  width: 1.3rem;
+  height: 1.3rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.admin-nav__title {
+  color: var(--cocoa);
+  font-size: 1.1rem;
+  letter-spacing: 0.02em;
+}
+
+.admin-tools__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.admin-search {
+  max-width: none;
+  width: 100%;
+}
+
+.admin-sort {
+  min-height: 2.3rem;
+  padding: 0.3rem 2.2rem 0.3rem 0.9rem;
+  border: 1.5px solid var(--sand-deep);
+  border-radius: var(--radius-control);
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%235b3a2e' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat left 0.8rem center / 0.7rem;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.92rem;
+  appearance: none;
+  padding-inline-start: 0.9rem;
+  padding-inline-end: 2.2rem;
+}
+
+@media (max-width: 640px) {
+  /* Phones: filters scroll sideways in one line instead of wrapping. */
+  .admin-filters {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    flex: 0 0 auto;
+    width: calc(100% + var(--gutter) * 2);
+    margin: 0 calc(var(--gutter) * -1);
+    padding: 0.1rem var(--gutter);
+    scrollbar-width: none;
+  }
+
+  .admin-filters::-webkit-scrollbar {
+    display: none;
+  }
+
+  .admin-filters button {
+    flex: none;
+  }
+}
+
+.order-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--sand-deep);
+}
+
+.order-rows li {
+  border-bottom: 1px solid var(--sand);
+}
+
+.order-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.8rem;
+  width: 100%;
+  padding: 0.85rem 0.2rem;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.order-row:hover,
+.order-row:focus-visible {
+  background: var(--paper);
+}
+
+.order-row:active {
+  background: var(--sand);
+}
+
+.order-row__main {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.order-row__top {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.order-row__top strong {
+  color: var(--terracotta-deep);
+  letter-spacing: 0.02em;
+}
+
+.order-row__top .status-chip {
+  padding: 0.05rem 0.55rem;
+  font-size: 0.75rem;
+}
+
+.order-row__name {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.order-row__sub {
+  color: var(--muted);
+  font-size: 0.88rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.order-row__side {
+  display: grid;
+  justify-items: end;
+  gap: 0.2rem;
+  white-space: nowrap;
+}
+
+.order-row__side span {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.order-row__chevron {
+  width: 1.1rem;
+  height: 1.1rem;
+  fill: none;
+  stroke: var(--sand-deep);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.order-row--cancelled {
+  opacity: 0.6;
+}
+
+.order-row--new .order-row__name::before {
+  content: "";
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-inline-end: 0.4rem;
+  border-radius: 50%;
+  background: var(--terracotta-deep);
+  vertical-align: 0.12em;
+}
+
+.order-detail {
+  display: grid;
+  gap: 1rem;
+  max-width: 40rem;
+}
+
+.order-detail__block {
+  display: grid;
+  gap: 0.6rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--sand);
+  border-radius: var(--radius-label);
+  background: var(--paper);
+  line-height: 1.7;
+}
+
+.order-detail__block h2 {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.order-detail__status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.order-detail__status span[dir="ltr"] {
+  color: var(--muted);
+}
+
+.order-detail__name {
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.order-detail__phone {
+  justify-self: start;
+  font-size: 1.1rem;
+  color: var(--cocoa);
+  letter-spacing: 0.02em;
+}
+
+.order-detail__contact {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+
+.status-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.status-grid button {
+  min-height: 3rem;
+  padding: 0.4rem 0.6rem;
+  border: 1.5px solid var(--sand-deep);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.status-grid button[aria-pressed="true"] {
+  border-color: var(--cocoa);
+  background: var(--cocoa);
+  color: var(--cream);
+}
+
+.status-grid button.is-confirm {
+  border-color: var(--terracotta-deep);
+  background: var(--terracotta-deep);
+  color: var(--cream);
+}
+
+.status-grid button:last-child {
+  grid-column: 1 / -1;
+}
+
+.status-grid button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.order-detail__pdf {
+  justify-self: center;
+  margin-bottom: 1rem;
+}
+
+.admin-page {
+  overflow-x: clip;
+}
+
+.admin-tools {
+  grid-template-columns: minmax(0, 1fr);
+}
