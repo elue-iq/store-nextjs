@@ -281,7 +281,7 @@ p {
 
 .site-footer {
   margin-top: 4rem;
-  background: var(--cocoa);
+  background: var(--terracotta);
   color: var(--cream);
 }
 
@@ -298,7 +298,7 @@ p {
 .site-footer__logo {
   width: 150px;
   height: auto;
-  color: var(--sand-deep);
+  color: var(--cream);
 }
 
 .site-footer__line {

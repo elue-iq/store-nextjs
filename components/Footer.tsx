@@ -6,7 +6,6 @@ export function Footer() {
     <footer className="site-footer">
       <div className="site-footer__inner">
         <Logo className="site-footer__logo" />
-        <p className="site-footer__line">ÉLUE — اللذّة التي تختارونها، بحساب</p>
         <ul className="site-footer__links">
           <li>
             <a href={site.instagramUrl} target="_blank" rel="noopener noreferrer">
