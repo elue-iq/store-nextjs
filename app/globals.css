@@ -216,48 +216,67 @@ p {
   text-decoration: none;
 }
 
-.account-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  white-space: nowrap;
+.icon-link {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 1.5px solid var(--cocoa);
+  border-radius: 50%;
+  color: var(--cocoa);
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-.account-link__icon {
-  width: 1.25rem;
-  height: 1.25rem;
+.icon-link:hover {
+  background: var(--cocoa);
+  color: var(--cream);
+}
+
+.icon-link__svg {
+  width: 1.35rem;
+  height: 1.35rem;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.6;
   stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Logged in: a small terracotta dot on the account icon. */
+.icon-link__dot {
+  position: absolute;
+  top: 0.15rem;
+  inset-inline-end: 0.1rem;
+  width: 0.7rem;
+  height: 0.7rem;
+  border: 2px solid var(--cream);
+  border-radius: 50%;
+  background: var(--terracotta-deep);
+}
+
+.icon-link__count {
+  position: absolute;
+  top: -0.35rem;
+  inset-inline-end: -0.35rem;
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  padding: 0 0.3rem;
+  border: 2px solid var(--cream);
+  border-radius: 999px;
+  background: var(--terracotta-deep);
+  color: var(--cream);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
 }
 
 @media (max-width: 420px) {
   .site-header__flavors {
     display: none;
   }
-}
-
-.cart-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.3rem 0.4rem 0.3rem 0.9rem;
-  border: 1.5px solid var(--cocoa);
-  border-radius: var(--radius-control);
-}
-
-.cart-link__count {
-  display: inline-grid;
-  place-items: center;
-  min-width: 1.7rem;
-  height: 1.7rem;
-  padding: 0 0.35rem;
-  border-radius: 999px;
-  background: var(--cocoa);
-  color: var(--cream);
-  font-size: 0.85rem;
-  line-height: 1;
 }
 
 .site-footer {
@@ -465,6 +484,7 @@ p {
   color: #fff;
   text-decoration: none;
   font-size: 0.95rem;
+  text-align: left;
 }
 
 /* RTL: odd items sit in the right column, even items in the left one. */
@@ -480,6 +500,8 @@ p {
 .hero__flavors span {
   font-family: var(--font-display);
   font-size: 1.05rem;
+  white-space: nowrap;
+  text-align: left;
 }
 
 @media (max-width: 559px) {
