@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { useAuth } from "./AuthProvider";
 import { useToast } from "./Toast";
 import { DeliveryFields, type DeliveryFieldsHandle } from "./DeliveryFields";
+import { callModon } from "./AdminModon";
 import { dataClient, errorCode, errorFields, type Order } from "@/lib/data";
 import { products } from "@/lib/products";
 import { MAX_QTY_PER_LINE } from "@/lib/order-text";
@@ -123,7 +124,18 @@ export function AdminOrderForm({
         toast({ id: "admin", tone: "attention", message: "تعذّر حفظ التعديلات. حاول مجددًا." });
         return;
       }
-      toast({ id: "admin", message: `حُفظت تعديلات ${order.orderNumber}.` });
+      // Already at Modon: send the new details there too (only possible before pickup).
+      const modonFields = ["phone", "name", "province", "area", "address", "note", "items"];
+      if (order.modonQr && modonFields.some((k) => k in changes)) {
+        const { error } = await callModon({ action: "update", orderId: order.id });
+        toast(
+          error
+            ? { id: "admin", tone: "attention", message: `حُفظت التعديلات هنا، لكن لم تُحدَّث لدى مدن: ${error} اتصل بمدن.` }
+            : { id: "admin", message: `حُفظت تعديلات ${order.orderNumber} وحُدّثت لدى مدن.` },
+        );
+      } else {
+        toast({ id: "admin", message: `حُفظت تعديلات ${order.orderNumber}.` });
+      }
       onDone(order.orderNumber);
       return;
     }

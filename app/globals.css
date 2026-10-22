@@ -2817,3 +2817,110 @@ body:has(.admin-app) .site-footer {
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
+
+/* ---------- Admin: Modon delivery ---------- */
+
+.modon__area {
+  font-size: 0.92rem;
+  color: var(--muted);
+}
+
+.modon__area strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.modon__label {
+  display: grid;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.modon__label input,
+.modon__regions {
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--sand-deep);
+  border-radius: var(--radius-panel);
+  background: var(--paper);
+  font: inherit;
+  color: var(--ink);
+}
+
+.modon__regions {
+  margin-top: 0.5rem;
+  padding: 0.3rem;
+}
+
+.modon__regions option {
+  padding: 0.45rem 0.5rem;
+  border-radius: 6px;
+}
+
+.modon__regions option:checked {
+  background: var(--terracotta) linear-gradient(var(--terracotta), var(--terracotta));
+  color: var(--cream);
+}
+
+.modon__sum {
+  display: grid;
+  gap: 0.15rem;
+  margin: 0.9rem 0;
+}
+
+.modon__sum strong {
+  color: var(--terracotta);
+  font-size: 1.15rem;
+}
+
+.modon__sum small {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.modon__confirm {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.9rem;
+  border: 1.5px solid var(--terracotta);
+  border-radius: var(--radius-panel);
+  background: var(--cream);
+}
+
+.modon__confirm p {
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+.modon__facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem 1rem;
+  margin: 0 0 0.9rem;
+}
+
+.modon__facts dt {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.modon__facts dd {
+  margin: 0.1rem 0 0;
+  font-weight: 600;
+}
+
+.modon__facts dd.is-warn {
+  color: var(--terracotta);
+}
+
+.modon__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.modon__delete {
+  font-size: 0.88rem;
+}

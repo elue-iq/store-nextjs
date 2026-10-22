@@ -6,6 +6,7 @@ import { useToast } from "./Toast";
 import { LoginPanel } from "./LoginPanel";
 import { AdminStock } from "./AdminStock";
 import { AdminOrderForm } from "./AdminOrderForm";
+import { AdminModon } from "./AdminModon";
 import { jarsLabel } from "./AddToCart";
 import { OrderItemsList, StatusChip, StatusTrack } from "./OrderBits";
 import { formatPoints, pointsFor } from "@/lib/loyalty";
@@ -365,6 +366,11 @@ export function AdminView() {
                 <span className={o.cashierOrderId ? "order-row__cashier" : "order-row__cashier is-missing"}>
                   {o.cashierOrderId ? <>كاشير: <span dir="ltr">{o.cashierOrderId}</span></> : "بلا رقم كاشير"}
                   {o.createdBy && " · أنشأه الفريق"}
+                  {o.modonQr && (
+                    <>
+                      {" · "}مدن: <span dir="ltr">{o.modonQr}</span>
+                    </>
+                  )}
                 </span>
                 <span className="order-row__sub">
                   {[o.province, o.area].filter(Boolean).join("، ") || fullAddress(o)}
@@ -532,6 +538,8 @@ function OrderDetail({ order: o, today, me }: { order: Order; today: string; me:
         )}
       </section>
 
+      <AdminModon order={o} />
+
       <section className="order-detail__block">
         <h2>تغيير الحالة</h2>
         <div className="status-grid" role="group" aria-label={`حالة الطلب ${o.orderNumber}`}>
@@ -548,6 +556,9 @@ function OrderDetail({ order: o, today, me }: { order: Order; today: string; me:
             </button>
           ))}
         </div>
+        {confirmCancel && o.modonQr && (
+          <p className="panel-note">الطلب مُرسل إلى مدن: احذفه من مدن أيضًا (أعلاه) أو اتصل بهم إذا استلمه المندوب.</p>
+        )}
       </section>
 
       <div className="order-detail__actions">

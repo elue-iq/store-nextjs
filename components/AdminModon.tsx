@@ -1,0 +1,229 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { useToast } from "./Toast";
+import { dataClient, type Order } from "@/lib/data";
+import { MODON_CITY, modonCollect, normalizeArabic, suggestRegion, type ModonRegion } from "@/lib/modon";
+import { formatIQD, site } from "@/lib/site";
+
+// Errors from the modon function come back as "code:message".
+function modonError(errors: { message?: string }[] | null | undefined, fallback: string): string {
+  const m = errors?.[0]?.message ?? "";
+  const i = m.indexOf(":");
+  const code = i > 0 ? m.slice(0, i) : m;
+  const detail = i > 0 ? m.slice(i + 1).trim() : "";
+  if (code === "already_sent") return `الطلب مُرسل إلى مدن مسبقًا (${detail}).`;
+  if (code.startsWith("modon_")) return detail ? `مدن: ${detail}` : fallback;
+  return fallback;
+}
+
+export async function callModon(args: {
+  action: "regions" | "send" | "update" | "delete" | "refresh";
+  orderId?: string;
+  cityId?: number;
+  regionId?: number;
+  regionName?: string;
+}): Promise<{ data: Record<string, unknown> | null; error: string }> {
+  try {
+    const { data, errors } = await dataClient.mutations.modon(args);
+    if (errors?.length) return { data: null, error: modonError(errors, "تعذّر الاتصال بمدن الآن. حاول مجددًا.") };
+    const parsed = typeof data === "string" ? JSON.parse(data) : data;
+    return { data: (parsed ?? {}) as Record<string, unknown>, error: "" };
+  } catch (err) {
+    console.error("modon call failed", err);
+    return { data: null, error: "تعذّر الاتصال بمدن الآن. حاول مجددًا." };
+  }
+}
+
+// The «التوصيل عبر مدن» block on an order screen in /admin.
+export function AdminModon({ order: o }: { order: Order }) {
+  const toast = useToast();
+  const cityId = MODON_CITY[o.province ?? ""];
+  const [regions, setRegions] = useState<ModonRegion[] | null>(null);
+  const [regionsError, setRegionsError] = useState("");
+  const [regionId, setRegionId] = useState<number | null>(null);
+  const [search, setSearch] = useState("");
+  const [confirmSend, setConfirmSend] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const sent = Boolean(o.modonQr);
+  const cancelled = o.status === "CANCELLED";
+
+  // Regions for the picker, with the closest match to what the customer typed selected.
+  useEffect(() => {
+    if (sent || cancelled || !cityId) return;
+    let alive = true;
+    void callModon({ action: "regions", cityId }).then(({ data, error }) => {
+      if (!alive) return;
+      if (error) return setRegionsError(error);
+      const list = (data?.regions as ModonRegion[]) ?? [];
+      setRegions(list);
+      const guess = suggestRegion(list, o.area ?? "", o.address);
+      if (guess) setRegionId(guess.id);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [sent, cancelled, cityId, o.area, o.address]);
+
+  const shown = useMemo(() => {
+    if (!regions) return [];
+    const q = normalizeArabic(search);
+    const list = q ? regions.filter((r) => normalizeArabic(r.name).includes(q)) : regions;
+    const chosen = regions.find((r) => r.id === regionId);
+    // Keep the chosen region visible while searching.
+    return chosen && !list.includes(chosen) ? [chosen, ...list] : list;
+  }, [regions, search, regionId]);
+
+  const chosen = regions?.find((r) => r.id === regionId) ?? null;
+
+  async function run(action: "send" | "delete" | "refresh", ok: string) {
+    setBusy(true);
+    const { data, error } = await callModon({
+      action,
+      orderId: o.id,
+      ...(action === "send" ? { regionId: regionId ?? undefined, regionName: chosen?.name } : {}),
+    });
+    setBusy(false);
+    setConfirmSend(false);
+    setConfirmDelete(false);
+    if (error) {
+      toast({ id: "modon", tone: "attention", message: error });
+      return;
+    }
+    toast({ id: "modon", message: ok });
+    if (action === "send" && data?.link) window.open(String(data.link), "_blank", "noopener");
+  }
+
+  if (!sent) {
+    if (cancelled) return null;
+    return (
+      <section className="order-detail__block modon">
+        <h2>التوصيل عبر مدن</h2>
+        {!cityId ? (
+          <p className="hint">لا توجد مدينة لدى مدن لمحافظة «{o.province || "غير محددة"}». عدّل عنوان الطلب أولًا.</p>
+        ) : regionsError ? (
+          <p className="panel-note">{regionsError}</p>
+        ) : !regions ? (
+          <p className="panel-loading">جارٍ تحميل مناطق مدن…</p>
+        ) : (
+          <>
+            <p className="modon__area">
+              كتب العميل: <strong>{[o.area, o.address].filter(Boolean).join(" — ") || "—"}</strong>
+            </p>
+            <label className="modon__label">
+              المنطقة لدى مدن
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={`ابحث بين ${regions.length} منطقة`}
+              />
+            </label>
+            <select
+              className="modon__regions"
+              size={6}
+              value={regionId ?? ""}
+              onChange={(e) => setRegionId(Number(e.target.value))}
+              aria-label="المنطقة لدى مدن"
+            >
+              {shown.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+            <p className="modon__sum">
+              يستلم المندوب من العميل <strong>{formatIQD(modonCollect(o.total))}</strong>
+              <small>
+                {formatIQD(o.total)} الطلب + {formatIQD(site.deliveryFee)} التوصيل
+              </small>
+            </p>
+            {confirmSend ? (
+              <div className="modon__confirm" role="alert">
+                <p>
+                  سيُنشأ الطلب لدى مدن ويأتي المندوب لاستلامه. المنطقة: <strong>{chosen?.name}</strong>
+                </p>
+                <button type="button" className="btn btn--full" disabled={busy} onClick={() => void run("send", "أُرسل الطلب إلى مدن.")}>
+                  {busy ? "جارٍ الإرسال…" : "تأكيد الإرسال إلى مدن"}
+                </button>
+                <button type="button" className="btn btn--quiet btn--full" disabled={busy} onClick={() => setConfirmSend(false)}>
+                  تراجع
+                </button>
+              </div>
+            ) : (
+              <button type="button" className="btn btn--full" disabled={!chosen} onClick={() => setConfirmSend(true)}>
+                {chosen ? "أرسل إلى مدن" : "اختر المنطقة أولًا"}
+              </button>
+            )}
+          </>
+        )}
+      </section>
+    );
+  }
+
+  const beforePickup = (o.modonStatusId ?? "1") === "1";
+
+  return (
+    <section className="order-detail__block modon">
+      <h2>التوصيل عبر مدن</h2>
+      <dl className="modon__facts">
+        <div>
+          <dt>رقم مدن</dt>
+          <dd dir="ltr">{o.modonQr}</dd>
+        </div>
+        <div>
+          <dt>الحالة لدى مدن</dt>
+          <dd>{o.modonStatus || "—"}</dd>
+        </div>
+        <div>
+          <dt>يستلم المندوب</dt>
+          <dd>{formatIQD(o.modonPrice ?? modonCollect(o.total))}</dd>
+        </div>
+        {o.modonFee != null && (
+          <div>
+            <dt>أجور مدن</dt>
+            <dd className={o.modonFee !== site.deliveryFee ? "is-warn" : undefined}>{formatIQD(o.modonFee)}</dd>
+          </div>
+        )}
+        {o.modonRegionName && (
+          <div>
+            <dt>المنطقة</dt>
+            <dd>{o.modonRegionName}</dd>
+          </div>
+        )}
+      </dl>
+      {o.modonFee != null && o.modonFee !== site.deliveryFee && (
+        <p className="panel-note">أجور مدن لهذا الطلب تختلف عن {formatIQD(site.deliveryFee)} المعتمدة في الموقع.</p>
+      )}
+      {o.modonNote && <p className="panel-note">ملاحظة المندوب: {o.modonNote}</p>}
+      <div className="modon__actions">
+        {o.modonLink && (
+          <a className="btn btn--small" href={o.modonLink} target="_blank" rel="noopener noreferrer">
+            طباعة الملصق
+          </a>
+        )}
+        <button type="button" className="btn btn--quiet btn--small" disabled={busy} onClick={() => void run("refresh", "حُدّثت حالة مدن.")}>
+          تحديث الحالة
+        </button>
+      </div>
+      {beforePickup &&
+        (confirmDelete ? (
+          <div className="modon__confirm" role="alert">
+            <p>سيُحذف الطلب من مدن ولن يأتي المندوب لاستلامه.</p>
+            <button type="button" className="btn btn--full" disabled={busy} onClick={() => void run("delete", "حُذف الطلب من مدن.")}>
+              {busy ? "جارٍ الحذف…" : "تأكيد الحذف من مدن"}
+            </button>
+            <button type="button" className="btn btn--quiet btn--full" disabled={busy} onClick={() => setConfirmDelete(false)}>
+              تراجع
+            </button>
+          </div>
+        ) : (
+          <button type="button" className="link-button modon__delete" onClick={() => setConfirmDelete(true)}>
+            حذف الطلب من مدن
+          </button>
+        ))}
+      {!beforePickup && <p className="hint">استلم المندوب الطلب: أي تعديل أو إلغاء يكون بالاتصال بمدن.</p>}
+    </section>
+  );
+}

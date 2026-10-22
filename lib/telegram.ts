@@ -37,6 +37,7 @@ export function buildOrderMessage(o: {
     ...o.lines.map((l) => `• ${ltr(`${l.qty} × ${escapeHtml(l.product.nameEn)}`)} — ${formatIQD(l.subtotal)}`),
     `عدد العلب: ${jars}`,
     `<b>المجموع: ${formatIQD(o.total)}</b>`,
+    `مع التوصيل يستلم المندوب: ${formatIQD(o.total + site.deliveryFee)}`,
     site.paymentNote,
     "",
     `الاسم: ${escapeHtml(o.name)}`,

@@ -12,7 +12,7 @@ import { OrderItemsList, StatusChip, StatusTrack } from "./OrderBits";
 import { DeliveryFields } from "./DeliveryFields";
 import { baghdadTime, dataClient, newestFirst, type Order } from "@/lib/data";
 import { formatIraqiMobile } from "@/lib/phone";
-import { formatIQD, site } from "@/lib/site";
+import { deliveryNote, formatIQD, site } from "@/lib/site";
 import { getProduct } from "@/lib/products";
 import { fullAddress } from "@/lib/iraq";
 import { formatPoints, pointsFor, pointsSummary } from "@/lib/loyalty";
@@ -360,6 +360,7 @@ function MyOrderDetail({ order: o }: { order: Order }) {
           <span>المجموع</span>
           <strong>{formatIQD(o.total)}</strong>
         </p>
+        <p className="order-detail__muted">{deliveryNote()}</p>
         {o.status !== "CANCELLED" && (
           <p className="order-detail__points">
             {o.status === "DELIVERED"

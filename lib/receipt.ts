@@ -7,7 +7,7 @@
 // This is an order summary for the customer's records, not a tax invoice.
 
 import { LOGO_PATH, LOGO_VIEWBOX } from "./brand-mark";
-import { formatIQD, site } from "./site";
+import { deliveryNote, formatIQD, site } from "./site";
 import { fullAddress } from "./iraq";
 import { getProduct } from "./products";
 
@@ -117,6 +117,8 @@ function draw(ctx: CanvasRenderingContext2D, d: ReceiptData): number {
   text("المجموع", R, y, { size: 38, weight: 700, color: C.cocoa });
   text(formatIQD(d.total), M, y, { size: 44, weight: 700, color: C.terracotta, align: "left" });
   y += 48;
+  text(deliveryNote(), R, y, { size: 26, color: C.muted });
+  y += 40;
   text(site.paymentNote, R, y, { size: 26, color: C.muted });
   y += 44;
   rule(y);

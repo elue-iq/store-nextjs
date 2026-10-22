@@ -11,7 +11,7 @@ import { LoginPanel } from "./LoginPanel";
 import { DeliveryFields, type DeliveryFieldsHandle } from "./DeliveryFields";
 import { buildWhatsAppText, priceCart, type CartItem } from "@/lib/order-text";
 import { formatIraqiMobile } from "@/lib/phone";
-import { formatIQD, site } from "@/lib/site";
+import { deliveryNote, formatIQD, site } from "@/lib/site";
 import { fullAddress } from "@/lib/iraq";
 import { checkDelivery, cleanDelivery, ltr, type DeliveryInfo, type FieldErrors } from "@/lib/validate";
 import { dataClient, errorCode, errorFields } from "@/lib/data";
@@ -290,6 +290,7 @@ export function OrderFlow() {
           <span>المجموع</span>
           <strong>{formatIQD(total)}</strong>
         </p>
+        <p className="order-pay">{deliveryNote()}</p>
         <p className="order-pay">{site.paymentNote}</p>
       </div>
 

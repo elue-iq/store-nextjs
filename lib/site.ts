@@ -15,6 +15,8 @@ export const site = {
   // Change this once ELUE's own WhatsApp number is connected in OTPIQ.
   codeSenderNote: "يصلك الرمز في رسالة واتساب باسم Premium Technology، وهي خدمة التحقق التي نستخدمها.",
   currency: "د.ع",
+  // Delivery fee the customer pays the driver on top of the jars (Modon keeps it).
+  deliveryFee: 5000,
   // Public address used in links the server sends (Telegram).
   address: "https://elue-iq.com",
 };
@@ -36,4 +38,9 @@ export function siteUrl(): string {
 
 export function formatIQD(amount: number): string {
   return `${amount.toLocaleString("en-US")} ${site.currency}`;
+}
+
+// Under the order total (checkout, receipt, «طلباتي»): delivery is paid to the driver.
+export function deliveryNote(): string {
+  return `+ أجور التوصيل ${formatIQD(site.deliveryFee)} تُدفع للمندوب عند الاستلام`;
 }

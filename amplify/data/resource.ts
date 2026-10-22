@@ -1,5 +1,6 @@
 import { a, defineData, type ClientSchema } from "@aws-amplify/backend";
 import { placeOrder } from "../functions/place-order/resource";
+import { modon } from "../functions/modon/resource";
 
 // Orders live in DynamoDB (one table, managed by Amplify).
 //
@@ -47,10 +48,23 @@ const schema = a
         // Last team member who changed the order (details or status), and when.
         editedBy: a.string().authorization((allow) => [allow.group("ADMINS")]),
         editedAt: a.datetime().authorization((allow) => [allow.group("ADMINS")]),
+        // Modon Express (delivery). Set by the modon function; team only.
+        modonId: a.string().authorization((allow) => [allow.group("ADMINS")]), // Modon's id (webhook, bulk lookup)
+        modonQr: a.string().authorization((allow) => [allow.group("ADMINS")]), // Modon's order number (qr_id: edit, delete, sticker)
+        modonLink: a.string().authorization((allow) => [allow.group("ADMINS")]), // sticker PDF
+        modonPrice: a.integer().authorization((allow) => [allow.group("ADMINS")]), // what the driver collects
+        modonFee: a.integer().authorization((allow) => [allow.group("ADMINS")]), // Modon's delivery fee
+        modonStatusId: a.string().authorization((allow) => [allow.group("ADMINS")]),
+        modonStatus: a.string().authorization((allow) => [allow.group("ADMINS")]),
+        modonNote: a.string().authorization((allow) => [allow.group("ADMINS")]), // driver's problem note
+        modonRegionId: a.integer().authorization((allow) => [allow.group("ADMINS")]),
+        modonRegionName: a.string().authorization((allow) => [allow.group("ADMINS")]),
+        modonSentAt: a.datetime().authorization((allow) => [allow.group("ADMINS")]),
+        modonUpdatedAt: a.datetime().authorization((allow) => [allow.group("ADMINS")]),
         owner: a.string().authorization((allow) => [allow.ownerDefinedIn("owner").to(["read"]), allow.group("ADMINS")]),
       })
       // Fast lookups: a customer's orders, and orders by phone number (admin search).
-      .secondaryIndexes((index) => [index("owner"), index("phone")])
+      .secondaryIndexes((index) => [index("owner"), index("phone"), index("modonId")])
       .authorization((allow) => [allow.ownerDefinedIn("owner").to(["read"]), allow.group("ADMINS")]),
 
     // The customer's saved delivery details ("معلوماتي" on /account).
@@ -99,8 +113,22 @@ const schema = a
       .returns(a.ref("PlaceOrderResult"))
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(placeOrder)),
+
+    // Modon actions from the admin: regions, send, update, delete, refresh.
+    modon: a
+      .mutation()
+      .arguments({
+        action: a.string().required(),
+        orderId: a.string(),
+        cityId: a.integer(),
+        regionId: a.integer(),
+        regionName: a.string(),
+      })
+      .returns(a.json())
+      .authorization((allow) => [allow.group("ADMINS")])
+      .handler(a.handler.function(modon)),
   })
-  .authorization((allow) => [allow.resource(placeOrder)]);
+  .authorization((allow) => [allow.resource(placeOrder), allow.resource(modon)]);
 
 export type Schema = ClientSchema<typeof schema>;
 
