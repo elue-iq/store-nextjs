@@ -1,0 +1,6 @@
+{
+  "redirects": [
+    { "source": "/", "destination": "https://elue-iq.com/", "permanent": false },
+    { "source": "/:path*", "destination": "https://elue-iq.com/:path*", "permanent": false }
+  ]
+}
