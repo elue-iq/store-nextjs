@@ -22,7 +22,7 @@ export function AdminStock() {
         for (const s of data ?? []) map[s.slug] = s.available;
         setAvailable(map);
       })
-      .catch(() => toast({ id: "stock", tone: "attention", message: "تعذّر تحميل حالة المنتجات. حدّثوا الصفحة." }));
+      .catch(() => toast({ id: "stock", tone: "attention", message: "تعذّر تحميل حالة المنتجات. حدّث الصفحة." }));
   }, [toast]);
 
   async function set(slug: string, nameAr: string, value: boolean) {
@@ -33,7 +33,7 @@ export function AdminStock() {
     setSaving(null);
     if (!res.data || res.errors?.length) {
       console.error("stock update failed", res.errors);
-      toast({ id: "stock", tone: "attention", message: `تعذّر حفظ حالة ${nameAr}. حاولوا مجددًا.` });
+      toast({ id: "stock", tone: "attention", message: `تعذّر حفظ حالة ${nameAr}. حاول مجددًا.` });
       return;
     }
     setAvailable({ ...available, [slug]: value });

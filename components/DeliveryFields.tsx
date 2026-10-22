@@ -111,7 +111,7 @@ export function DeliveryFields({
             {...a11y("province")}
           >
             <option value="" disabled>
-              اختاروا المحافظة
+              اختر المحافظة
             </option>
             {PROVINCES.map((p) => (
               <option key={p} value={p}>
@@ -139,7 +139,7 @@ export function DeliveryFields({
 
       {outsideDelivery && (
         <p className="field-note" role="note">
-          التوصيل متاح حاليًا داخل بغداد فقط. يمكنكم إرسال الطلب، وسنتواصل معكم بشأن التوصيل إلى محافظتكم.
+          التوصيل متاح حاليًا داخل بغداد فقط. يمكنك إرسال الطلب، وسنتواصل معك بشأن التوصيل إلى محافظتك.
         </p>
       )}
 

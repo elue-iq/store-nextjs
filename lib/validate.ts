@@ -17,18 +17,18 @@ export const ltr = (s: string) => `⁦${s}⁩`;
 // letters only, each word 2+ letters, 4+ letters in total.
 export function nameError(raw: string): string | null {
   const name = raw.trim().replace(/\s+/g, " ");
-  if (!name) return "اكتبوا الاسم الكامل.";
+  if (!name) return "اكتب الاسم الكامل.";
   if (/[\d٠-٩۰-۹]/.test(name) || !/^[\p{L}\p{M}\s'.-]+$/u.test(name)) return "يجب أن يتكوّن الاسم من حروف فقط.";
   const words = name.split(" ").filter(Boolean);
   const letters = name.replace(/[^\p{L}]/gu, "").length;
   if (words.length < 2 || letters < 4 || words.some((w) => w.replace(/[^\p{L}]/gu, "").length < 2)) {
-    return "اكتبوا الاسم الكامل: الاسم الأول واسم الأب أو العائلة.";
+    return "اكتب الاسم الكامل: الاسم الأول واسم الأب أو العائلة.";
   }
   return null;
 }
 
 export function phoneError(raw: string): string | null {
-  if (!raw.trim()) return "اكتبوا رقم الواتساب.";
+  if (!raw.trim()) return "اكتب رقم الواتساب.";
   if (!normalizeIraqiMobile(raw)) {
     return "يجب أن يكون الرقم رقم هاتف عراقيًا من 11 خانة يبدأ بـ 07، مثل ⁦0771 234 5678⁩.";
   }
@@ -36,20 +36,20 @@ export function phoneError(raw: string): string | null {
 }
 
 export function provinceError(raw: string): string | null {
-  return isProvince(raw.trim()) ? null : "اختاروا المحافظة.";
+  return isProvince(raw.trim()) ? null : "اختر المحافظة.";
 }
 
 export function areaError(raw: string): string | null {
   const area = raw.trim();
-  if (!area) return "اكتبوا المنطقة أو الحي.";
-  if (area.length < 2) return "اكتبوا اسم المنطقة أو الحي كاملًا.";
+  if (!area) return "اكتب المنطقة أو الحي.";
+  if (area.length < 2) return "اكتب اسم المنطقة أو الحي كاملًا.";
   return null;
 }
 
 export function addressError(raw: string): string | null {
   const address = raw.trim();
-  if (!address) return "اكتبوا تفاصيل العنوان.";
-  if (address.length < 6) return "اكتبوا تفاصيل العنوان مع أقرب نقطة دالة.";
+  if (!address) return "اكتب تفاصيل العنوان.";
+  if (address.length < 6) return "اكتب تفاصيل العنوان مع أقرب نقطة دالة.";
   return null;
 }
 

@@ -65,7 +65,7 @@ export function ProductBuyBox({ slug }: { slug: string }) {
   if (!isAvailable(slug)) {
     return (
       <div className="buy-box">
-        <p className="soldout-note">نفدت الكمية حاليًا. نعمل على توفيرها قريبًا، ويمكنكم اختيار نكهة أخرى.</p>
+        <p className="soldout-note">نفدت الكمية حاليًا. نعمل على توفيرها قريبًا، ويمكنك اختيار نكهة أخرى.</p>
       </div>
     );
   }

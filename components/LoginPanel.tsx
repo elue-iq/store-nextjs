@@ -65,12 +65,12 @@ export function LoginPanel({
         message: isResend ? "أرسلنا رمزًا جديدًا عبر واتساب." : `أرسلنا الرمز عبر واتساب إلى الرقم ${ltr(phoneDisplay)}.`,
       });
     } else if (result === "rate_limited") {
-      toast({ id: "login", tone: "attention", message: "طلبتم رموزًا كثيرة لهذا الرقم. حاولوا مجددًا بعد 10 دقائق." });
+      toast({ id: "login", tone: "attention", message: "طلبت رموزًا كثيرة لهذا الرقم. حاول مجددًا بعد 10 دقائق." });
     } else if (result === "invalid_phone") {
       setStep("phone");
       setPhoneErr(phoneError("x") ?? "");
     } else {
-      toast({ id: "login", tone: "attention", message: "تعذّر إرسال الرمز الآن. تأكدوا من الرقم وحاولوا بعد قليل." });
+      toast({ id: "login", tone: "attention", message: "تعذّر إرسال الرمز الآن. تأكد من الرقم وحاول بعد قليل." });
     }
   }
 
@@ -87,9 +87,9 @@ export function LoginPanel({
     setBusy(false);
     boxes.current?.clear();
     if (result === "wrong") {
-      setCodeErr("الرمز غير صحيح. تأكدوا منه وحاولوا مجددًا.");
+      setCodeErr("الرمز غير صحيح. تأكد منه وحاول مجددًا.");
     } else {
-      setCodeErr("انتهت صلاحية الرمز أو تجاوزتم عدد المحاولات. اطلبوا رمزًا جديدًا.");
+      setCodeErr("انتهت صلاحية الرمز أو تجاوزت عدد المحاولات. اطلب رمزًا جديدًا.");
       setResendIn(0);
     }
   }
@@ -149,7 +149,7 @@ export function LoginPanel({
             )}
           </label>
           <button type="submit" className="btn btn--full" disabled={busy}>
-            {busy ? "جارٍ الإرسال…" : "أرسلوا رمز التحقق عبر واتساب"}
+            {busy ? "جارٍ الإرسال…" : "أرسل رمز التحقق عبر واتساب"}
           </button>
           <p className="hint">{site.codeSenderNote}</p>
         </form>
@@ -168,7 +168,7 @@ export function LoginPanel({
               {phoneDisplay}
             </p>
             <button type="button" className="link-button" onClick={changeNumber}>
-              الرقم غير صحيح؟ عدّلوه
+              الرقم غير صحيح؟ عدّله
             </button>
           </div>
           <CodeInput
@@ -197,7 +197,7 @@ export function LoginPanel({
               {resendIn > 0 ? `إعادة إرسال الرمز بعد ${resendIn} ثانية` : "إعادة إرسال الرمز"}
             </button>
           </div>
-          <p className="hint">لم يصلكم الرمز؟ تأكدوا من صحة الرقم ومن أن واتساب مفعّل عليه.</p>
+          <p className="hint">لم يصلك الرمز؟ تأكد من صحة الرقم ومن أن واتساب مفعّل عليه.</p>
         </form>
       )}
     </div>

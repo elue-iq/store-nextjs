@@ -938,7 +938,8 @@ p {
   gap: 1.2rem;
   padding: clamp(1.75rem, 5vw, 3.5rem);
   border-radius: 18px;
-  background: var(--sage);
+  border: 1.5px solid var(--terracotta);
+  background: var(--cream);
 }
 
 @media (min-width: 900px) {
@@ -950,7 +951,7 @@ p {
 }
 
 .kids h2 {
-  color: var(--sage-deep);
+  color: var(--terracotta);
   font-size: clamp(1.7rem, 3.4vw, 2.5rem);
   font-weight: 700;
 }
@@ -2659,4 +2660,67 @@ body:has(.admin-app) .site-footer {
 .cta {
   display: flex;
   justify-content: center;
+}
+
+/* ---------- حسابي: points and order list ---------- */
+
+.points-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem 1.5rem;
+  margin-bottom: 1.4rem;
+  padding: 1.1rem 1.2rem;
+  border-radius: var(--radius-label);
+  background: var(--terracotta);
+  color: var(--cream);
+}
+
+.points-card__label {
+  display: block;
+  font-size: 0.9rem;
+  opacity: 0.85;
+}
+
+.points-card__value {
+  font-size: 1.9rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.points-card__value small {
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.points-card__note {
+  flex: 1 1 14rem;
+  font-size: 0.9rem;
+  line-height: 1.7;
+  opacity: 0.9;
+}
+
+.admin-nav--shop {
+  top: 4.4rem;
+}
+
+.order-detail__muted {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.order-detail__points {
+  padding: 0.5rem 0.8rem;
+  border-radius: 8px;
+  background: var(--cream);
+  color: var(--terracotta);
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.order-detail__actions {
+  display: grid;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
 }

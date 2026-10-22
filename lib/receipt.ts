@@ -92,10 +92,10 @@ function draw(ctx: CanvasRenderingContext2D, d: ReceiptData): number {
 
   // Title, order number, time.
   let y = bandH + 104;
-  text("ملخص طلبكم", R, y, { size: 54, weight: 700, color: C.cocoa });
+  text("ملخص طلبك", R, y, { size: 54, weight: 700, color: C.cocoa });
   text(d.orderId, M, y, { size: 42, weight: 700, color: C.terracotta, align: "left", dir: "ltr" });
   y += 54;
-  text("شكراً لاختياركم ÉLUE", R, y, { size: 27, color: C.muted });
+  text("شكراً لاختيارك ÉLUE", R, y, { size: 27, color: C.muted });
   text(d.time, M, y, { size: 27, color: C.muted, align: "left", dir: "ltr" });
   y += 46;
   rule(y);
@@ -144,7 +144,7 @@ function draw(ctx: CanvasRenderingContext2D, d: ReceiptData): number {
 
   // Footer.
   y += 66;
-  text("لمتابعة طلبكم، راسلونا عبر واتساب", W / 2, y, { size: 27, color: C.ink, align: "center" });
+  text("لمتابعة طلبك، راسلنا عبر واتساب", W / 2, y, { size: 27, color: C.ink, align: "center" });
   y += 44;
   text(`${site.whatsappDisplay}   ·   ${site.instagramHandle}`, W / 2, y, {
     size: 27,
@@ -160,7 +160,7 @@ async function loadFonts() {
   if (typeof document === "undefined" || !document.fonts) return;
   try {
     await Promise.all([
-      document.fonts.load(`700 40px ${AR}`, "ملخص طلبكم EL-0"),
+      document.fonts.load(`700 40px ${AR}`, "ملخص طلبك EL-0"),
       document.fonts.load(`400 30px ${AR}`, "العنوان 0771"),
       document.fonts.load(`600 30px ${AR}`, "دارك 15,000"),
     ]);

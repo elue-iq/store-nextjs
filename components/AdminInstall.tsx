@@ -66,14 +66,14 @@ export function AdminInstall() {
           <p>لتثبيت لوحة الطلبات على هذا الجهاز:</p>
           <ol>
             <li>
-              اضغطوا زر المشاركة{" "}
+              اضغط زر المشاركة{" "}
               <svg viewBox="0 0 24 24" aria-hidden="true" className="admin-install__share">
                 <path d="M12 3v12M7.5 7.5 12 3l4.5 4.5M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" />
               </svg>{" "}
               في Safari.
             </li>
-            <li>اختاروا «إضافة إلى الشاشة الرئيسية».</li>
-            <li>افتحوا «طلبات ÉLUE» من الشاشة الرئيسية وسجّلوا الدخول مرة واحدة.</li>
+            <li>اختر «إضافة إلى الشاشة الرئيسية».</li>
+            <li>افتح «طلبات ÉLUE» من الشاشة الرئيسية وسجّل الدخول مرة واحدة.</li>
           </ol>
           <button type="button" className="link-button" onClick={() => setShowHelp(false)}>
             إغلاق

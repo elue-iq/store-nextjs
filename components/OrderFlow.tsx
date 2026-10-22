@@ -93,9 +93,9 @@ export function OrderFlow() {
           items: priced.map((l) => ({ slug: l.product.slug, nameAr: l.product.nameAr, nameEn: l.product.nameEn, qty: l.qty, price: l.product.price })),
         });
         setPdfSaved(true);
-        toast({ id: automatic ? "checkout" : "pdf", message: "حفظنا ملخص الطلب (PDF) على جهازكم." });
+        toast({ id: automatic ? "checkout" : "pdf", message: "حفظنا ملخص الطلب (PDF) على جهازك." });
       } catch {
-        if (!automatic) toast({ id: "pdf", tone: "attention", message: "تعذّر تجهيز الملف الآن. حاولوا مجددًا." });
+        if (!automatic) toast({ id: "pdf", tone: "attention", message: "تعذّر تجهيز الملف الآن. حاول مجددًا." });
       }
     },
     [toast],
@@ -123,7 +123,7 @@ export function OrderFlow() {
       toast({
         id: "checkout",
         tone: "attention",
-        message: `نفدت كمية ${soldOutLines.map((l) => l.product.nameAr).join(" و")}. أزيلوها من السلة لإتمام الطلب.`,
+        message: `نفدت كمية ${soldOutLines.map((l) => l.product.nameAr).join(" و")}. أزلها من السلة لإتمام الطلب.`,
       });
       return;
     }
@@ -153,7 +153,7 @@ export function OrderFlow() {
         setPlaced({ ...snapshot, orderNumber: data.orderNumber, createdAt: data.createdAt });
         setStep("sent");
         cart.clear();
-        toast({ id: "checkout", message: `استلمنا طلبكم رقم ${ltr(data.orderNumber)}.` });
+        toast({ id: "checkout", message: `استلمنا طلبك رقم ${ltr(data.orderNumber)}.` });
         window.scrollTo({ top: 0 });
         return;
       }
@@ -165,14 +165,14 @@ export function OrderFlow() {
         toast({
           id: "checkout",
           tone: "attention",
-          message: "نفدت كمية بعض النكهات في سلتكم قبل قليل. أزيلوها من السلة ثم أكّدوا الطلب.",
+          message: "نفدت كمية بعض النكهات في سلتك قبل قليل. أزلها من السلة ثم أكّد الطلب.",
         });
       } else if (code === "empty_cart") {
-        toast({ id: "checkout", tone: "attention", message: "السلة فارغة أو فيها خطأ. عودوا إلى النكهات وأضيفوها من جديد." });
+        toast({ id: "checkout", tone: "attention", message: "السلة فارغة أو فيها خطأ. عُد إلى النكهات وأضفها من جديد." });
       } else if (code === "not_signed_in") {
         // The login on this device is no longer valid: log in again with a fresh code.
         await auth.signOut();
-        toast({ id: "checkout", tone: "attention", message: "انتهت جلسة الدخول. سجّلوا الدخول مجددًا لإتمام الطلب." });
+        toast({ id: "checkout", tone: "attention", message: "انتهت جلسة الدخول. سجّل الدخول مجددًا لإتمام الطلب." });
       } else {
         console.error("placeOrder failed", gqlErrors);
         setPlaced({ ...snapshot, orderNumber: "", createdAt: new Date().toISOString() });
@@ -204,25 +204,25 @@ export function OrderFlow() {
     )}`;
     return (
       <div className="order-result">
-        <h2>استلمنا طلبكم</h2>
+        <h2>استلمنا طلبك</h2>
         <p className="order-result__id">
           رقم الطلب <strong dir="ltr">{placed.orderNumber}</strong>
         </p>
         <p>
-          سيتواصل فريقنا معكم عبر واتساب على الرقم <span dir="ltr">{formatIraqiMobile(placed.phone)}</span> لتأكيد موعد
-          التوصيل. ويمكنكم متابعة حالة الطلب من صفحة «حسابي».
+          سيتواصل فريقنا معك عبر واتساب على الرقم <span dir="ltr">{formatIraqiMobile(placed.phone)}</span> لتأكيد موعد
+          التوصيل. ويمكنك متابعة حالة الطلب من صفحة «حسابي».
         </p>
         <p className="order-result__muted">
           {pdfSaved
-            ? "حفظنا ملخص الطلب (PDF) على جهازكم، ليبقى رقم الطلب وتفاصيله معكم."
-            : "يمكنكم تنزيل ملخص الطلب (PDF) ليبقى رقم الطلب وتفاصيله معكم."}
+            ? "حفظنا ملخص الطلب (PDF) على جهازك، ليبقى رقم الطلب وتفاصيله معك."
+            : "يمكنك تنزيل ملخص الطلب (PDF) ليبقى رقم الطلب وتفاصيله معك."}
         </p>
         <div className="order-result__actions">
           <Link className="btn btn--full" href="/account">
-            تابعوا طلبكم في «حسابي»
+            تابع طلبك في «حسابي»
           </Link>
           <a className="btn btn--quiet btn--full" href={followUp} target="_blank" rel="noopener noreferrer">
-            راسلونا عبر واتساب
+            راسلنا عبر واتساب
           </a>
           <button type="button" className="btn btn--quiet btn--full" onClick={() => void savePdf(placed, false)}>
             تنزيل ملخص الطلب (PDF)
@@ -238,9 +238,9 @@ export function OrderFlow() {
   if (cart.ready && lines.length === 0 && step !== "failed") {
     return (
       <div className="order-empty">
-        <p>سلتكم فارغة. اختاروا نكهة للبدء.</p>
+        <p>سلتك فارغة. اختر نكهة للبدء.</p>
         <Link href="/#flavors" className="btn">
-          تصفّحوا النكهات
+          تصفّح النكهات
         </Link>
       </div>
     );
@@ -263,7 +263,7 @@ export function OrderFlow() {
   return (
     <div className="order-layout">
       <div className="order-summary">
-        <h2>طلبكم</h2>
+        <h2>طلبك</h2>
         <ul className="order-lines">
           {lines.map((l) => (
             <li key={l.product.slug} style={{ "--band": l.product.band } as React.CSSProperties}>
@@ -296,10 +296,10 @@ export function OrderFlow() {
       <div className="order-form">
         {step === "failed" ? (
           <div className="order-failed" role="alert">
-            <h2>لنُكمل طلبكم عبر واتساب</h2>
-            <p>حدث خلل أثناء إرسال الطلب. طلبكم محفوظ على هذا الجهاز، والرسالة جاهزة: اضغطوا الزر وأرسلوها إلينا مباشرة.</p>
+            <h2>لنُكمل طلبك عبر واتساب</h2>
+            <p>حدث خلل أثناء إرسال الطلب. طلبك محفوظ على هذا الجهاز، والرسالة جاهزة: اضغط الزر وأرسلها إلينا مباشرة.</p>
             <a className="btn btn--full" href={fallbackHref} target="_blank" rel="noopener noreferrer">
-              أرسلوا الطلب عبر واتساب
+              أرسل الطلب عبر واتساب
             </a>
             <button
               type="button"
@@ -310,23 +310,23 @@ export function OrderFlow() {
                 void placeOrder();
               }}
             >
-              {busy ? "جارٍ الإرسال…" : "حاولوا مجددًا"}
+              {busy ? "جارٍ الإرسال…" : "حاول مجددًا"}
             </button>
           </div>
         ) : auth.status === "loading" ? (
-          <p className="panel-loading">لحظة من فضلكم…</p>
+          <p className="panel-loading">لحظة من فضلك…</p>
         ) : auth.status === "signedOut" ? (
           <LoginPanel
             compact
-            title="سجّلوا الدخول لإتمام الطلب"
-            intro="نتحقق من رقم الواتساب مرة واحدة فقط، ثم تُحفظ معلومات التوصيل في حسابكم وتتابعون طلباتكم منه."
+            title="سجّل الدخول لإتمام الطلب"
+            intro="نتحقق من رقم الواتساب مرة واحدة فقط، ثم تُحفظ معلومات التوصيل في حسابك وتتابع طلباتك منه."
           />
         ) : teamDevice ? (
           <div className="order-failed" role="note">
             <h2>هذا الجهاز مسجَّل بحساب الفريق</h2>
             <p>
-              الحساب الحالي (<span dir="ltr">{formatIraqiMobile(auth.phone)}</span>) مخصص للوحة الطلبات. لإرسال طلب، سجّلوا
-              الخروج ثم ادخلوا برقم العميل.
+              الحساب الحالي (<span dir="ltr">{formatIraqiMobile(auth.phone)}</span>) مخصص للوحة الطلبات. لإرسال طلب، سجّل
+              الخروج ثم ادخل برقم العميل.
             </p>
             <button type="button" className="btn btn--quiet btn--full" onClick={() => void auth.signOut()}>
               تسجيل الخروج
@@ -348,7 +348,7 @@ export function OrderFlow() {
               <span>رقم الواتساب</span>
               <strong dir="ltr">{formatIraqiMobile(auth.phone)}</strong>
               <button type="button" className="link-button" onClick={() => void auth.signOut()}>
-                ليس رقمكم؟ سجّلوا الخروج
+                ليس رقمك؟ سجّل الخروج
               </button>
             </div>
 
@@ -388,7 +388,7 @@ export function OrderFlow() {
 
             {soldOutLines.length > 0 && (
               <p className="field-note" role="alert">
-                نفدت كمية {soldOutLines.map((l) => l.product.nameAr).join(" و")} حاليًا. أزيلوها من السلة لإتمام الطلب.
+                نفدت كمية {soldOutLines.map((l) => l.product.nameAr).join(" و")} حاليًا. أزلها من السلة لإتمام الطلب.
               </p>
             )}
             <button type="submit" className="btn btn--full" disabled={busy || soldOutLines.length > 0}>

@@ -2,19 +2,20 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "./AuthProvider";
 import { useCart } from "./CartProvider";
 import { useStock } from "./StockProvider";
 import { useToast } from "./Toast";
 import { LoginPanel } from "./LoginPanel";
-import { OrderItemsList, StatusTrack } from "./OrderBits";
+import { OrderItemsList, StatusChip, StatusTrack } from "./OrderBits";
 import { DeliveryFields } from "./DeliveryFields";
 import { baghdadTime, dataClient, newestFirst, type Order } from "@/lib/data";
 import { formatIraqiMobile } from "@/lib/phone";
 import { formatIQD, site } from "@/lib/site";
 import { getProduct } from "@/lib/products";
 import { fullAddress } from "@/lib/iraq";
+import { formatPoints, pointsFor, pointsSummary } from "@/lib/loyalty";
 import { checkDelivery, type DeliveryInfo, type FieldErrors } from "@/lib/validate";
 import { EMPTY_DELIVERY, loadProfile, saveProfile, type Profile } from "@/lib/profile";
 
@@ -32,26 +33,112 @@ async function loadMyOrders(owner: string): Promise<Order[]> {
   return all.sort(newestFirst);
 }
 
+// Customer's own orders, loaded once for the points card and the list.
+function useMyOrders(owner: string) {
+  const [orders, setOrders] = useState<Order[] | null>(null);
+  const [failed, setFailed] = useState(false);
+  const load = useCallback(async () => {
+    if (!owner) return;
+    try {
+      setOrders(await loadMyOrders(owner));
+      setFailed(false);
+    } catch (err) {
+      console.error("orders failed", err);
+      setFailed(true);
+    }
+  }, [owner]);
+  useEffect(() => {
+    void load();
+    // Statuses change during the day: refresh when the customer comes back to the tab.
+    const onFocus = () => document.visibilityState === "visible" && void load();
+    document.addEventListener("visibilitychange", onFocus);
+    return () => document.removeEventListener("visibilitychange", onFocus);
+  }, [load]);
+  return { orders, failed, reload: load };
+}
+
+function orderFromUrl(): string | null {
+  return new URLSearchParams(window.location.search).get("order");
+}
+
 export function AccountView() {
   const auth = useAuth();
   const toast = useToast();
   const [tab, setTab] = useState<Tab>("orders");
+  const [selected, setSelected] = useState<string | null>(null);
+  const listScroll = useRef(0);
+  const { orders, failed, reload } = useMyOrders(auth.status === "signedIn" ? auth.owner : "");
 
-  // Open "معلوماتي" directly with /account#details.
+  // Open "معلوماتي" with /account#details; an order screen with /account?order=<id>.
   useEffect(() => {
     if (window.location.hash === "#details") setTab("details");
+    setSelected(orderFromUrl());
+    const onPop = () => {
+      const id = orderFromUrl();
+      setSelected(id);
+      if (!id) requestAnimationFrame(() => window.scrollTo({ top: listScroll.current }));
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
   }, []);
 
-  if (auth.status === "loading") return <p className="panel-loading">لحظة من فضلكم…</p>;
+  const openOrder = useCallback((id: string) => {
+    listScroll.current = window.scrollY;
+    window.history.pushState({ order: id }, "", `/account?order=${encodeURIComponent(id)}`);
+    setSelected(id);
+    window.scrollTo({ top: 0 });
+  }, []);
+
+  const backToList = useCallback(() => {
+    if (window.history.state?.order) {
+      window.history.back();
+    } else {
+      window.history.replaceState(null, "", "/account");
+      setSelected(null);
+      window.scrollTo({ top: 0 });
+    }
+  }, []);
+
+  if (auth.status === "loading") return <p className="panel-loading">لحظة من فضلك…</p>;
 
   if (auth.status === "signedOut") {
     return (
       <LoginPanel
         title="تسجيل الدخول"
-        intro="سجّلوا الدخول برقم الواتساب لمتابعة طلباتكم وحفظ معلومات التوصيل. يصلكم رمز التحقق عبر واتساب."
+        intro="سجّل الدخول برقم الواتساب لمتابعة طلباتك وحفظ معلومات التوصيل. يصلك رمز التحقق عبر واتساب."
       />
     );
   }
+
+  if (selected) {
+    const order = orders?.find((o) => o.id === selected);
+    return (
+      <div className="account admin-screen--detail">
+        <div className="admin-nav admin-nav--shop">
+          <button type="button" className="admin-nav__back" onClick={backToList}>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M9 5l7 7-7 7" />
+            </svg>
+            طلباتي
+          </button>
+          {order && (
+            <strong className="admin-nav__title" dir="ltr">
+              {order.orderNumber}
+            </strong>
+          )}
+        </div>
+        {order ? (
+          <MyOrderDetail order={order} />
+        ) : orders === null ? (
+          <p className="panel-loading">جارٍ تحميل الطلب…</p>
+        ) : (
+          <p className="hint">لم نجد هذا الطلب.</p>
+        )}
+      </div>
+    );
+  }
+
+  const points = pointsSummary(orders ?? []);
 
   return (
     <div className="account">
@@ -74,6 +161,19 @@ export function AccountView() {
         </button>
       </div>
 
+      <section className="points-card" aria-label="نقاطي">
+        <div>
+          <span className="points-card__label">نقاطي</span>
+          <strong className="points-card__value">
+            {orders === null ? "…" : formatPoints(points.earned)} <small>نقطة</small>
+          </strong>
+        </div>
+        <p className="points-card__note">
+          {points.pending > 0 && <>{formatPoints(points.pending)} نقطة تُضاف بعد توصيل طلباتك الحالية. </>}
+          تحصل على 10 نقاط عن كل 1,000 د.ع، وتُضاف بعد توصيل الطلب.
+        </p>
+      </section>
+
       <div className="tabs" role="tablist" aria-label="أقسام الحساب">
         <button type="button" role="tab" aria-selected={tab === "orders"} onClick={() => setTab("orders")}>
           طلباتي
@@ -83,10 +183,16 @@ export function AccountView() {
         </button>
       </div>
 
-      <div role="tabpanel">{tab === "orders" ? <MyOrders /> : <MyDetails />}</div>
+      <div role="tabpanel">
+        {tab === "orders" ? (
+          <MyOrders orders={orders} failed={failed} reload={reload} onOpen={openOrder} />
+        ) : (
+          <MyDetails />
+        )}
+      </div>
 
       <p className="hint panel-foot">
-        لديكم سؤال عن طلب؟ راسلونا عبر واتساب{" "}
+        لديك سؤال عن طلب؟ راسلنا عبر واتساب{" "}
         <a href={`https://wa.me/${site.whatsappNumber}`} target="_blank" rel="noopener noreferrer" dir="ltr">
           {site.whatsappDisplay}
         </a>
@@ -95,35 +201,80 @@ export function AccountView() {
   );
 }
 
-function MyOrders() {
-  const auth = useAuth();
+function MyOrders({
+  orders,
+  failed,
+  reload,
+  onOpen,
+}: {
+  orders: Order[] | null;
+  failed: boolean;
+  reload: () => Promise<void>;
+  onOpen: (id: string) => void;
+}) {
+  if (failed) {
+    return (
+      <div className="panel-note" role="alert">
+        تعذّر تحميل طلباتك الآن.{" "}
+        <button type="button" className="link-button" onClick={() => void reload()}>
+          حاول مجددًا
+        </button>
+      </div>
+    );
+  }
+
+  if (orders === null) return <p className="panel-loading">جارٍ تحميل طلباتك…</p>;
+
+  if (orders.length === 0) {
+    return (
+      <div className="order-empty">
+        <p>لا توجد طلبات بعد.</p>
+        <Link href="/#flavors" className="btn">
+          تصفّح النكهات
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <ul className="order-rows">
+      {orders.map((o) => (
+        <li key={o.id}>
+          <button type="button" className={`order-row order-row--${o.status.toLowerCase()}`} onClick={() => onOpen(o.id)}>
+            <span className="order-row__main">
+              <span className="order-row__top">
+                <strong dir="ltr">{o.orderNumber}</strong>
+                <StatusChip status={o.status} />
+              </span>
+              <span className="order-row__sub">
+                {o.items
+                  .filter((i): i is NonNullable<typeof i> => Boolean(i))
+                  .map((i) => `${getProduct(i.slug)?.nameAr ?? i.nameAr} × ${i.qty}`)
+                  .join("، ")}
+              </span>
+            </span>
+            <span className="order-row__side">
+              <strong>{formatIQD(o.total)}</strong>
+              <span dir="ltr">{baghdadTime(o.createdAt).slice(0, 10)}</span>
+            </span>
+            <svg className="order-row__chevron" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M15 5l-7 7 7 7" />
+            </svg>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function MyOrderDetail({ order: o }: { order: Order }) {
   const cart = useCart();
   const toast = useToast();
   const router = useRouter();
   const stock = useStock();
-  const [orders, setOrders] = useState<Order[] | null>(null);
-  const [failed, setFailed] = useState(false);
+  const points = pointsFor(o.total);
 
-  const load = useCallback(async () => {
-    if (!auth.owner) return;
-    try {
-      setOrders(await loadMyOrders(auth.owner));
-      setFailed(false);
-    } catch (err) {
-      console.error("orders failed", err);
-      setFailed(true);
-    }
-  }, [auth.owner]);
-
-  useEffect(() => {
-    void load();
-    // Statuses change during the day: refresh when the customer comes back to the tab.
-    const onFocus = () => document.visibilityState === "visible" && void load();
-    document.addEventListener("visibilitychange", onFocus);
-    return () => document.removeEventListener("visibilitychange", onFocus);
-  }, [load]);
-
-  function reorder(o: Order) {
+  function reorder() {
     let added = 0;
     const skipped: string[] = [];
     for (const i of o.items) {
@@ -149,70 +300,56 @@ function MyOrders() {
     router.push("/order");
   }
 
-  async function pdf(o: Order) {
+  async function pdf() {
     try {
       const { saveOrderPdf } = await import("@/lib/receipt");
       await saveOrderPdf(o);
       toast({ id: "pdf", message: "نزّلنا ملخص الطلب (PDF)." });
     } catch {
-      toast({ id: "pdf", tone: "attention", message: "تعذّر تجهيز الملف الآن. حاولوا مجددًا." });
+      toast({ id: "pdf", tone: "attention", message: "تعذّر تجهيز الملف الآن. حاول مجددًا." });
     }
   }
 
-  if (failed) {
-    return (
-      <div className="panel-note" role="alert">
-        تعذّر تحميل طلباتكم الآن.{" "}
-        <button type="button" className="link-button" onClick={() => void load()}>
-          حاولوا مجددًا
+  return (
+    <article className="order-detail">
+      <section className="order-detail__block">
+        <StatusTrack status={o.status} />
+        <span className="order-detail__muted" dir="ltr">
+          {baghdadTime(o.createdAt)}
+        </span>
+      </section>
+
+      <section className="order-detail__block">
+        <h2>الطلب</h2>
+        <OrderItemsList items={o.items} />
+        <p className="order-card__total">
+          <span>المجموع</span>
+          <strong>{formatIQD(o.total)}</strong>
+        </p>
+        {o.status !== "CANCELLED" && (
+          <p className="order-detail__points">
+            {o.status === "DELIVERED"
+              ? `أضفنا ${formatPoints(points)} نقطة إلى رصيدك.`
+              : `تحصل على ${formatPoints(points)} نقطة بعد توصيل هذا الطلب.`}
+          </p>
+        )}
+      </section>
+
+      <section className="order-detail__block">
+        <h2>التوصيل</h2>
+        <p>{fullAddress(o)}</p>
+        {o.note && <p className="order-card__note">ملاحظة: {o.note}</p>}
+      </section>
+
+      <div className="order-detail__actions">
+        <button type="button" className="btn btn--full" onClick={reorder}>
+          اطلب الطلب نفسه
+        </button>
+        <button type="button" className="btn btn--quiet btn--full" onClick={() => void pdf()}>
+          ملخص الطلب (PDF)
         </button>
       </div>
-    );
-  }
-
-  if (orders === null) return <p className="panel-loading">جارٍ تحميل طلباتكم…</p>;
-
-  if (orders.length === 0) {
-    return (
-      <div className="order-empty">
-        <p>لا توجد طلبات بعد.</p>
-        <Link href="/#flavors" className="btn">
-          تصفّحوا النكهات
-        </Link>
-      </div>
-    );
-  }
-
-  return (
-    <ul className="order-cards">
-      {orders.map((o) => (
-        <li key={o.id} className="order-card">
-          <div className="order-card__head">
-            <strong dir="ltr" className="order-card__number">
-              {o.orderNumber}
-            </strong>
-            <span className="order-card__time" dir="ltr">
-              {baghdadTime(o.createdAt)}
-            </span>
-          </div>
-          <StatusTrack status={o.status} />
-          <OrderItemsList items={o.items} />
-          <p className="order-card__total">
-            <span>المجموع</span>
-            <strong>{formatIQD(o.total)}</strong>
-          </p>
-          <p className="order-card__address">{fullAddress(o)}</p>
-          <div className="order-card__actions">
-            <button type="button" className="btn btn--small" onClick={() => reorder(o)}>
-              اطلبوا الطلب نفسه
-            </button>
-            <button type="button" className="btn btn--quiet btn--small" onClick={() => void pdf(o)}>
-              ملخص الطلب (PDF)
-            </button>
-          </div>
-        </li>
-      ))}
-    </ul>
+    </article>
   );
 }
 
@@ -249,20 +386,20 @@ function MyDetails() {
       const saved = await saveProfile(values, profile?.id);
       setProfile(saved);
       setValues({ name: saved.name, province: saved.province, area: saved.area, address: saved.address });
-      toast({ id: "profile", message: "حُفظت معلوماتكم، وستُستخدم في طلباتكم القادمة." });
+      toast({ id: "profile", message: "حُفظت معلوماتك، وستُستخدم في طلباتك القادمة." });
     } catch (err) {
       console.error("profile save failed", err);
-      toast({ id: "profile", tone: "attention", message: "تعذّر حفظ المعلومات الآن. حاولوا مجددًا." });
+      toast({ id: "profile", tone: "attention", message: "تعذّر حفظ المعلومات الآن. حاول مجددًا." });
     } finally {
       setSaving(false);
     }
   }
 
-  if (state === "loading") return <p className="panel-loading">جارٍ تحميل معلوماتكم…</p>;
+  if (state === "loading") return <p className="panel-loading">جارٍ تحميل معلوماتك…</p>;
   if (state === "failed") {
     return (
       <p className="panel-note" role="alert">
-        تعذّر تحميل معلوماتكم الآن. حدّثوا الصفحة وحاولوا مجددًا.
+        تعذّر تحميل معلوماتك الآن. حدّث الصفحة وحاول مجددًا.
       </p>
     );
   }
@@ -277,7 +414,7 @@ function MyDetails() {
       }}
     >
       <h2>معلومات التوصيل</h2>
-      <p className="hint">تُملأ هذه المعلومات تلقائيًا عند كل طلب، ويمكنكم تعديلها في أي وقت.</p>
+      <p className="hint">تُملأ هذه المعلومات تلقائيًا عند كل طلب، ويمكنك تعديلها في أي وقت.</p>
       <DeliveryFields idPrefix="profile" values={values} errors={errors} onChange={setValues} onErrors={setErrors} />
       <button type="submit" className="btn btn--full" disabled={saving}>
         {saving ? "جارٍ الحفظ…" : "حفظ المعلومات"}

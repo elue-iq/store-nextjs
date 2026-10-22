@@ -129,7 +129,7 @@ export default function Home() {
 
       <section className="section" aria-labelledby="kids-title">
         <div className="kids">
-          <h2 id="kids-title">لأطفالكم: بدون حيرة</h2>
+          <h2 id="kids-title">لأطفالك: بدون حيرة</h2>
           <div className="kids__body">
             <p>كل أهل يعرفون هالحيرة: تنطي طفلك حلو ويبقى بالك بشنو بيه، ما تنطيه ويزعل.</p>
             <p>

@@ -149,10 +149,10 @@ export function AdminView() {
 
   // ---- Access -------------------------------------------------------------
 
-  if (auth.status === "loading") return <p className="panel-loading">لحظة من فضلكم…</p>;
+  if (auth.status === "loading") return <p className="panel-loading">لحظة من فضلك…</p>;
 
   if (auth.status === "signedOut") {
-    return <LoginPanel title="لوحة الطلبات" intro="هذه الصفحة مخصصة لفريق ÉLUE. سجّلوا الدخول برقم الواتساب المضاف إلى الفريق." />;
+    return <LoginPanel title="لوحة الطلبات" intro="هذه الصفحة مخصصة لفريق ÉLUE. سجّل الدخول برقم الواتساب المضاف إلى الفريق." />;
   }
 
   if (!auth.isAdmin) {
@@ -242,7 +242,7 @@ export function AdminView() {
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="ابحثوا بالرقم أو الاسم أو الهاتف"
+          placeholder="ابحث بالرقم أو الاسم أو الهاتف"
           aria-label="بحث"
         />
         <div className="admin-tools__row">
@@ -263,7 +263,7 @@ export function AdminView() {
 
       {failed && (
         <p className="panel-note" role="alert">
-          انقطع الاتصال بقائمة الطلبات. حدّثوا الصفحة.
+          انقطع الاتصال بقائمة الطلبات. حدّث الصفحة.
         </p>
       )}
 
@@ -321,7 +321,7 @@ function OrderDetail({ order: o, today }: { order: Order; today: string }) {
     setSaving(false);
     if (errors?.length) {
       console.error("status update failed", errors);
-      toast({ id: "admin", tone: "attention", message: `تعذّر حفظ حالة الطلب ${o.orderNumber}. حاولوا مجددًا.` });
+      toast({ id: "admin", tone: "attention", message: `تعذّر حفظ حالة الطلب ${o.orderNumber}. حاول مجددًا.` });
     } else {
       toast({ id: "admin", message: `${o.orderNumber}: ${STATUS_LABELS[status]}` });
     }
@@ -332,7 +332,7 @@ function OrderDetail({ order: o, today }: { order: Order; today: string }) {
       const { saveOrderPdf } = await import("@/lib/receipt");
       await saveOrderPdf(o);
     } catch {
-      toast({ id: "pdf", tone: "attention", message: "تعذّر تجهيز الملف الآن. حاولوا مجددًا." });
+      toast({ id: "pdf", tone: "attention", message: "تعذّر تجهيز الملف الآن. حاول مجددًا." });
     }
   }
 

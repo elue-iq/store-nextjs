@@ -13,7 +13,7 @@ export const site = {
   // Who the WhatsApp code comes from. OTPIQ's default sender shows as
   // "Premium Technology" (+1 555 335 9750), not ELUE.
   // Change this once ELUE's own WhatsApp number is connected in OTPIQ.
-  codeSenderNote: "يصلكم الرمز في رسالة واتساب باسم Premium Technology، وهي خدمة التحقق التي نستخدمها.",
+  codeSenderNote: "يصلك الرمز في رسالة واتساب باسم Premium Technology، وهي خدمة التحقق التي نستخدمها.",
   currency: "د.ع",
 };
 
