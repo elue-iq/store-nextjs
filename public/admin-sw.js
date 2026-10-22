@@ -7,7 +7,7 @@ const OFFLINE_HTML = `<!doctype html><html lang="ar" dir="rtl"><head><meta chars
 <style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#F5EFE6;color:#3B2A23;
 font-family:system-ui,-apple-system,"Segoe UI",Tahoma,sans-serif;text-align:center;padding:24px}
 h1{font-size:1.4rem;margin:0 0 .5rem}p{color:#6E584C;margin:0 0 1.5rem}
-button{font:inherit;padding:.8rem 1.6rem;border-radius:999px;border:0;background:#9A513C;color:#F5EFE6}</style>
+button{font:inherit;padding:.8rem 1.6rem;border-radius:999px;border:0;background:#A45A44;color:#F5EFE6}</style>
 </head><body><div><h1>لا يوجد اتصال بالإنترنت</h1><p>تحتاج لوحة الطلبات إلى الإنترنت لعرض الطلبات المباشرة.</p>
 <button onclick="location.reload()">إعادة المحاولة</button></div></body></html>`;
 
