@@ -15,7 +15,11 @@ import { siteUrl } from "@/lib/site";
 const description =
   "ترافل شوكولاتة قليل السعرات ومحسوبها، بلا سكر مضاف. أربع نكهات، وسعرات كل قطعة مدوّنة على العلبة. التوصيل داخل بغداد.";
 
+// Anything that isn't the live site (the dev copy, a local build) is marked and hidden from search.
+const TEST_COPY = process.env.NEXT_PUBLIC_STAGE !== "amplify";
+
 export const metadata: Metadata = {
+  ...(TEST_COPY ? { robots: { index: false, follow: false } } : {}),
   metadataBase: new URL(siteUrl()),
   title: { default: "ÉLUE — Chocolate Truffles", template: "%s — ÉLUE" },
   description,
@@ -40,6 +44,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ar" dir="rtl">
       <body>
+        {TEST_COPY && (
+          <div className="stage-banner" role="note">
+            نسخة التطوير — للتجربة فقط. الطلبات هنا لا تصل إلى الفريق ولا إلى مدن.
+          </div>
+        )}
         <ToastProvider>
           <AuthProvider>
             <StockProvider>

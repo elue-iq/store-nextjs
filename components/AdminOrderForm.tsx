@@ -8,8 +8,9 @@ import { callModon } from "./AdminModon";
 import { dataClient, errorCode, errorFields, type Order } from "@/lib/data";
 import { products } from "@/lib/products";
 import { MAX_QTY_PER_LINE } from "@/lib/order-text";
+import { collectBreakdown, modonCollect } from "@/lib/modon";
 import { formatIraqiMobile, normalizeIraqiMobile } from "@/lib/phone";
-import { formatIQD } from "@/lib/site";
+import { formatIQD, site } from "@/lib/site";
 import { checkDelivery, cleanDelivery, phoneError, type DeliveryInfo, type FieldErrors } from "@/lib/validate";
 
 // Team form for one order:
@@ -43,6 +44,9 @@ export function AdminOrderForm({
   const [errors, setErrors] = useState<FieldErrors>({});
   const [note, setNote] = useState(order?.note ?? "");
   const [cashier, setCashier] = useState(order?.cashierOrderId ?? "");
+  const [paid, setPaid] = useState(Boolean(order?.paid));
+  const [paidNote, setPaidNote] = useState(order?.paidNote ?? "");
+  const [freeDelivery, setFreeDelivery] = useState(Boolean(order?.freeDelivery));
   const [qty, setQty] = useState<Record<string, number>>(() =>
     Object.fromEntries((order?.items ?? []).filter(Boolean).map((i) => [i!.slug, i!.qty])),
   );
@@ -58,6 +62,7 @@ export function AdminOrderForm({
     .map((p) => ({ product: p, qty: qty[p.slug], price: oldPrice[p.slug] ?? p.price }));
   const total = lines.reduce((n, l) => n + l.qty * l.price, 0);
   const jars = lines.reduce((n, l) => n + l.qty, 0);
+  const driverCollects = modonCollect(total, paid, freeDelivery);
 
   function step(slug: string, by: number) {
     setQty((q) => ({ ...q, [slug]: Math.min(MAX_QTY_PER_LINE, Math.max(0, (q[slug] ?? 0) + by)) }));
@@ -97,8 +102,19 @@ export function AdminOrderForm({
         address: order.address,
         note: order.note ?? null,
         cashierOrderId: order.cashierOrderId ?? null,
+        paid: Boolean(order.paid),
+        paidNote: order.paidNote ?? null,
+        freeDelivery: Boolean(order.freeDelivery),
       };
-      const after = { phone: customerPhone, ...info, note: note.trim() || null, cashierOrderId: cashier.trim() || null };
+      const after = {
+        phone: customerPhone,
+        ...info,
+        note: note.trim() || null,
+        cashierOrderId: cashier.trim() || null,
+        paid,
+        paidNote: paid ? paidNote.trim() || null : null,
+        freeDelivery,
+      };
       const changes: Record<string, unknown> = {};
       for (const key of Object.keys(after) as (keyof typeof after)[]) {
         if (after[key] !== before[key]) changes[key] = after[key];
@@ -125,7 +141,8 @@ export function AdminOrderForm({
         return;
       }
       // Already at Modon: send the new details there too (only possible before pickup).
-      const modonFields = ["phone", "name", "province", "area", "address", "note", "items"];
+      // "paid" changes the amount the driver collects, so it must re-sync.
+      const modonFields = ["phone", "name", "province", "area", "address", "note", "items", "paid", "freeDelivery"];
       if (order.modonQr && modonFields.some((k) => k in changes)) {
         const { error } = await callModon({ action: "update", orderId: order.id });
         toast(
@@ -146,6 +163,9 @@ export function AdminOrderForm({
       items: JSON.stringify(lines.map((l) => ({ slug: l.product.slug, qty: l.qty }))),
       customerPhone,
       cashierOrderId: cashier.trim() || undefined,
+      paid,
+      paidNote: paid ? paidNote.trim() || undefined : undefined,
+      freeDelivery,
     });
     setBusy(false);
     if (data?.orderNumber) {
@@ -231,6 +251,33 @@ export function AdminOrderForm({
         <p className="order-card__total">
           <span>المجموع · {jars} علبة</span>
           <strong>{formatIQD(total)}</strong>
+        </p>
+      </section>
+
+      <section className="order-detail__block">
+        <h2>الدفع والتوصيل</h2>
+        <label className="admin-order-form__check">
+          <input type="checkbox" checked={paid} onChange={(e) => setPaid(e.target.checked)} />
+          <span>العميل دفع ثمن الطلب مسبقاً (يستلم المندوب أجور التوصيل فقط)</span>
+        </label>
+        {paid && (
+          <label>
+            <span className="visually-hidden">طريقة الدفع</span>
+            <input
+              value={paidNote}
+              onChange={(e) => setPaidNote(e.target.value)}
+              maxLength={120}
+              placeholder="طريقة الدفع، مثل: تحويل Qi"
+            />
+          </label>
+        )}
+        <label className="admin-order-form__check">
+          <input type="checkbox" checked={freeDelivery} onChange={(e) => setFreeDelivery(e.target.checked)} />
+          <span>توصيل مجاني — نتحمّل أجور التوصيل ({formatIQD(site.deliveryFee)})</span>
+        </label>
+        <p className="admin-order-form__collect">
+          يستلم المندوب من العميل <strong>{formatIQD(driverCollects)}</strong>
+          <small>{collectBreakdown(total, paid, freeDelivery)}</small>
         </p>
       </section>
 

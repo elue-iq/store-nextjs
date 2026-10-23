@@ -1,6 +1,7 @@
 import type { CreateAuthChallengeTriggerHandler } from "aws-lambda";
 import { randomInt } from "node:crypto";
 import { env } from "$amplify/env/create-auth-challenge";
+import { allowNewCode } from "../limits";
 
 // Creates the 4-digit code and sends it on WhatsApp through OTPIQ.
 // On a retry (wrong code) the same code is reused, so the customer isn't
@@ -43,6 +44,7 @@ export const handler: CreateAuthChallengeTriggerHandler = async (event) => {
   } else {
     code = String(randomInt(0, 10 ** CODE_LENGTH)).padStart(CODE_LENGTH, "0");
     const phone = (event.request.userAttributes.phone_number ?? "").replace(/^\+/, "");
+    await allowNewCode(phone); // limits per number and overall (see ../limits.ts)
     await sendWhatsApp(phone, code);
   }
 

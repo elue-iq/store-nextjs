@@ -9,7 +9,7 @@
 
 import { confirmSignIn, getCurrentUser, signIn, signOut, signUp } from "aws-amplify/auth";
 
-export type SendResult = "sent" | "rate_limited" | "invalid_phone" | "failed";
+export type SendResult = "sent" | "rate_limited" | "locked" | "invalid_phone" | "failed";
 export type ConfirmResult = "ok" | "wrong" | "expired" | "failed";
 
 function randomPassword(): string {
@@ -55,6 +55,7 @@ export async function sendLoginCode(phone: string): Promise<SendResult> {
     return "failed";
   } catch (err) {
     const text = errorText(err);
+    if (text.includes("locked")) return "locked";
     if (text.includes("rate_limited")) return "rate_limited";
     console.error("signIn failed", err);
     return "failed";

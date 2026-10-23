@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useToast } from "./Toast";
 import { dataClient, type Order } from "@/lib/data";
-import { MODON_CITY, modonCollect, normalizeArabic, suggestRegion, type ModonRegion } from "@/lib/modon";
+import { collectBreakdown, MODON_CITY, modonCollect, normalizeArabic, suggestRegion, type ModonRegion } from "@/lib/modon";
 import { formatIQD, site } from "@/lib/site";
 
 // Errors from the modon function come back as "code:message".
@@ -134,10 +134,9 @@ export function AdminModon({ order: o }: { order: Order }) {
               ))}
             </select>
             <p className="modon__sum">
-              يستلم المندوب من العميل <strong>{formatIQD(modonCollect(o.total))}</strong>
-              <small>
-                {formatIQD(o.total)} الطلب + {formatIQD(site.deliveryFee)} التوصيل
-              </small>
+              يستلم المندوب من العميل{" "}
+              <strong>{formatIQD(modonCollect(o.total, Boolean(o.paid), Boolean(o.freeDelivery)))}</strong>
+              <small>{collectBreakdown(o.total, Boolean(o.paid), Boolean(o.freeDelivery))}</small>
             </p>
             {confirmSend ? (
               <div className="modon__confirm" role="alert">
@@ -178,7 +177,11 @@ export function AdminModon({ order: o }: { order: Order }) {
         </div>
         <div>
           <dt>يستلم المندوب</dt>
-          <dd>{formatIQD(o.modonPrice ?? modonCollect(o.total))}</dd>
+          <dd>
+            {formatIQD(o.modonPrice ?? modonCollect(o.total, Boolean(o.paid), Boolean(o.freeDelivery)))}
+            {o.paid && <small className="modon__paid"> · مدفوع</small>}
+            {o.freeDelivery && <small className="modon__paid"> · توصيل مجاني</small>}
+          </dd>
         </div>
         {o.modonFee != null && (
           <div>

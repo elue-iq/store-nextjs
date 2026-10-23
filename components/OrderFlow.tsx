@@ -14,7 +14,8 @@ import { formatIraqiMobile } from "@/lib/phone";
 import { deliveryNote, formatIQD, site } from "@/lib/site";
 import { fullAddress } from "@/lib/iraq";
 import { checkDelivery, cleanDelivery, ltr, type DeliveryInfo, type FieldErrors } from "@/lib/validate";
-import { dataClient, errorCode, errorFields } from "@/lib/data";
+import { dataClient, errorCode, errorDetail, errorFields } from "@/lib/data";
+import { OPEN_STATUSES } from "@/lib/order-rules";
 import { EMPTY_DELIVERY, loadProfile, saveProfile, type Profile } from "@/lib/profile";
 
 type Step = "checkout" | "sent" | "failed";
@@ -49,10 +50,32 @@ export function OrderFlow() {
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
 
+  // An order still being handled blocks a new one (the server checks this too).
+  const [openOrder, setOpenOrder] = useState<string | null>(null);
   const [placed, setPlaced] = useState<Placed | null>(null);
   const [pdfSaved, setPdfSaved] = useState(false);
   const autoSaveStarted = useRef(false);
   const fields = useRef<DeliveryFieldsHandle>(null);
+
+  useEffect(() => {
+    if (!signedIn || teamDevice || !auth.owner) return setOpenOrder(null);
+    let cancelled = false;
+    dataClient.models.Order.listOrderByOwner(
+      { owner: auth.owner },
+      { limit: 200, selectionSet: ["orderNumber", "status", "createdAt"] },
+    )
+      .then(({ data }) => {
+        if (cancelled) return;
+        const open = (data ?? [])
+          .filter((o) => (OPEN_STATUSES as readonly string[]).includes(o.status))
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+        setOpenOrder(open[0]?.orderNumber ?? null);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [signedIn, teamDevice, auth.owner, step]);
 
   // After login: load the saved delivery details once.
   useEffect(() => {
@@ -118,7 +141,7 @@ export function OrderFlow() {
   }
 
   async function placeOrder() {
-    if (busy || teamDevice) return;
+    if (busy || teamDevice || openOrder) return;
     if (soldOutLines.length) {
       toast({
         id: "checkout",
@@ -167,6 +190,19 @@ export function OrderFlow() {
           tone: "attention",
           message: "نفدت كمية بعض النكهات في سلتك قبل قليل. أزلها من السلة ثم أكّد الطلب.",
         });
+      } else if (code === "open_order") {
+        setOpenOrder(errorDetail(gqlErrors) || "—");
+        window.scrollTo({ top: 0 });
+      } else if (code === "too_many_orders") {
+        toast({ id: "checkout", tone: "attention", message: "وصلت إلى الحد اليومي للطلبات. لطلب إضافي راسلنا عبر واتساب." });
+      } else if (code === "too_many_jars") {
+        toast({
+          id: "checkout",
+          tone: "attention",
+          message: `أقصى عدد في الطلب الواحد ${errorDetail(gqlErrors)} علبة. للطلبات الأكبر راسلنا عبر واتساب.`,
+        });
+      } else if (code === "busy") {
+        toast({ id: "checkout", tone: "attention", message: "طلبك قيد الإرسال الآن. انتظر لحظة قبل المحاولة مجددًا." });
       } else if (code === "empty_cart") {
         toast({ id: "checkout", tone: "attention", message: "السلة فارغة أو فيها خطأ. عُد إلى النكهات وأضفها من جديد." });
       } else if (code === "not_signed_in") {
@@ -387,12 +423,23 @@ export function OrderFlow() {
               <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={400} />
             </label>
 
+            {openOrder && (
+              <div className="field-note open-order" role="alert">
+                <p>
+                  لديك طلب قيد التنفيذ رقم <strong dir="ltr">{openOrder}</strong>. يمكنك طلب جديد بعد توصيله.
+                </p>
+                <p>
+                  لإضافة شيء إليه أو تعديله، راسلنا عبر واتساب.{" "}
+                  <a href={`/account?order=${encodeURIComponent(openOrder)}`}>عرض الطلب</a>
+                </p>
+              </div>
+            )}
             {soldOutLines.length > 0 && (
               <p className="field-note" role="alert">
                 نفدت كمية {soldOutLines.map((l) => l.product.nameAr).join(" و")} حاليًا. أزلها من السلة لإتمام الطلب.
               </p>
             )}
-            <button type="submit" className="btn btn--full" disabled={busy || soldOutLines.length > 0}>
+            <button type="submit" className="btn btn--full" disabled={busy || soldOutLines.length > 0 || Boolean(openOrder)}>
               {busy ? "جارٍ إرسال الطلب…" : `تأكيد الطلب · ${formatIQD(total)}`}
             </button>
           </form>
