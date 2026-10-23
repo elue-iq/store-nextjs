@@ -160,6 +160,9 @@ export const handler: Schema["placeOrder"]["functionHandler"] = async (event) =>
   const phone = forCustomer ? normalizeIraqiMobile(String(args.customerPhone)) : callerPhone;
   if (!phone) throw new Error('invalid_fields:{"phone":"رقم الواتساب غير صحيح."}');
   const cashierOrderId = isTeam ? String(args.cashierOrderId ?? "").trim().slice(0, 60) || null : null;
+  // Only the team can mark an order prepaid (customer paid the jars already).
+  const paid = isTeam ? Boolean(args.paid) : false;
+  const paidNote = paid ? String(args.paidNote ?? "").trim().slice(0, 120) || null : null;
   const { name, province, area, address } = cleanDelivery({
     name: String(args.name ?? ""),
     province: String(args.province ?? ""),
@@ -219,6 +222,8 @@ export const handler: Schema["placeOrder"]["functionHandler"] = async (event) =>
       status: "NEW",
       telegramSent: false,
       cashierOrderId,
+      paid,
+      paidNote,
       createdBy: forCustomer ? callerPhone : null,
       owner,
     });
@@ -242,6 +247,8 @@ export const handler: Schema["placeOrder"]["functionHandler"] = async (event) =>
       returning,
       createdBy: forCustomer ? callerPhone : null,
       cashierOrderId,
+      paid,
+      paidNote,
     });
     // The dev copy never messages the team's Telegram group.
     const telegramSent = PRODUCTION ? await sendToTelegram(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_CHAT_ID, message) : false;

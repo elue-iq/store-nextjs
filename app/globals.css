@@ -2942,3 +2942,49 @@ body:has(.admin-app) .site-footer {
   font-size: 0.8rem;
   text-align: center;
 }
+
+/* ---------- Prepaid orders ---------- */
+.admin-order-form__check {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.admin-order-form__check input {
+  margin-top: 0.2rem;
+  width: 1.1rem;
+  height: 1.1rem;
+  accent-color: var(--terracotta);
+  flex: none;
+}
+.admin-order-form__collect {
+  display: grid;
+  gap: 0.15rem;
+  margin: 0.8rem 0 0;
+}
+.admin-order-form__collect strong {
+  color: var(--terracotta);
+  font-size: 1.1rem;
+}
+.admin-order-form__collect small {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.order-detail__paid,
+.modon__paid {
+  color: var(--terracotta);
+  font-weight: 600;
+}
+.order-detail__paid {
+  margin: 0.3rem 0 0;
+}
+.order-row__paid {
+  padding: 0.05rem 0.5rem;
+  border-radius: 999px;
+  background: var(--terracotta);
+  color: var(--cream);
+  font-size: 0.72rem;
+  font-weight: 600;
+}

@@ -48,6 +48,11 @@ const schema = a
         // Last team member who changed the order (details or status), and when.
         editedBy: a.string().authorization((allow) => [allow.group("ADMINS")]),
         editedAt: a.datetime().authorization((allow) => [allow.group("ADMINS")]),
+        // Customer already paid for the jars (e.g. Qi transfer); the driver
+        // then collects only the delivery fee. `paid` is readable by the customer
+        // (so their order shows it); the note is team only.
+        paid: a.boolean(), // inherits model auth: owner read, team read/write
+        paidNote: a.string().authorization((allow) => [allow.group("ADMINS")]), // how it was paid (e.g. Qi)
         // Modon Express (delivery). Set by the modon function; team only.
         modonId: a.string().authorization((allow) => [allow.group("ADMINS")]), // Modon's id (webhook, bulk lookup)
         modonQr: a.string().authorization((allow) => [allow.group("ADMINS")]), // Modon's order number (qr_id: edit, delete, sticker)
@@ -109,6 +114,9 @@ const schema = a
         // Team only: place the order for this customer (WhatsApp number).
         customerPhone: a.string(),
         cashierOrderId: a.string(),
+        // Team only: customer already paid for the jars (driver collects delivery only).
+        paid: a.boolean(),
+        paidNote: a.string(),
       })
       .returns(a.ref("PlaceOrderResult"))
       .authorization((allow) => [allow.authenticated()])

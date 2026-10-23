@@ -29,16 +29,21 @@ export function buildOrderMessage(o: {
   returning: boolean;
   createdBy?: string | null; // team member who placed it for the customer
   cashierOrderId?: string | null;
+  paid?: boolean | null; // customer already paid the jars
+  paidNote?: string | null;
 }): string {
   const jars = o.lines.reduce((n, l) => n + l.qty, 0);
+  const collect = o.paid ? site.deliveryFee : o.total + site.deliveryFee;
   return [
     `<b>طلب جديد ${ltr(o.orderNumber)}</b>${o.returning ? " · عميل سابق" : ""}`,
     "",
     ...o.lines.map((l) => `• ${ltr(`${l.qty} × ${escapeHtml(l.product.nameEn)}`)} — ${formatIQD(l.subtotal)}`),
     `عدد العلب: ${jars}`,
     `<b>المجموع: ${formatIQD(o.total)}</b>`,
-    `مع التوصيل يستلم المندوب: ${formatIQD(o.total + site.deliveryFee)}`,
-    site.paymentNote,
+    o.paid
+      ? `<b>مدفوع مسبقاً${o.paidNote ? ` (${escapeHtml(o.paidNote)})` : ""}</b> — يستلم المندوب أجور التوصيل فقط: ${formatIQD(collect)}`
+      : `مع التوصيل يستلم المندوب: ${formatIQD(collect)}`,
+    o.paid ? null : site.paymentNote,
     "",
     `الاسم: ${escapeHtml(o.name)}`,
     `الرقم: <a href="https://wa.me/${o.phone}">${ltr(formatIraqiMobile(o.phone))}</a>`,

@@ -29,10 +29,12 @@ export const MODON_CITY: Record<string, number> = {
 
 export type ModonRegion = { id: number; name: string };
 
-// What the driver collects: the jars plus the delivery fee. Modon keeps the fee
-// and pays ÉLUE the jars total.
-export function modonCollect(total: number): number {
-  return total + site.deliveryFee;
+// What the driver collects from the customer:
+// - normal order: jars + delivery fee (Modon keeps the fee, pays ÉLUE the jars)
+// - prepaid order (customer already paid the jars, e.g. by Qi transfer): the
+//   delivery fee only, so the customer pays the driver nothing for the jars.
+export function modonCollect(total: number, paid = false): number {
+  return (paid ? 0 : total) + site.deliveryFee;
 }
 
 // Arabic spelling differences that shouldn't matter when matching an area name.

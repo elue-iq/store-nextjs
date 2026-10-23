@@ -360,7 +360,11 @@ function MyOrderDetail({ order: o }: { order: Order }) {
           <span>المجموع</span>
           <strong>{formatIQD(o.total)}</strong>
         </p>
-        <p className="order-detail__muted">{deliveryNote()}</p>
+        <p className="order-detail__muted">
+          {o.paid
+            ? `دُفع ثمن الطلب. تدفع للمندوب أجور التوصيل فقط ${formatIQD(site.deliveryFee)}.`
+            : deliveryNote()}
+        </p>
         {o.status !== "CANCELLED" && (
           <p className="order-detail__points">
             {o.status === "DELIVERED"

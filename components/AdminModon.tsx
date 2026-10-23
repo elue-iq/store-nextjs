@@ -134,9 +134,11 @@ export function AdminModon({ order: o }: { order: Order }) {
               ))}
             </select>
             <p className="modon__sum">
-              يستلم المندوب من العميل <strong>{formatIQD(modonCollect(o.total))}</strong>
+              يستلم المندوب من العميل <strong>{formatIQD(modonCollect(o.total, Boolean(o.paid)))}</strong>
               <small>
-                {formatIQD(o.total)} الطلب + {formatIQD(site.deliveryFee)} التوصيل
+                {o.paid
+                  ? `أجور التوصيل فقط (${formatIQD(site.deliveryFee)}) — الطلب مدفوع`
+                  : `${formatIQD(o.total)} الطلب + ${formatIQD(site.deliveryFee)} التوصيل`}
               </small>
             </p>
             {confirmSend ? (
@@ -178,7 +180,10 @@ export function AdminModon({ order: o }: { order: Order }) {
         </div>
         <div>
           <dt>يستلم المندوب</dt>
-          <dd>{formatIQD(o.modonPrice ?? modonCollect(o.total))}</dd>
+          <dd>
+            {formatIQD(o.modonPrice ?? modonCollect(o.total, Boolean(o.paid)))}
+            {o.paid && <small className="modon__paid"> · مدفوع</small>}
+          </dd>
         </div>
         {o.modonFee != null && (
           <div>

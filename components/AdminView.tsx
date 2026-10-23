@@ -361,6 +361,7 @@ export function AdminView() {
                 <span className="order-row__top">
                   <strong dir="ltr">{o.orderNumber}</strong>
                   <StatusChip status={o.status} />
+                  {o.paid && <span className="order-row__paid">مدفوع</span>}
                 </span>
                 <span className="order-row__name">{o.name}</span>
                 <span className={o.cashierOrderId ? "order-row__cashier" : "order-row__cashier is-missing"}>
@@ -523,6 +524,9 @@ function OrderDetail({ order: o, today, me }: { order: Order; today: string; me:
           <span>المجموع · {jarsLabel(o.jars)}</span>
           <strong>{formatIQD(o.total)}</strong>
         </p>
+        {o.paid && (
+          <p className="order-detail__paid">مدفوع مسبقاً{o.paidNote ? ` · ${o.paidNote}` : ""}</p>
+        )}
         {o.status !== "CANCELLED" && (
           <p className="order-detail__points">
             {o.status === "DELIVERED"
