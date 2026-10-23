@@ -65,7 +65,13 @@ export function LoginPanel({
         message: isResend ? "أرسلنا رمزًا جديدًا عبر واتساب." : `أرسلنا الرمز عبر واتساب إلى الرقم ${ltr(phoneDisplay)}.`,
       });
     } else if (result === "rate_limited") {
-      toast({ id: "login", tone: "attention", message: "طلبت رموزًا كثيرة لهذا الرقم. حاول مجددًا بعد 10 دقائق." });
+      toast({ id: "login", tone: "attention", message: "طلبت رموزًا كثيرة لهذا الرقم. حاول مجددًا بعد ساعة." });
+    } else if (result === "locked") {
+      toast({
+        id: "login",
+        tone: "attention",
+        message: "أُوقف الدخول بهذا الرقم حتى الغد بسبب محاولات خاطئة كثيرة. إذا كان الرقم رقمك، راسلنا عبر واتساب.",
+      });
     } else if (result === "invalid_phone") {
       setStep("phone");
       setPhoneErr(phoneError("x") ?? "");

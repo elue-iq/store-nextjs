@@ -26,6 +26,9 @@ Amplify.configure(resourceConfig, libraryOptions);
 const client = generateClient<Schema>({ authMode: "iam" });
 
 const BASE = "https://mcht.modon-express.net/v1/merchant";
+// Only production (the "amplify" branch) creates, edits or deletes real Modon
+// orders. The dev copy reads Modon's regions but only pretends to send.
+const PRODUCTION = process.env.STAGE === "amplify";
 const WEBHOOK_HEADER = "x-elue-key";
 const PACKAGE_SIZE = 1; // «عادي» (our box is about 20×30×20 cm)
 const TYPE_NAME = "ترافل شوكولاتة ÉLUE";
@@ -213,7 +216,9 @@ async function adminAction(args: {
       if (o.status === "CANCELLED") throw new Error("cancelled");
       const regionId = Number(args.regionId);
       if (!regionId) throw new Error("missing_region");
-      const reply = await authed("/create-order", { method: "POST" }, () => orderForm(o, regionId));
+      const reply: ModonReply = PRODUCTION
+        ? await authed("/create-order", { method: "POST" }, () => orderForm(o, regionId))
+        : { status: true, data: { id: `DEV${Date.now()}`, qr_id: `DEV-${Date.now()}`, qr_link: null, company_price: 5000 } };
       if (!reply.status) fail(reply, "send");
       const d = (Array.isArray(reply.data) ? reply.data[0] : reply.data) as Record<string, unknown>;
       const now = new Date().toISOString();
@@ -240,7 +245,9 @@ async function adminAction(args: {
       const o = await getOrder(args.orderId);
       if (!o.modonQr || !o.modonRegionId) throw new Error("not_sent");
       const regionId = Number(args.regionId) || o.modonRegionId;
-      const reply = await authed("/edit-order", { method: "POST" }, () => orderForm(o, regionId, o.modonQr!));
+      const reply: ModonReply = PRODUCTION
+        ? await authed("/edit-order", { method: "POST" }, () => orderForm(o, regionId, o.modonQr!))
+        : { status: true };
       if (!reply.status) fail(reply, "update");
       await client.models.Order.update({
         id: o.id,
@@ -255,11 +262,13 @@ async function adminAction(args: {
     case "delete": {
       const o = await getOrder(args.orderId);
       if (!o.modonQr) throw new Error("not_sent");
-      const reply = await authed("/delete-orders", { method: "POST" }, () => {
-        const f = new FormData();
-        f.append("qr_id", o.modonQr!);
-        return f;
-      });
+      const reply: ModonReply = PRODUCTION
+        ? await authed("/delete-orders", { method: "POST" }, () => {
+            const f = new FormData();
+            f.append("qr_id", o.modonQr!);
+            return f;
+          })
+        : { status: true };
       if (!reply.status) fail(reply, "delete");
       await client.models.Order.update({
         id: o.id,
@@ -278,7 +287,7 @@ async function adminAction(args: {
     }
 
     case "refresh":
-      return refresh(args.orderId);
+      return PRODUCTION ? refresh(args.orderId) : { updated: [] };
 
     default:
       throw new Error("unknown_action");

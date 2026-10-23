@@ -36,6 +36,13 @@ export function errorCode(errors: { message?: string }[] | undefined | null): st
   return message.split(":")[0].trim();
 }
 
+// "open_order:EL-0012" -> "EL-0012"
+export function errorDetail(errors: { message?: string }[] | undefined | null): string {
+  const message = errors?.[0]?.message ?? "";
+  const i = message.indexOf(":");
+  return i < 0 ? "" : message.slice(i + 1).trim();
+}
+
 export function errorFields(errors: { message?: string }[] | undefined | null): Record<string, string> {
   const message = errors?.[0]?.message ?? "";
   const i = message.indexOf("invalid_fields:");

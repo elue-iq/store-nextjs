@@ -2924,3 +2924,21 @@ body:has(.admin-app) .site-footer {
 .modon__delete {
   font-size: 0.88rem;
 }
+
+.open-order p {
+  margin: 0 0 0.3rem;
+}
+
+.open-order a {
+  color: var(--terracotta);
+  font-weight: 600;
+}
+
+/* Dev copy marker (never shown on the live site). */
+.stage-banner {
+  padding: 0.35rem var(--gutter);
+  background: var(--ink);
+  color: var(--cream);
+  font-size: 0.8rem;
+  text-align: center;
+}
