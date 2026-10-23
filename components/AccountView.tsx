@@ -361,9 +361,13 @@ function MyOrderDetail({ order: o }: { order: Order }) {
           <strong>{formatIQD(o.total)}</strong>
         </p>
         <p className="order-detail__muted">
-          {o.paid
-            ? `دُفع ثمن الطلب. تدفع للمندوب أجور التوصيل فقط ${formatIQD(site.deliveryFee)}.`
-            : deliveryNote()}
+          {o.paid && o.freeDelivery
+            ? "دُفع ثمن الطلب والتوصيل مجاني. لا تدفع للمندوب شيئاً."
+            : o.paid
+              ? `دُفع ثمن الطلب. تدفع للمندوب أجور التوصيل فقط ${formatIQD(site.deliveryFee)}.`
+              : o.freeDelivery
+                ? `التوصيل مجاني. تدفع للمندوب ثمن الطلب فقط ${formatIQD(o.total)}.`
+                : deliveryNote()}
         </p>
         {o.status !== "CANCELLED" && (
           <p className="order-detail__points">

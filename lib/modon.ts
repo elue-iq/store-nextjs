@@ -29,12 +29,22 @@ export const MODON_CITY: Record<string, number> = {
 
 export type ModonRegion = { id: number; name: string };
 
-// What the driver collects from the customer:
-// - normal order: jars + delivery fee (Modon keeps the fee, pays ÉLUE the jars)
-// - prepaid order (customer already paid the jars, e.g. by Qi transfer): the
-//   delivery fee only, so the customer pays the driver nothing for the jars.
-export function modonCollect(total: number, paid = false): number {
-  return (paid ? 0 : total) + site.deliveryFee;
+// What the driver collects from the customer. Two independent cases:
+// - paid: the customer already paid the jars (e.g. Qi transfer), so the jars
+//   drop out and only the delivery fee is collected.
+// - freeDelivery: ÉLUE covers the delivery, so the fee drops out and only the
+//   jars are collected. Modon still keeps its fee and pays ÉLUE that much less.
+// Both can be true at once (prepaid jars + free delivery = driver collects 0).
+export function modonCollect(total: number, paid = false, freeDelivery = false): number {
+  return (paid ? 0 : total) + (freeDelivery ? 0 : site.deliveryFee);
+}
+
+// One short line describing how the collected amount breaks down, for the admin.
+export function collectBreakdown(total: number, paid: boolean, freeDelivery: boolean): string {
+  const parts: string[] = [];
+  parts.push(paid ? "الطلب مدفوع مسبقاً" : `${total.toLocaleString("en-US")} الطلب`);
+  parts.push(freeDelivery ? "التوصيل مجاني" : `${site.deliveryFee.toLocaleString("en-US")} التوصيل`);
+  return parts.join(" · ");
 }
 
 // Arabic spelling differences that shouldn't matter when matching an area name.

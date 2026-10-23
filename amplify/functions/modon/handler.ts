@@ -110,11 +110,14 @@ function orderForm(o: Order, regionId: number, qr?: string): FormData {
   form.append("location", [o.area, o.address].filter(Boolean).join(" - ") || o.area || o.province || "-");
   form.append("type_name", TYPE_NAME);
   form.append("items_number", String(o.jars));
-  form.append("price", String(modonCollect(o.total, Boolean(o.paid))));
+  form.append("price", String(modonCollect(o.total, Boolean(o.paid), Boolean(o.freeDelivery))));
   form.append("package_size", String(PACKAGE_SIZE));
   form.append(
     "merchant_notes",
-    [o.orderNumber, o.paid ? "مدفوع مسبقاً - توصيل فقط" : null, o.note].filter(Boolean).join(" — ").slice(0, 400),
+    [o.orderNumber, o.paid ? "مدفوع مسبقاً" : null, o.freeDelivery ? "توصيل مجاني" : null, o.note]
+      .filter(Boolean)
+      .join(" — ")
+      .slice(0, 400),
   );
   form.append("replacement", "0");
   return form;
@@ -230,7 +233,7 @@ async function adminAction(args: {
         modonId: String(d?.id ?? d?.qr_id ?? ""),
         modonQr: String(d?.qr_id ?? d?.id ?? ""),
         modonLink: d?.qr_link ? String(d.qr_link) : null,
-        modonPrice: Number(d?.price ?? modonCollect(o.total, Boolean(o.paid))),
+        modonPrice: Number(d?.price ?? modonCollect(o.total, Boolean(o.paid), Boolean(o.freeDelivery))),
         modonFee: d?.company_price != null ? Number(d.company_price) : null,
         modonStatusId: "1",
         modonStatus: "طلب جديد لدى مدن",
@@ -254,7 +257,7 @@ async function adminAction(args: {
       if (!reply.status) fail(reply, "update");
       await client.models.Order.update({
         id: o.id,
-        modonPrice: modonCollect(o.total, Boolean(o.paid)),
+        modonPrice: modonCollect(o.total, Boolean(o.paid), Boolean(o.freeDelivery)),
         modonRegionId: regionId,
         ...(args.regionName ? { modonRegionName: args.regionName } : {}),
         modonUpdatedAt: new Date().toISOString(),

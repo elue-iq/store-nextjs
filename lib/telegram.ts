@@ -31,19 +31,23 @@ export function buildOrderMessage(o: {
   cashierOrderId?: string | null;
   paid?: boolean | null; // customer already paid the jars
   paidNote?: string | null;
+  freeDelivery?: boolean | null; // ÉLUE covers the delivery fee
 }): string {
   const jars = o.lines.reduce((n, l) => n + l.qty, 0);
-  const collect = o.paid ? site.deliveryFee : o.total + site.deliveryFee;
+  const collect = (o.paid ? 0 : o.total) + (o.freeDelivery ? 0 : site.deliveryFee);
+  const special = [
+    o.paid ? `مدفوع مسبقاً${o.paidNote ? ` (${escapeHtml(o.paidNote)})` : ""}` : null,
+    o.freeDelivery ? "توصيل مجاني (نتحمّل الأجور)" : null,
+  ].filter(Boolean);
   return [
     `<b>طلب جديد ${ltr(o.orderNumber)}</b>${o.returning ? " · عميل سابق" : ""}`,
     "",
     ...o.lines.map((l) => `• ${ltr(`${l.qty} × ${escapeHtml(l.product.nameEn)}`)} — ${formatIQD(l.subtotal)}`),
     `عدد العلب: ${jars}`,
     `<b>المجموع: ${formatIQD(o.total)}</b>`,
-    o.paid
-      ? `<b>مدفوع مسبقاً${o.paidNote ? ` (${escapeHtml(o.paidNote)})` : ""}</b> — يستلم المندوب أجور التوصيل فقط: ${formatIQD(collect)}`
-      : `مع التوصيل يستلم المندوب: ${formatIQD(collect)}`,
-    o.paid ? null : site.paymentNote,
+    special.length ? `<b>${special.join(" · ")}</b>` : null,
+    `يستلم المندوب من العميل: ${formatIQD(collect)}`,
+    o.paid || o.freeDelivery ? null : site.paymentNote,
     "",
     `الاسم: ${escapeHtml(o.name)}`,
     `الرقم: <a href="https://wa.me/${o.phone}">${ltr(formatIraqiMobile(o.phone))}</a>`,
