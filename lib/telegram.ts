@@ -49,6 +49,7 @@ export function buildOrderMessage(o: {
     `<b>يستلم المندوب من العميل: ${formatIQD(collect)}</b>`,
     collectStatement(o.total, Boolean(o.paid), Boolean(o.freeDelivery)),
     o.paid || o.freeDelivery ? null : site.paymentNote,
+    site.courierNote,
     "",
     `الاسم: ${escapeHtml(o.name)}`,
     `الرقم: <a href="https://wa.me/${o.phone}">${ltr(formatIraqiMobile(o.phone))}</a>`,

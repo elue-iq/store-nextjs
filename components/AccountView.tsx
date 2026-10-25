@@ -363,6 +363,7 @@ function MyOrderDetail({ order: o }: { order: Order }) {
         <p className="order-detail__muted">
           {collectStatement(o.total, Boolean(o.paid), Boolean(o.freeDelivery))}
         </p>
+        <p className="order-detail__muted">{site.courierNote}</p>
         {o.status !== "CANCELLED" && (
           <p className="order-detail__points">
             {o.status === "DELIVERED"

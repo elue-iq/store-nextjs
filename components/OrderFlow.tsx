@@ -328,6 +328,7 @@ export function OrderFlow() {
         </p>
         <p className="order-pay">{collectStatement(total)}</p>
         <p className="order-pay">{site.paymentNote}</p>
+        <p className="order-pay">{site.courierNote}</p>
       </div>
 
       <div className="order-form">

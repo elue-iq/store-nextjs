@@ -6,7 +6,7 @@ import { getAmplifyDataClientConfig } from "@aws-amplify/backend/function/runtim
 import { env } from "$amplify/env/modon";
 import type { Schema } from "../../data/resource";
 import { MODON_CITY, modonCollect, statusFromModon, type ModonRegion } from "../../../lib/modon";
-import { collectStatement } from "../../../lib/site";
+import { site } from "../../../lib/site";
 
 // Modon Express integration.
 //
@@ -115,7 +115,7 @@ function orderForm(o: Order, regionId: number, qr?: string): FormData {
   form.append("package_size", String(PACKAGE_SIZE));
   form.append(
     "merchant_notes",
-    [o.orderNumber, collectStatement(o.total, Boolean(o.paid), Boolean(o.freeDelivery)), o.note]
+    [o.orderNumber, site.courierNote, o.note]
       .filter(Boolean)
       .join(" — ")
       .slice(0, 400),

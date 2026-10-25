@@ -10,6 +10,8 @@ export const site = {
   instagramHandle: "@elue.iq",
   // Shown on the order page. Change it if you start taking online payments.
   paymentNote: "الدفع نقداً عند الاستلام",
+  // Printed on every courier label (note), sent to Telegram, and shown to the customer.
+  courierNote: "يرجى تسليم بوكس الفلين الى مندوب التوصيل، والتأكد من الطلب",
   // Who the WhatsApp code comes from. OTPIQ's default sender shows as
   // "Premium Technology" (+1 555 335 9750), not ELUE.
   // Change this once ELUE's own WhatsApp number is connected in OTPIQ.
