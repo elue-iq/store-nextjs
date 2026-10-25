@@ -119,7 +119,9 @@ function orderForm(o: Order, regionId: number, qr?: string): FormData {
       .join(" — ")
       .slice(0, 400),
   );
-  form.append("replacement", "0");
+  // Modon support told us to register every ÉLUE order as «استبدال» (replacement = 1),
+  // not «أصلي». Used for create-order and edit-order alike.
+  form.append("replacement", "1");
   return form;
 }
 
