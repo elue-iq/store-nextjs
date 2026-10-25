@@ -2,7 +2,7 @@
 // Plain TypeScript with relative imports only, so it bundles into the function.
 
 import { formatIraqiMobile } from "./phone";
-import { formatIQD, site } from "./site";
+import { collectStatement, formatIQD, site } from "./site";
 import type { OrderLine } from "./order-text";
 import { fullAddress } from "./iraq";
 
@@ -46,7 +46,8 @@ export function buildOrderMessage(o: {
     `عدد العلب: ${jars}`,
     `<b>المجموع: ${formatIQD(o.total)}</b>`,
     special.length ? `<b>${special.join(" · ")}</b>` : null,
-    `يستلم المندوب من العميل: ${formatIQD(collect)}`,
+    `<b>يستلم المندوب من العميل: ${formatIQD(collect)}</b>`,
+    collectStatement(o.total, Boolean(o.paid), Boolean(o.freeDelivery)),
     o.paid || o.freeDelivery ? null : site.paymentNote,
     "",
     `الاسم: ${escapeHtml(o.name)}`,

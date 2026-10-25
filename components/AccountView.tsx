@@ -12,7 +12,7 @@ import { OrderItemsList, StatusChip, StatusTrack } from "./OrderBits";
 import { DeliveryFields } from "./DeliveryFields";
 import { baghdadTime, dataClient, newestFirst, type Order } from "@/lib/data";
 import { formatIraqiMobile } from "@/lib/phone";
-import { deliveryNote, formatIQD, site } from "@/lib/site";
+import { collectStatement, formatIQD, site } from "@/lib/site";
 import { getProduct } from "@/lib/products";
 import { fullAddress } from "@/lib/iraq";
 import { formatPoints, pointsFor, pointsSummary } from "@/lib/loyalty";
@@ -361,13 +361,7 @@ function MyOrderDetail({ order: o }: { order: Order }) {
           <strong>{formatIQD(o.total)}</strong>
         </p>
         <p className="order-detail__muted">
-          {o.paid && o.freeDelivery
-            ? "دُفع ثمن الطلب والتوصيل مجاني. لا تدفع للمندوب شيئاً."
-            : o.paid
-              ? `دُفع ثمن الطلب. تدفع للمندوب أجور التوصيل فقط ${formatIQD(site.deliveryFee)}.`
-              : o.freeDelivery
-                ? `التوصيل مجاني. تدفع للمندوب ثمن الطلب فقط ${formatIQD(o.total)}.`
-                : deliveryNote()}
+          {collectStatement(o.total, Boolean(o.paid), Boolean(o.freeDelivery))}
         </p>
         {o.status !== "CANCELLED" && (
           <p className="order-detail__points">

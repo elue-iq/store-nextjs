@@ -41,6 +41,16 @@ export function formatIQD(amount: number): string {
 }
 
 // Under the order total (checkout, receipt, «طلباتي»): delivery is paid to the driver.
+// One sentence saying what the driver collects and why. The same wording goes on
+// the courier label (note), the Telegram message, and the customer's screens.
+export function collectStatement(total: number, paid = false, freeDelivery = false): string {
+  const fee = site.deliveryFee;
+  if (paid && freeDelivery) return "الطلب مدفوع مسبقاً والتوصيل مجاني. لا يُطلب أي مبلغ عند الاستلام";
+  if (paid) return `الطلب مدفوع مسبقاً. المطلوب عند الاستلام ${formatIQD(fee)} (أجور التوصيل فقط)`;
+  if (freeDelivery) return `التوصيل مجاني. المطلوب عند الاستلام ${formatIQD(total)} (ثمن الطلب فقط)`;
+  return `المطلوب عند الاستلام ${formatIQD(total + fee)} (الطلب ${formatIQD(total)} + التوصيل ${formatIQD(fee)})`;
+}
+
 export function deliveryNote(): string {
   return `+ أجور التوصيل ${formatIQD(site.deliveryFee)} تُدفع للمندوب عند الاستلام`;
 }
