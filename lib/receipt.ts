@@ -7,9 +7,10 @@
 // This is an order summary for the customer's records, not a tax invoice.
 
 import { LOGO_PATH, LOGO_VIEWBOX } from "./brand-mark";
-import { deliveryNote, formatIQD, site } from "./site";
+import { formatIQD, site } from "./site";
 import { fullAddress } from "./iraq";
 import { getProduct } from "./products";
+import { modonCollect } from "./modon";
 
 export type ReceiptLine = { nameAr: string; nameEn: string; qty: number; price: number; subtotal: number };
 
@@ -22,6 +23,8 @@ export type ReceiptData = {
   phoneDisplay: string;
   address: string;
   note?: string;
+  paid?: boolean; // customer already paid for the jars
+  freeDelivery?: boolean; // ÉLUE covers the delivery fee
 };
 
 const W = 1240;
@@ -112,14 +115,24 @@ function draw(ctx: CanvasRenderingContext2D, d: ReceiptData): number {
   y -= 20;
   rule(y);
 
-  // Total.
+  // Total, and what the driver collects.
+  const paid = Boolean(d.paid);
+  const free = Boolean(d.freeDelivery);
+  const collect = modonCollect(d.total, paid, free);
   y += 76;
   text("المجموع", R, y, { size: 38, weight: 700, color: C.cocoa });
   text(formatIQD(d.total), M, y, { size: 44, weight: 700, color: C.terracotta, align: "left" });
-  y += 48;
-  text(deliveryNote(), R, y, { size: 26, color: C.muted });
-  y += 40;
-  text(site.paymentNote, R, y, { size: 26, color: C.muted });
+  y += 52;
+  text("حالة الدفع", R, y, { size: 27, color: C.muted });
+  text(paid ? "مدفوع مسبقاً" : "غير مدفوع", M, y, { size: 27, weight: 600, align: "left" });
+  y += 44;
+  text("أجور التوصيل", R, y, { size: 27, color: C.muted });
+  text(free ? "مجاني" : formatIQD(site.deliveryFee), M, y, { size: 27, weight: 600, align: "left" });
+  y += 56;
+  text("المبلغ المستحق عند الاستلام", R, y, { size: 31, weight: 700, color: C.cocoa });
+  text(collect > 0 ? formatIQD(collect) : "لا شيء", M, y, { size: 36, weight: 700, color: C.terracotta, align: "left" });
+  y += 42;
+  text(collect > 0 ? site.paymentNote : "لا يُطلب منك أي مبلغ عند الاستلام", R, y, { size: 26, color: C.muted });
   y += 44;
   rule(y);
 
@@ -225,6 +238,8 @@ export function receiptFromOrder(o: {
   area?: string | null;
   address: string;
   note?: string | null;
+  paid?: boolean | null;
+  freeDelivery?: boolean | null;
 }): ReceiptData {
   const time = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Baghdad", dateStyle: "short", timeStyle: "short" }).format(
     new Date(o.createdAt),
@@ -247,6 +262,8 @@ export function receiptFromOrder(o: {
     phoneDisplay: `${local.slice(0, 4)} ${local.slice(4, 7)} ${local.slice(7)}`,
     address: fullAddress(o),
     note: o.note || undefined,
+    paid: Boolean(o.paid),
+    freeDelivery: Boolean(o.freeDelivery),
   };
 }
 
