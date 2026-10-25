@@ -7,6 +7,7 @@ import { LoginPanel } from "./LoginPanel";
 import { AdminStock } from "./AdminStock";
 import { AdminOrderForm } from "./AdminOrderForm";
 import { AdminModon } from "./AdminModon";
+import { buildCustomers, CustomerDetail, CustomerList, CustomersSummary } from "./AdminCustomers";
 import { jarsLabel } from "./AddToCart";
 import { OrderItemsList, StatusChip, StatusTrack } from "./OrderBits";
 import { formatPoints, pointsFor } from "@/lib/loyalty";
@@ -35,11 +36,16 @@ type Sort = "newest" | "oldest";
 // "new" = the screen for placing an order for a customer (?new=1).
 function orderFromUrl(): string | null {
   const params = new URLSearchParams(window.location.search);
-  return params.has("new") ? "new" : params.get("order");
+  if (params.has("new")) return params.has("for") ? `new:${params.get("for")}` : "new";
+  const customer = params.get("customer");
+  return customer ? `c:${customer}` : params.get("order");
 }
 
 function screenUrl(id: string): string {
-  return id === "new" ? "/admin?new=1" : `/admin?order=${encodeURIComponent(id)}`;
+  if (id === "new") return "/admin?new=1";
+  if (id.startsWith("new:")) return `/admin?new=1&for=${encodeURIComponent(id.slice(4))}`;
+  if (id.startsWith("c:")) return `/admin?customer=${encodeURIComponent(id.slice(2))}`;
+  return `/admin?order=${encodeURIComponent(id)}`;
 }
 
 // First load of every order (pages of 200). Live changes then come from observeQuery.
@@ -67,6 +73,7 @@ export function AdminView() {
   const [sort, setSort] = useState<Sort>("newest");
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
+  const [view, setView] = useState<"orders" | "customers">("orders");
   const listScroll = useRef(0);
 
   // ---- Navigation (list <-> order screen) --------------------------------
@@ -173,6 +180,8 @@ export function AdminView() {
     };
   }, [orders, today]);
 
+  const customers = useMemo(() => buildCustomers(orders ?? []), [orders]);
+
   const shown = useMemo(() => {
     const q = toLatinDigits(query).trim().toLowerCase();
     const qDigits = q.replace(/\D/g, "").replace(/^0+/, "");
@@ -214,7 +223,9 @@ export function AdminView() {
 
   // ---- Order screen -------------------------------------------------------
 
-  if (selected === "new") {
+  if (selected === "new" || selected?.startsWith("new:")) {
+    const forPhone = selected.startsWith("new:") ? selected.slice(4) : "";
+    const known = forPhone ? customers.find((c) => c.phone === forPhone) : undefined;
     return (
       <div className="admin-screen admin-screen--detail">
         <div className="admin-nav">
@@ -224,9 +235,11 @@ export function AdminView() {
             </svg>
             الطلبات
           </button>
-          <strong className="admin-nav__title">طلب جديد لعميل</strong>
+          <strong className="admin-nav__title">{known ? `طلب جديد: ${known.name}` : "طلب جديد لعميل"}</strong>
         </div>
         <AdminOrderForm
+          key={forPhone || "blank"}
+          prefill={known?.orders[0]}
           onCancel={backToList}
           onDone={(number) => {
             // Don't wait for the live update: fetch the list so the new order is there.
@@ -238,6 +251,34 @@ export function AdminView() {
             window.scrollTo({ top: 0 });
           }}
         />
+      </div>
+    );
+  }
+
+  if (selected?.startsWith("c:")) {
+    const customer = customers.find((c) => c.phone === selected.slice(2));
+    return (
+      <div className="admin-screen admin-screen--detail">
+        <div className="admin-nav">
+          <button type="button" className="admin-nav__back" onClick={backToList}>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M9 5l7 7-7 7" />
+            </svg>
+            العملاء
+          </button>
+          {customer && <strong className="admin-nav__title">{customer.name}</strong>}
+        </div>
+        {customer ? (
+          <CustomerDetail
+            customer={customer}
+            onOpenOrder={openOrder}
+            onNewOrder={() => openOrder(`new:${customer.phone}`)}
+          />
+        ) : orders === null ? (
+          <p className="panel-loading">جارٍ تحميل العميل…</p>
+        ) : (
+          <p className="hint">لم نجد هذا العميل.</p>
+        )}
       </div>
     );
   }
@@ -272,6 +313,7 @@ export function AdminView() {
 
   // ---- List ---------------------------------------------------------------
 
+  if (view === "customers") {
   return (
     <div className="admin-screen">
       <div className="panel-head">
@@ -283,6 +325,45 @@ export function AdminView() {
         </div>
         <button type="button" className="link-button" onClick={() => void auth.signOut()}>
           تسجيل الخروج
+        </button>
+      </div>
+
+      <div className="admin-tabs" role="tablist" aria-label="القسم">
+        <button type="button" role="tab" aria-selected={(view as string) === "orders"} onClick={() => setView("orders")}>
+          الطلبات <span>{orders?.length ?? 0}</span>
+        </button>
+        <button type="button" role="tab" aria-selected={(view as string) === "customers"} onClick={() => setView("customers")}>
+          العملاء <span>{customers.length}</span>
+        </button>
+      </div>
+
+      <CustomersSummary customers={customers} />
+      {orders === null && !failed && <p className="panel-loading">جارٍ تحميل العملاء…</p>}
+      <CustomerList customers={customers} onOpen={(phone) => openOrder(`c:${phone}`)} />
+    </div>
+  );
+  }
+
+  return (
+    <div className="admin-screen">
+      <div className="panel-head">
+        <div>
+          <h1>لوحة الطلبات</h1>
+          <p className="panel-head__sub">
+            {synced ? "مباشر: تظهر الطلبات الجديدة تلقائيًا" : "جارٍ تحميل الطلبات…"}
+          </p>
+        </div>
+        <button type="button" className="link-button" onClick={() => void auth.signOut()}>
+          تسجيل الخروج
+        </button>
+      </div>
+
+      <div className="admin-tabs" role="tablist" aria-label="القسم">
+        <button type="button" role="tab" aria-selected={(view as string) === "orders"} onClick={() => setView("orders")}>
+          الطلبات <span>{orders?.length ?? 0}</span>
+        </button>
+        <button type="button" role="tab" aria-selected={(view as string) === "customers"} onClick={() => setView("customers")}>
+          العملاء <span>{customers.length}</span>
         </button>
       </div>
 

@@ -20,10 +20,13 @@ import { checkDelivery, cleanDelivery, phoneError, type DeliveryInfo, type Field
 //   customers ask on WhatsApp.
 export function AdminOrderForm({
   order,
+  prefill,
   onDone,
   onCancel,
 }: {
   order?: Order;
+  // New order for a known customer: start from their latest order's contact and address.
+  prefill?: Order;
   onDone: (orderNumber: string) => void;
   onCancel: () => void;
 }) {
@@ -33,13 +36,14 @@ export function AdminOrderForm({
   const fieldsRef = useRef<DeliveryFieldsHandle>(null);
   const phoneRef = useRef<HTMLInputElement>(null);
 
-  const [phone, setPhone] = useState(order ? formatIraqiMobile(order.phone) : "");
+  const seed = order ?? prefill;
+  const [phone, setPhone] = useState(seed ? formatIraqiMobile(seed.phone) : "");
   const [phoneErr, setPhoneErr] = useState("");
   const [delivery, setDelivery] = useState<DeliveryInfo>({
-    name: order?.name ?? "",
-    province: order?.province ?? "",
-    area: order?.area ?? "",
-    address: order?.address ?? "",
+    name: seed?.name ?? "",
+    province: seed?.province ?? "",
+    area: seed?.area ?? "",
+    address: seed?.address ?? "",
   });
   const [errors, setErrors] = useState<FieldErrors>({});
   const [note, setNote] = useState(order?.note ?? "");
