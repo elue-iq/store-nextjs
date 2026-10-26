@@ -6,6 +6,7 @@ export const modon = defineFunction({
   name: "modon",
   resourceGroupName: "data",
   timeoutSeconds: 25,
+  schedule: "every 10m",
   environment: {
     MODON_USERNAME: secret("MODON_USERNAME"),
     MODON_PASSWORD: secret("MODON_PASSWORD"),

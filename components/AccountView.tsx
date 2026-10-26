@@ -8,7 +8,7 @@ import { useCart } from "./CartProvider";
 import { useStock } from "./StockProvider";
 import { useToast } from "./Toast";
 import { LoginPanel } from "./LoginPanel";
-import { OrderItemsList, StatusChip, StatusTrack } from "./OrderBits";
+import { DeliveryTracking, OrderItemsList, StatusChip, StatusTrack } from "./OrderBits";
 import { DeliveryFields } from "./DeliveryFields";
 import { baghdadTime, dataClient, newestFirst, type Order } from "@/lib/data";
 import { formatIraqiMobile } from "@/lib/phone";
@@ -352,6 +352,8 @@ function MyOrderDetail({ order: o }: { order: Order }) {
           {baghdadTime(o.createdAt)}
         </span>
       </section>
+
+      <DeliveryTracking order={o} />
 
       <section className="order-detail__block">
         <h2>الطلب</h2>

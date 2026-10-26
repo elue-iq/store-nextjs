@@ -85,17 +85,70 @@ export function suggestRegion(regions: ModonRegion[], area: string, address: str
   return best;
 }
 
-// Our status from a Modon status update. null = leave our status as it is
-// (still at ÉLUE, or a problem the team should look at: returned, refused…).
+// Modon's status ids (from their /statuses list). Only the ones that matter to us.
+// Our order status from a Modon status update. null = leave it as it is (still
+// at ÉLUE, or a problem the team should look at: returned, refused, can't reach…).
 export function statusFromModon(m: {
   status_id?: string | number | null;
   status?: string | null;
   deliver_done?: string | number | null;
 }): "OUT_FOR_DELIVERY" | "DELIVERED" | null {
   const id = String(m.status_id ?? "");
-  const text = String(m.status ?? "");
-  if (String(m.deliver_done ?? "") === "1" || /تم التسليم|تم تسليم|واصل/.test(text)) return "DELIVERED";
-  if (/راجع|رفض|الغاء|إلغاء|مؤجل|تأجيل|لا يرد|مغلق/.test(text)) return null;
-  if (id && id !== "1") return "OUT_FOR_DELIVERY";
-  return null;
+  // Delivered: Modon's own flag, «تم تسليم الطلب الى الزبون» (4), or delivered with a return taken back (21).
+  if (String(m.deliver_done ?? "") === "1" || id === "4" || id === "21") return "DELIVERED";
+  // In the courier's hands, on its way, or sorted at one of its offices/warehouses.
+  if (["2", "3", "5", "6", "7", "12", "13", "14", "22", "44"].includes(id)) return "OUT_FOR_DELIVERY";
+  return null; // new at Modon (1), returned / refused / postponed / unreachable / disabled…
+}
+
+// What the customer sees on their order for a Modon status (our own wording).
+// null = internal to the courier, not shown to the customer.
+export function customerTrack(statusId: string | number | null | undefined): string | null {
+  const id = String(statusId ?? "");
+  const map: Record<string, string> = {
+    "1": "طلبك جاهز وبانتظار استلام شركة التوصيل",
+    "2": "استلمت شركة التوصيل طلبك",
+    "3": "طلبك مع مندوب التوصيل في طريقه إليك",
+    "4": "تم تسليم طلبك. بالهناء والعافية",
+    "5": "طلبك في موقع الفرز في بغداد",
+    "6": "طلبك في مكتب محافظتك",
+    "7": "طلبك في طريقه إلى محافظتك",
+    "12": "طلبك في مخازن شركة التوصيل",
+    "13": "طلبك في مخازن شركة التوصيل",
+    "14": "سيُعاد إرسال طلبك إليك قريبًا",
+    "44": "سيُعاد إرسال طلبك إليك قريبًا",
+    "22": "يُعاد فرز طلبك",
+    "25": "تعذّر الوصول إليك هاتفيًا. أبقِ هاتفك مفتوحًا",
+    "26": "تعذّر الوصول إليك هاتفيًا. أبقِ هاتفك مفتوحًا",
+    "27": "تعذّر الوصول إليك هاتفيًا. أبقِ هاتفك مفتوحًا",
+    "28": "تعذّر الوصول إليك هاتفيًا. أبقِ هاتفك مفتوحًا",
+    "41": "تعذّر الوصول إليك هاتفيًا. أبقِ هاتفك مفتوحًا",
+    "29": "تأجّل التوصيل",
+    "30": "تأجّل التوصيل",
+    "36": "نحتاج إلى تأكيد رقم هاتفك أو عنوانك. سنتواصل معك",
+    "37": "نحتاج إلى تأكيد رقم هاتفك أو عنوانك. سنتواصل معك",
+    "38": "نحتاج إلى تأكيد رقم هاتفك أو عنوانك. سنتواصل معك",
+  };
+  return map[id] ?? null;
+}
+
+// Modon times are Baghdad local time, "2026-10-26 12:32:20". null when empty/zero.
+export function modonTime(s: string | null | undefined): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})$/.exec(String(s ?? "").trim());
+  if (!m || m[1] === "0000") return null;
+  const d = new Date(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}+03:00`);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+export type TrackEvent = { at: string; text: string };
+
+export function parseTrackEvents(raw: unknown): TrackEvent[] {
+  try {
+    const v = typeof raw === "string" ? JSON.parse(raw) : raw;
+    return Array.isArray(v)
+      ? v.filter((e): e is TrackEvent => Boolean(e) && typeof e.at === "string" && typeof e.text === "string")
+      : [];
+  } catch {
+    return [];
+  }
 }

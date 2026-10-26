@@ -3254,3 +3254,68 @@ body:has(.admin-app) .site-footer {
 .admin-section--screen {
   padding: 0.4rem 1rem 1rem;
 }
+
+/* «تتبّع التوصيل» on an order */
+.delivery-track__now {
+  margin: 0 0 0.3rem;
+  color: #a45a44;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+.delivery-track__eta {
+  margin: 0 0 0.9rem;
+  color: var(--muted, #6e584c);
+}
+.delivery-track__eta strong {
+  color: var(--ink, #3b2a23);
+}
+.delivery-track__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0;
+}
+.delivery-track__list li {
+  position: relative;
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.55rem 1.5rem 0.55rem 0;
+  color: var(--muted, #6e584c);
+}
+.delivery-track__list li::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: auto;
+  right: 0.15rem;
+  top: 0.95rem;
+  width: 0.7rem;
+  height: 0.7rem;
+  border: 2px solid #a45a44;
+  border-radius: 50%;
+  background: var(--cream, #f5efe6);
+}
+.delivery-track__list li::after {
+  content: "";
+  position: absolute;
+  right: 0.43rem;
+  top: 1.7rem;
+  bottom: -0.3rem;
+  width: 2px;
+  background: var(--sand, #d9c4a8);
+}
+.delivery-track__list li:last-child::after {
+  display: none;
+}
+.delivery-track__list li.is-current {
+  color: var(--ink, #3b2a23);
+  font-weight: 600;
+}
+.delivery-track__list li.is-current::before {
+  background: #a45a44;
+}
+.delivery-track__list small {
+  color: var(--muted, #6e584c);
+  font-weight: 400;
+  text-align: right;
+}

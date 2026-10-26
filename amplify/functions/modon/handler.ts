@@ -5,7 +5,16 @@ import { generateClient } from "aws-amplify/data";
 import { getAmplifyDataClientConfig } from "@aws-amplify/backend/function/runtime";
 import { env } from "$amplify/env/modon";
 import type { Schema } from "../../data/resource";
-import { MODON_CITY, modonCollect, statusFromModon, type ModonRegion } from "../../../lib/modon";
+import {
+  customerTrack,
+  MODON_CITY,
+  modonCollect,
+  modonTime,
+  parseTrackEvents,
+  statusFromModon,
+  type ModonRegion,
+  type TrackEvent,
+} from "../../../lib/modon";
 import { site } from "../../../lib/site";
 
 // Modon Express integration.
@@ -144,6 +153,9 @@ type ModonOrder = {
   issue_notes?: string | null;
   delivery_price?: string | number | null;
   price?: string | number | null;
+  updated_at?: string | null;
+  created_at?: string | null;
+  deliver_estimation_datetime?: string | null;
 };
 
 // Saves a Modon status on our order (webhook, refresh).
@@ -155,7 +167,21 @@ async function applyStatus(m: ModonOrder): Promise<string | null> {
   if (!o) return null;
   const next = statusFromModon(m);
   const keep = o.status === "CANCELLED" || o.status === "DELIVERED";
+
+  // What the customer sees: the current line, expected arrival, and each new step
+  // (time from Modon's own update time). A step is added only when it changes.
+  const line = customerTrack(m.status_id);
+  const events = parseTrackEvents(o.trackEvents);
+  let trackEvents: TrackEvent[] | undefined;
+  if (line && events[events.length - 1]?.text !== line) {
+    trackEvents = [...events, { at: modonTime(m.updated_at) ?? new Date().toISOString(), text: line }].slice(-30);
+  }
+  const eta = modonTime(m.deliver_estimation_datetime);
+
   await client.models.Order.update({
+    ...(line ? { trackStatus: line } : {}),
+    ...(trackEvents ? { trackEvents } : {}),
+    trackEta: eta,
     id: o.id,
     modonStatusId: m.status_id != null ? String(m.status_id) : o.modonStatusId,
     modonStatus: m.status ?? o.modonStatus,
@@ -240,6 +266,9 @@ async function adminAction(args: {
         modonFee: d?.company_price != null ? Number(d.company_price) : null,
         modonStatusId: "1",
         modonStatus: "طلب جديد لدى مدن",
+        trackStatus: customerTrack("1"),
+        trackEvents: [{ at: now, text: customerTrack("1")! }],
+        trackEta: null,
         modonNote: null,
         modonRegionId: regionId,
         modonRegionName: args.regionName ?? null,
@@ -291,6 +320,9 @@ async function adminAction(args: {
         modonNote: null,
         modonSentAt: null,
         modonUpdatedAt: new Date().toISOString(),
+        trackStatus: null,
+        trackEta: null,
+        trackEvents: null,
       });
       return { ok: true };
     }
@@ -351,6 +383,17 @@ async function webhook(event: UrlEvent) {
 
 export const handler = async (event: unknown) => {
   if ((event as UrlEvent)?.requestContext?.http) return webhook(event as UrlEvent);
+  // Every 10 minutes (schedule): pull the latest status of every open Modon order,
+  // so customers see tracking even if a webhook update is missed.
+  if ((event as { source?: string })?.source === "aws.events") {
+    if (!PRODUCTION) return { skipped: "dev" };
+    try {
+      return await refresh();
+    } catch (err) {
+      console.error("scheduled refresh failed", err);
+      return { failed: true };
+    }
+  }
   const e = event as { arguments: Parameters<typeof adminAction>[0] };
   return adminAction(e.arguments);
 };

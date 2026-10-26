@@ -11,7 +11,7 @@ import { AdminOrderForm } from "./AdminOrderForm";
 import { AdminModon } from "./AdminModon";
 import { buildCustomers, CustomerDetail, CustomerList, CustomersSummary } from "./AdminCustomers";
 import { jarsLabel } from "./AddToCart";
-import { OrderItemsList, StatusChip, StatusTrack } from "./OrderBits";
+import { DeliveryTracking, OrderItemsList, StatusChip, StatusTrack } from "./OrderBits";
 import { formatPoints, pointsFor } from "@/lib/loyalty";
 import { baghdadTime, dataClient, newestFirst, STATUS_LABELS, STATUS_ORDER, type Order, type OrderStatus } from "@/lib/data";
 import { formatIraqiMobile, toLatinDigits } from "@/lib/phone";
@@ -661,6 +661,8 @@ function OrderDetail({ order: o, today, me, onOpenCustomer }: { order: Order; to
       </section>
 
       <AdminModon order={o} />
+
+      <DeliveryTracking order={o} />
 
       <section className="order-detail__block">
         <h2>تغيير الحالة</h2>

@@ -2,7 +2,8 @@
 
 import { formatIQD } from "@/lib/site";
 import { getProduct } from "@/lib/products";
-import { STATUS_LABELS, type Order, type OrderStatus } from "@/lib/data";
+import { baghdadTime, STATUS_LABELS, type Order, type OrderStatus } from "@/lib/data";
+import { parseTrackEvents } from "@/lib/modon";
 
 export function StatusChip({ status }: { status: OrderStatus }) {
   return <span className={`status-chip status-chip--${status.toLowerCase()}`}>{STATUS_LABELS[status]}</span>;
@@ -47,5 +48,36 @@ export function OrderItemsList({ items }: { items: Order["items"] }) {
           </li>
         ))}
     </ul>
+  );
+}
+
+// «تتبّع التوصيل»: the courier's steps so far (newest first) and the expected
+// arrival. Shown only once the order has been handed to the courier.
+export function DeliveryTracking({ order: o }: { order: Pick<Order, "trackStatus" | "trackEta" | "trackEvents" | "status"> }) {
+  const events = parseTrackEvents(o.trackEvents);
+  if (!events.length && !o.trackStatus) return null;
+  const when = (iso: string) => baghdadTime(iso);
+  const list = [...events].reverse();
+  const delivered = o.status === "DELIVERED";
+  return (
+    <section className="order-detail__block delivery-track">
+      <h2>تتبّع التوصيل</h2>
+      {o.trackStatus && <p className="delivery-track__now">{o.trackStatus}</p>}
+      {o.trackEta && !delivered && o.status !== "CANCELLED" && (
+        <p className="delivery-track__eta">
+          الوقت المتوقع للوصول <strong dir="ltr">{baghdadTime(o.trackEta)}</strong>
+        </p>
+      )}
+      {list.length > 0 && (
+        <ol className="delivery-track__list">
+          {list.map((e, i) => (
+            <li key={`${e.at}-${i}`} className={i === 0 ? "is-current" : undefined}>
+              <span>{e.text}</span>
+              <small dir="ltr">{when(e.at)}</small>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
   );
 }

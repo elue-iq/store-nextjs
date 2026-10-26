@@ -56,6 +56,12 @@ const schema = a
         // ÉLUE covers the delivery fee (free-delivery offer); the driver then
         // collects only the jars. Readable by the customer so their order shows it.
         freeDelivery: a.boolean(),
+        // Delivery tracking for the customer (from the courier's status updates,
+        // in our own wording): current line, expected arrival, and the steps so far.
+        // Written only by the modon function; the customer can read them.
+        trackStatus: a.string(),
+        trackEta: a.datetime(),
+        trackEvents: a.json(),
         // Modon Express (delivery). Set by the modon function; team only.
         modonId: a.string().authorization((allow) => [allow.group("ADMINS")]), // Modon's id (webhook, bulk lookup)
         modonQr: a.string().authorization((allow) => [allow.group("ADMINS")]), // Modon's order number (qr_id: edit, delete, sticker)
