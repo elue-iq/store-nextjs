@@ -1,6 +1,14 @@
 import { setDefaultResultOrder } from "node:dns";
 import type { AppSyncIdentityCognito } from "aws-lambda";
-import { AdminGetUserCommand, CognitoIdentityProviderClient, ListUsersCommand } from "@aws-sdk/client-cognito-identity-provider";
+import {
+  AdminCreateUserCommand,
+  AdminGetUserCommand,
+  AdminSetUserPasswordCommand,
+  CognitoIdentityProviderClient,
+  ListUsersCommand,
+  UsernameExistsException,
+} from "@aws-sdk/client-cognito-identity-provider";
+import { randomBytes } from "node:crypto";
 import {
   ConditionalCheckFailedException,
   DeleteItemCommand,
@@ -67,6 +75,44 @@ async function ownerForPhone(phone: string): Promise<string | null> {
   } catch (err) {
     console.error("customer search failed", err);
     return null;
+  }
+}
+
+// The customer's account for an order the team places. If the number has never
+// logged in, the account is created now (same kind of account the website makes
+// on first login), so the order is theirs from the start and they see it, with
+// their points, as soon as they log in with that WhatsApp number. Returns
+// created=true only for a new account, so its saved details can be filled in.
+async function ensureCustomer(phone: string): Promise<{ owner: string | null; created: boolean }> {
+  const existing = await ownerForPhone(phone);
+  if (existing) return { owner: existing, created: false };
+  try {
+    const res = await cognito.send(
+      new AdminCreateUserCommand({
+        UserPoolId: process.env.USER_POOL_ID,
+        Username: `+${phone}`,
+        UserAttributes: [
+          { Name: "phone_number", Value: `+${phone}` },
+          { Name: "phone_number_verified", Value: "true" },
+        ],
+        MessageAction: "SUPPRESS", // no SMS from Cognito: the customer logs in with a WhatsApp code
+      }),
+    );
+    // Same as a self-made account: confirmed, with a random password nobody uses.
+    await cognito.send(
+      new AdminSetUserPasswordCommand({
+        UserPoolId: process.env.USER_POOL_ID,
+        Username: res.User?.Username,
+        Password: `Aa1!${randomBytes(18).toString("base64url")}`,
+        Permanent: true,
+      }),
+    );
+    const sub = res.User?.Attributes?.find((a) => a.Name === "sub")?.Value;
+    return res.User?.Username && sub ? { owner: `${sub}::${res.User.Username}`, created: true } : { owner: null, created: false };
+  } catch (err) {
+    if (err instanceof UsernameExistsException) return { owner: await ownerForPhone(phone), created: false };
+    console.error("creating the customer account failed", err);
+    return { owner: null, created: false };
   }
 }
 
@@ -196,7 +242,8 @@ export const handler: Schema["placeOrder"]["functionHandler"] = async (event) =>
   const missing = lines.filter((l) => soldOut.has(l.product.slug)).map((l) => l.product.slug);
   if (missing.length) throw new Error(`out_of_stock:${missing.join(",")}`);
 
-  const owner = forCustomer ? await ownerForPhone(phone) : `${identity.sub}::${identity.username}`;
+  const customer = forCustomer ? await ensureCustomer(phone) : null;
+  const owner = customer ? customer.owner : `${identity.sub}::${identity.username}`;
 
   const saveAndNotify = async () => {
     const previous = await client.models.Order.listOrderByPhone({ phone }, { limit: 1, selectionSet: ["id"] });
@@ -233,6 +280,12 @@ export const handler: Schema["placeOrder"]["functionHandler"] = async (event) =>
     if (!order || errors?.length) {
       console.error("Saving the order failed", JSON.stringify(errors));
       throw new Error("save_failed");
+    }
+
+    // A brand-new customer's saved details («معلوماتي») start from this order.
+    if (customer?.created && owner) {
+      const { errors: profileErrors } = await client.models.CustomerProfile.create({ name, province, area, address, owner });
+      if (profileErrors?.length) console.error("saving the customer profile failed", JSON.stringify(profileErrors));
     }
 
     const message = buildOrderMessage({

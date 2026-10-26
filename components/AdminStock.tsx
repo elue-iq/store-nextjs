@@ -6,7 +6,7 @@ import { dataClient } from "@/lib/data";
 import { useToast } from "./Toast";
 import { useStock } from "./StockProvider";
 
-// "المنتجات" on /admin: switch each flavor between in stock and sold out.
+// The «المنتجات» screen of /admin: switch each flavor between in stock and sold out.
 // The shop reads this straight away; placeOrder refuses sold-out flavors.
 export function AdminStock() {
   const toast = useToast();
@@ -42,17 +42,10 @@ export function AdminStock() {
   }
 
   return (
-    <details className="admin-section">
-      <summary>
-        المنتجات{" "}
-        {available && (
-          <span className="admin-section__meta">
-            {Object.values(available).every(Boolean)
-              ? "· كلها متوفرة"
-              : `· نفدت كمية ${Object.values(available).filter((v) => !v).length}`}
-          </span>
-        )}
-      </summary>
+    <section className="admin-section admin-section--screen">
+      <p className="hint">
+        بدّل حالة كل نكهة بين «متوفر» و«نفدت الكمية». يظهر التغيير في المتجر فورًا، ولا يقبل الموقع طلبًا لنكهة نفدت.
+      </p>
       {available === null ? (
         <p className="panel-loading">جارٍ تحميل المنتجات…</p>
       ) : (
@@ -87,6 +80,6 @@ export function AdminStock() {
           ))}
         </ul>
       )}
-    </details>
+    </section>
   );
 }

@@ -37,7 +37,7 @@ cfnUserPoolClient.tokenValidityUnits = { accessToken: "minutes", idToken: "minut
 const userPool = backend.auth.resources.userPool;
 backend.placeOrder.addEnvironment("USER_POOL_ID", userPool.userPoolId);
 backend.placeOrder.resources.lambda.addToRolePolicy(
-  new PolicyStatement({ actions: ["cognito-idp:AdminGetUser", "cognito-idp:ListUsers"], resources: [userPool.userPoolArn] }),
+  new PolicyStatement({ actions: ["cognito-idp:AdminGetUser", "cognito-idp:ListUsers", "cognito-idp:AdminCreateUser", "cognito-idp:AdminSetUserPassword"], resources: [userPool.userPoolArn] }),
 );
 
 // Sequential order numbers (EL-0001, EL-0002, ...): one counter row, increased

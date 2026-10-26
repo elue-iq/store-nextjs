@@ -5,6 +5,8 @@ import { useAuth } from "./AuthProvider";
 import { useToast } from "./Toast";
 import { LoginPanel } from "./LoginPanel";
 import { AdminStock } from "./AdminStock";
+import { AdminDrawer, type AdminView as View } from "./AdminDrawer";
+import { usePullToRefresh } from "./usePullToRefresh";
 import { AdminOrderForm } from "./AdminOrderForm";
 import { AdminModon } from "./AdminModon";
 import { buildCustomers, CustomerDetail, CustomerList, CustomersSummary } from "./AdminCustomers";
@@ -14,6 +16,7 @@ import { formatPoints, pointsFor } from "@/lib/loyalty";
 import { baghdadTime, dataClient, newestFirst, STATUS_LABELS, STATUS_ORDER, type Order, type OrderStatus } from "@/lib/data";
 import { formatIraqiMobile, toLatinDigits } from "@/lib/phone";
 import { formatIQD } from "@/lib/site";
+import { shareOrderUrl } from "@/lib/share";
 import { fullAddress } from "@/lib/iraq";
 
 const baghdadDay = (iso: string) =>
@@ -73,7 +76,8 @@ export function AdminView() {
   const [sort, setSort] = useState<Sort>("newest");
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
-  const [view, setView] = useState<"orders" | "customers">("orders");
+  const [view, setView] = useState<View>("orders");
+  const [menuOpen, setMenuOpen] = useState(false);
   const listScroll = useRef(0);
 
   // ---- Navigation (list <-> order screen) --------------------------------
@@ -164,6 +168,9 @@ export function AdminView() {
     if (newCount > 0) nav.setAppBadge?.(newCount).catch(() => {});
     else nav.clearAppBadge?.().catch(() => {});
   }, [newCount]);
+
+  // Pull-to-refresh on the list screens only (detail screens and forms are push screens).
+  const ptr = usePullToRefresh(auth.status === "signedIn" && auth.isAdmin && !selected);
 
   const today = baghdadDay(new Date().toISOString());
 
@@ -301,7 +308,7 @@ export function AdminView() {
           )}
         </div>
         {order ? (
-          <OrderDetail key={order.id} order={order} today={today} me={auth.phone} />
+          <OrderDetail key={order.id} order={order} today={today} me={auth.phone} onOpenCustomer={() => openOrder(`c:${order.phone}`)} />
         ) : orders === null ? (
           <p className="panel-loading">جارٍ تحميل الطلب…</p>
         ) : (
@@ -313,59 +320,77 @@ export function AdminView() {
 
   // ---- List ---------------------------------------------------------------
 
+  const pullEl =
+    ptr.pull > 0 || ptr.refreshing ? (
+      <div className="ptr" style={{ transform: `translateY(${ptr.pull}px)` }} aria-hidden="true">
+        <span className={ptr.refreshing ? "ptr__spin is-spinning" : "ptr__spin"} style={{ rotate: `${ptr.pull * 4}deg` }} />
+      </div>
+    ) : null;
+
+  const listHead = (title: string, sub: string) => (
+    <div className="panel-head">
+      <button type="button" className="admin-menu-btn" aria-label="القائمة" aria-haspopup="dialog" onClick={() => setMenuOpen(true)}>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 7h16M4 12h16M4 17h16" />
+        </svg>
+        {newCount > 0 && <span className="admin-menu-btn__dot" aria-hidden="true" />}
+      </button>
+      <div>
+        <h1>{title}</h1>
+        <p className="panel-head__sub">{sub}</p>
+      </div>
+    </div>
+  );
+
+  const drawer = (
+    <AdminDrawer
+      open={menuOpen}
+      view={view}
+      counts={{ orders: orders?.length ?? 0, customers: customers.length, attention: newCount }}
+      phone={formatIraqiMobile(auth.phone)}
+      onClose={() => setMenuOpen(false)}
+      onView={(v) => {
+        setView(v);
+        setMenuOpen(false);
+        window.scrollTo({ top: 0 });
+      }}
+      onNewOrder={() => {
+        setMenuOpen(false);
+        openOrder("new");
+      }}
+      onSignOut={() => void auth.signOut()}
+    />
+  );
+
+  if (view === "products") {
+    return (
+      <div className="admin-screen">
+        {pullEl}
+        {listHead("المنتجات", "حالة التوفر لكل نكهة")}
+        <AdminStock />
+        {drawer}
+      </div>
+    );
+  }
+
   if (view === "customers") {
   return (
     <div className="admin-screen">
-      <div className="panel-head">
-        <div>
-          <h1>لوحة الطلبات</h1>
-          <p className="panel-head__sub">
-            {synced ? "مباشر: تظهر الطلبات الجديدة تلقائيًا" : "جارٍ تحميل الطلبات…"}
-          </p>
-        </div>
-        <button type="button" className="link-button" onClick={() => void auth.signOut()}>
-          تسجيل الخروج
-        </button>
-      </div>
-
-      <div className="admin-tabs" role="tablist" aria-label="القسم">
-        <button type="button" role="tab" aria-selected={(view as string) === "orders"} onClick={() => setView("orders")}>
-          الطلبات <span>{orders?.length ?? 0}</span>
-        </button>
-        <button type="button" role="tab" aria-selected={(view as string) === "customers"} onClick={() => setView("customers")}>
-          العملاء <span>{customers.length}</span>
-        </button>
-      </div>
+      {pullEl}
+      {listHead("العملاء", `${customers.length} عميل`)}
 
       <CustomersSummary customers={customers} />
       {orders === null && !failed && <p className="panel-loading">جارٍ تحميل العملاء…</p>}
       <CustomerList customers={customers} onOpen={(phone) => openOrder(`c:${phone}`)} />
+      {drawer}
     </div>
   );
   }
 
   return (
     <div className="admin-screen">
-      <div className="panel-head">
-        <div>
-          <h1>لوحة الطلبات</h1>
-          <p className="panel-head__sub">
-            {synced ? "مباشر: تظهر الطلبات الجديدة تلقائيًا" : "جارٍ تحميل الطلبات…"}
-          </p>
-        </div>
-        <button type="button" className="link-button" onClick={() => void auth.signOut()}>
-          تسجيل الخروج
-        </button>
-      </div>
-
-      <div className="admin-tabs" role="tablist" aria-label="القسم">
-        <button type="button" role="tab" aria-selected={(view as string) === "orders"} onClick={() => setView("orders")}>
-          الطلبات <span>{orders?.length ?? 0}</span>
-        </button>
-        <button type="button" role="tab" aria-selected={(view as string) === "customers"} onClick={() => setView("customers")}>
-          العملاء <span>{customers.length}</span>
-        </button>
-      </div>
+      {pullEl}
+      {listHead("لوحة الطلبات", synced ? "مباشر: تظهر الطلبات الجديدة تلقائيًا" : "جارٍ تحميل الطلبات…")}
 
       <dl className="admin-stats">
         <div>
@@ -385,8 +410,6 @@ export function AdminView() {
           <dd>{stats.counts.NEW}</dd>
         </div>
       </dl>
-
-      <AdminStock />
 
       <div className="admin-tools">
         <button type="button" className="btn btn--full admin-new" onClick={() => openOrder("new")}>
@@ -470,11 +493,12 @@ export function AdminView() {
           </li>
         ))}
       </ul>
+      {drawer}
     </div>
   );
 }
 
-function OrderDetail({ order: o, today, me }: { order: Order; today: string; me: string }) {
+function OrderDetail({ order: o, today, me, onOpenCustomer }: { order: Order; today: string; me: string; onOpenCustomer: () => void }) {
   const toast = useToast();
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -579,16 +603,27 @@ function OrderDetail({ order: o, today, me }: { order: Order; today: string; me:
 
       <section className="order-detail__block">
         <h2>العميل</h2>
-        <p className="order-detail__name">{o.name}</p>
-        <p className="order-detail__phone" dir="ltr">
-          {local}
-        </p>
+        <button type="button" className="customer-link" onClick={onOpenCustomer}>
+          <span>
+            <span className="order-detail__name">{o.name}</span>
+            <span className="order-detail__phone" dir="ltr">
+              {local}
+            </span>
+          </span>
+          <small>كل تفاصيله وطلباته</small>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M15 5l-7 7 7 7" />
+          </svg>
+        </button>
         <div className="order-detail__contact">
           <a className="btn btn--small" href={`https://wa.me/${o.phone}`} target="_blank" rel="noopener noreferrer">
             واتساب
           </a>
           <a className="btn btn--quiet btn--small" href={`tel:+${o.phone}`}>
             اتصال
+          </a>
+          <a className="btn btn--quiet btn--small" href={shareOrderUrl(o)} target="_blank" rel="noopener noreferrer">
+            أرسل له رابط الطلب
           </a>
         </div>
       </section>

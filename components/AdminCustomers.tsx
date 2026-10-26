@@ -8,6 +8,7 @@ import { fullAddress } from "@/lib/iraq";
 import { getProduct } from "@/lib/products";
 import { formatIraqiMobile, toLatinDigits } from "@/lib/phone";
 import { formatIQD } from "@/lib/site";
+import { shareAccountUrl } from "@/lib/share";
 
 // A customer is every order with the same WhatsApp number. Built from the
 // orders the admin already loads, so there is nothing new to store.
@@ -183,6 +184,9 @@ export function CustomerDetail({
           </a>
           <a className="btn btn--quiet btn--small" href={`tel:+${c.phone}`}>
             اتصال
+          </a>
+          <a className="btn btn--quiet btn--small" href={shareAccountUrl(latest)} target="_blank" rel="noopener noreferrer">
+            أرسل له رابط حسابه
           </a>
           <button type="button" className="btn btn--quiet btn--small" onClick={onNewOrder}>
             + طلب جديد له

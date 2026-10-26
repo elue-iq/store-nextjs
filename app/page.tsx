@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { nutNote, products, sharedPoints } from "@/lib/products";
-import { formatIQD } from "@/lib/site";
+import { formatIQD, site, siteUrl } from "@/lib/site";
 import { JarLabel } from "@/components/JarLabel";
 import { AddToCartButton } from "@/components/AddToCart";
 
@@ -15,9 +15,29 @@ const ingredients = [
   { title: "بدائل سكر إسبانية المنشأ", text: "للتحلية بدلًا من السكر." },
 ];
 
+// Tells Google who ÉLUE is (name, logo, Instagram, WhatsApp, where it delivers).
+const organizationJsonLd = () => ({
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  name: "ÉLUE",
+  alternateName: "إيلو",
+  url: siteUrl(),
+  logo: `${siteUrl()}/icon.svg`,
+  description: "ترافل شوكولاتة قليل السعرات ومحسوبها، بلا سكر مضاف. التوصيل داخل بغداد.",
+  sameAs: [site.instagramUrl],
+  contactPoint: [
+    { "@type": "ContactPoint", contactType: "customer service", telephone: `+${site.whatsappNumber}`, availableLanguage: ["ar", "en"] },
+  ],
+  areaServed: { "@type": "City", name: "Baghdad" },
+});
+
 export default function Home() {
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd()).replace(/</g, "\\u003c") }}
+      />
       <section className="hero">
         <div className="hero__media">
           <Image
