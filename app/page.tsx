@@ -24,7 +24,7 @@ const organizationJsonLd = () => ({
   alternateName: "إيلو",
   url: siteUrl(),
   logo: `${siteUrl()}/icon.svg`,
-  description: "ترافل شوكولاتة قليل السعرات ومحسوبها، بلا سكر مضاف. التوصيل داخل بغداد.",
+  description: "ترافل شوكولاتة قليل السعرات ومحسوبها، بلا سكر مضاف. التوصيل لكل المحافظات.",
   sameAs: [site.instagramUrl],
   contactPoint: [
     { "@type": "ContactPoint", contactType: "customer service", telephone: `+${site.whatsappNumber}`, availableLanguage: ["ar", "en"] },

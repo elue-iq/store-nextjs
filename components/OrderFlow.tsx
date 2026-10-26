@@ -329,7 +329,7 @@ export function OrderFlow() {
         <p className="order-pay">{collectStatement(total)}</p>
         <p className="order-pay">{site.paymentNote}</p>
         <p className="order-pay">{site.courierNote}</p>
-        <p className="order-pay">اطلبوا قبل الساعة {site.deliveryCutoff} ويصلكم غداً داخل بغداد.</p>
+        <p className="order-pay">اطلبوا قبل الساعة {site.deliveryCutoff} ويصلكم غداً.</p>
         <p className="order-pay order-pay--cold">{site.coldNote.text}</p>
       </div>
 
