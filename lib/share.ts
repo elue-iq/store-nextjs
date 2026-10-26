@@ -11,19 +11,23 @@ function origin(): string {
   return typeof window === "undefined" ? "https://elue-iq.com" : window.location.origin;
 }
 
+// Same warm message for both buttons; only the link (and the order number) differ.
+function message(o: Who, link: string, withNumber: boolean): string {
+  return (
+    `مرحباً ${o.name} 🧡\n\n` +
+    `شكراً لطلبكم من ÉLUE.\n` +
+    `استلمنا طلبكم${withNumber ? ` (${o.orderNumber})` : ""} وراح نجهزه بكل حب وحرص.\n\n` +
+    `لمتابعة الطلب:\n${link}\n\n` +
+    `قد تحتاجون لتسجيل الدخول من خلال رقم الواتساب ${formatIraqiMobile(o.phone)} 🧡\n\n` +
+    `فريق دعم ÉLUE دائماً سعيد بسماع أي اقتراح أو استفسار.`
+  );
+}
+
 export function shareOrderUrl(o: Who): string {
   const link = `${origin()}/account?order=${encodeURIComponent(o.orderNumber)}`;
-  const text =
-    `مرحباً ${o.name}، سجّلنا طلبك ${o.orderNumber} من ÉLUE.\n` +
-    `تابع حالة الطلب ونقاطك من هنا:\n${link}\n` +
-    `سجّل الدخول برقم الواتساب ${formatIraqiMobile(o.phone)}، يصلك رمز على الواتساب.`;
-  return `https://wa.me/${o.phone}?text=${encodeURIComponent(text)}`;
+  return `https://wa.me/${o.phone}?text=${encodeURIComponent(message(o, link, true))}`;
 }
 
 export function shareAccountUrl(o: Who): string {
-  const link = `${origin()}/account`;
-  const text =
-    `مرحباً ${o.name}، هذا رابط حسابك في ÉLUE لمتابعة طلباتك ونقاطك:\n${link}\n` +
-    `سجّل الدخول برقم الواتساب ${formatIraqiMobile(o.phone)}، يصلك رمز على الواتساب.`;
-  return `https://wa.me/${o.phone}?text=${encodeURIComponent(text)}`;
+  return `https://wa.me/${o.phone}?text=${encodeURIComponent(message(o, `${origin()}/account`, false))}`;
 }
