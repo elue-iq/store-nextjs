@@ -25,8 +25,6 @@ export const PROVINCES = [
 
 export type Province = (typeof PROVINCES)[number];
 
-// ÉLUE delivers to every governorate (through the courier).
-export const DELIVERY_PROVINCES: readonly string[] = PROVINCES;
 
 export function isProvince(v: string): v is Province {
   return (PROVINCES as readonly string[]).includes(v);

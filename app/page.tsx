@@ -24,7 +24,7 @@ const organizationJsonLd = () => ({
   alternateName: "إيلو",
   url: siteUrl(),
   logo: `${siteUrl()}/icon.svg`,
-  description: "ترافل شوكولاتة قليل السعرات ومحسوبها، بلا سكر مضاف. التوصيل لكل المحافظات.",
+  description: "ترافل شوكولاتة قليل السعرات ومحسوبها، بلا سكر مضاف. التوصيل لكل محافظات العراق.",
   sameAs: [site.instagramUrl],
   contactPoint: [
     { "@type": "ContactPoint", contactType: "customer service", telephone: `+${site.whatsappNumber}`, availableLanguage: ["ar", "en"] },
@@ -165,7 +165,7 @@ export default function Home() {
         <div className="section__head">
           <h2 id="delivery-title">كيف يوصلك طلبك؟</h2>
           <p>
-            من الطلب إلى البراد بأربع خطوات. الدفع نقداً عند الاستلام، وأجور التوصيل {formatIQD(site.deliveryFee)}.
+            التوصيل لكل محافظات العراق. الدفع نقداً عند الاستلام، وأجور التوصيل {formatIQD(site.deliveryFee)}.
           </p>
         </div>
         <DeliverySteps />

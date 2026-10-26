@@ -14,7 +14,7 @@ import { ColdBanner } from "@/components/ColdBanner";
 import { siteUrl } from "@/lib/site";
 
 const description =
-  "ترافل شوكولاتة قليل السعرات ومحسوبها، بلا سكر مضاف. أربع نكهات، وسعرات كل قطعة مدوّنة على العلبة. التوصيل لكل المحافظات.";
+  "ترافل شوكولاتة قليل السعرات ومحسوبها، بلا سكر مضاف. أربع نكهات، وسعرات كل قطعة مدوّنة على العلبة. التوصيل لكل محافظات العراق.";
 
 // Anything that isn't the live site (the dev copy, a local build) is marked and hidden from search.
 const TEST_COPY = process.env.NEXT_PUBLIC_STAGE !== "amplify";
