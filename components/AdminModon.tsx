@@ -45,26 +45,28 @@ export function AdminModon({ order: o }: { order: Order }) {
   const [search, setSearch] = useState("");
   const [confirmSend, setConfirmSend] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const sent = Boolean(o.modonQr);
   const cancelled = o.status === "CANCELLED";
 
   // Regions for the picker, with the closest match to what the customer typed selected.
   useEffect(() => {
-    if (sent || cancelled || !cityId) return;
+    if ((sent && !editing) || cancelled || !cityId) return;
     let alive = true;
     void callModon({ action: "regions", cityId }).then(({ data, error }) => {
       if (!alive) return;
       if (error) return setRegionsError(error);
       const list = (data?.regions as ModonRegion[]) ?? [];
       setRegions(list);
-      const guess = suggestRegion(list, o.area ?? "", o.address);
+      const current = sent ? list.find((r) => r.id === o.modonRegionId) : null;
+      const guess = current ?? suggestRegion(list, o.area ?? "", o.address);
       if (guess) setRegionId(guess.id);
     });
     return () => {
       alive = false;
     };
-  }, [sent, cancelled, cityId, o.area, o.address]);
+  }, [sent, editing, cancelled, cityId, o.area, o.address, o.modonRegionId]);
 
   const shown = useMemo(() => {
     if (!regions) return [];
@@ -77,16 +79,17 @@ export function AdminModon({ order: o }: { order: Order }) {
 
   const chosen = regions?.find((r) => r.id === regionId) ?? null;
 
-  async function run(action: "send" | "delete" | "refresh", ok: string) {
+  async function run(action: "send" | "update" | "delete" | "refresh", ok: string) {
     setBusy(true);
     const { data, error } = await callModon({
       action,
       orderId: o.id,
-      ...(action === "send" ? { regionId: regionId ?? undefined, regionName: chosen?.name } : {}),
+      ...(action === "send" || action === "update" ? { regionId: regionId ?? undefined, regionName: chosen?.name } : {}),
     });
     setBusy(false);
     setConfirmSend(false);
     setConfirmDelete(false);
+    if (!error && action === "update") setEditing(false);
     if (error) {
       toast({ id: "modon", tone: "attention", message: error });
       return;
@@ -210,6 +213,65 @@ export function AdminModon({ order: o }: { order: Order }) {
           تحديث الحالة
         </button>
       </div>
+      {!cancelled &&
+        (editing ? (
+          <div className="modon__confirm">
+            <p>سيُرسل إلى مدن كل ما في الطلب الآن: اسم العميل ورقمه وعنوانه والمنطقة والمبلغ والملاحظة.</p>
+            {regionsError ? (
+              <p className="panel-note">{regionsError}</p>
+            ) : !regions ? (
+              <p className="panel-loading">جارٍ تحميل مناطق مدن…</p>
+            ) : (
+              <>
+                <p className="modon__area">
+                  العنوان في ÉLUE: <strong>{[o.area, o.address].filter(Boolean).join(" — ") || "—"}</strong>
+                </p>
+                <label className="modon__label">
+                  المنطقة لدى مدن
+                  <input
+                    type="search"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder={`ابحث بين ${regions.length} منطقة`}
+                  />
+                </label>
+                <select
+                  className="modon__regions"
+                  size={6}
+                  value={regionId ?? ""}
+                  onChange={(e) => setRegionId(Number(e.target.value))}
+                  aria-label="المنطقة لدى مدن"
+                >
+                  {shown.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="modon__sum">
+                  يستلم المندوب من العميل{" "}
+                  <strong>{formatIQD(modonCollect(o.total, Boolean(o.paid), Boolean(o.freeDelivery)))}</strong>
+                  <small>{collectBreakdown(o.total, Boolean(o.paid), Boolean(o.freeDelivery))}</small>
+                </p>
+                <button
+                  type="button"
+                  className="btn btn--full"
+                  disabled={busy || !chosen}
+                  onClick={() => void run("update", "حُدّث الطلب لدى مدن.")}
+                >
+                  {busy ? "جارٍ التحديث…" : "تأكيد التحديث في مدن"}
+                </button>
+              </>
+            )}
+            <button type="button" className="btn btn--quiet btn--full" disabled={busy} onClick={() => setEditing(false)}>
+              تراجع
+            </button>
+          </div>
+        ) : (
+          <button type="button" className="btn btn--quiet btn--full" onClick={() => setEditing(true)}>
+            تحديث الطلب في مدن
+          </button>
+        ))}
       {beforePickup &&
         (confirmDelete ? (
           <div className="modon__confirm" role="alert">
@@ -226,7 +288,7 @@ export function AdminModon({ order: o }: { order: Order }) {
             حذف الطلب من مدن
           </button>
         ))}
-      {!beforePickup && <p className="hint">استلم المندوب الطلب: أي تعديل أو إلغاء يكون بالاتصال بمدن.</p>}
+      {!beforePickup && <p className="hint">استلم المندوب الطلب: الإلغاء يكون بالاتصال بمدن. إن رفض مدن التعديل ستظهر رسالتهم.</p>}
     </section>
   );
 }
