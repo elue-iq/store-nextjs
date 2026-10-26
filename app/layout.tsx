@@ -10,10 +10,11 @@ import { AuthProvider } from "@/components/AuthProvider";
 import { StockProvider } from "@/components/StockProvider";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
+import { ColdBanner } from "@/components/ColdBanner";
 import { siteUrl } from "@/lib/site";
 
 const description =
-  "ترافل شوكولاتة قليل السعرات ومحسوبها، بلا سكر مضاف. أربع نكهات، وسعرات كل قطعة مدوّنة على العلبة. التوصيل داخل بغداد.";
+  "ترافل شوكولاتة قليل السعرات ومحسوبها، بلا سكر مضاف. أربع نكهات، وسعرات كل قطعة مدوّنة على العلبة. التوصيل لكل محافظات العراق.";
 
 // Anything that isn't the live site (the dev copy, a local build) is marked and hidden from search.
 const TEST_COPY = process.env.NEXT_PUBLIC_STAGE !== "amplify";
@@ -54,6 +55,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <StockProvider>
               <CartProvider>
                 <Header />
+                <ColdBanner />
                 <main>{children}</main>
                 <Footer />
               </CartProvider>

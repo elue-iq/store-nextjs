@@ -4,6 +4,7 @@ import { nutNote, products, sharedPoints } from "@/lib/products";
 import { formatIQD, site, siteUrl } from "@/lib/site";
 import { JarLabel } from "@/components/JarLabel";
 import { AddToCartButton } from "@/components/AddToCart";
+import { DeliverySteps } from "@/components/DeliverySteps";
 
 const ingredients = [
   {
@@ -23,7 +24,7 @@ const organizationJsonLd = () => ({
   alternateName: "إيلو",
   url: siteUrl(),
   logo: `${siteUrl()}/icon.svg`,
-  description: "ترافل شوكولاتة قليل السعرات ومحسوبها، بلا سكر مضاف. التوصيل داخل بغداد.",
+  description: "ترافل شوكولاتة قليل السعرات ومحسوبها، بلا سكر مضاف. التوصيل لكل محافظات العراق.",
   sameAs: [site.instagramUrl],
   contactPoint: [
     { "@type": "ContactPoint", contactType: "customer service", telephone: `+${site.whatsappNumber}`, availableLanguage: ["ar", "en"] },
@@ -158,6 +159,16 @@ export default function Home() {
             </p>
           </div>
         </div>
+      </section>
+
+      <section className="section" aria-labelledby="delivery-title">
+        <div className="section__head">
+          <h2 id="delivery-title">كيف يوصلك طلبك؟</h2>
+          <p>
+            التوصيل لكل محافظات العراق. الدفع نقداً عند الاستلام، وأجور التوصيل {formatIQD(site.deliveryFee)}.
+          </p>
+        </div>
+        <DeliverySteps />
       </section>
 
       <section className="section cta">

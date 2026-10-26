@@ -1,7 +1,7 @@
 "use client";
 
 import { useImperativeHandle, useRef, type Ref } from "react";
-import { DELIVERY_PROVINCES, PROVINCES } from "@/lib/iraq";
+import { PROVINCES } from "@/lib/iraq";
 import {
   areaError,
   nameError,
@@ -82,7 +82,6 @@ export function DeliveryFields({
       </span>
     ) : null;
 
-  const outsideDelivery = values.province && !DELIVERY_PROVINCES.includes(values.province);
 
   return (
     <>
@@ -137,11 +136,6 @@ export function DeliveryFields({
         </label>
       </div>
 
-      {outsideDelivery && (
-        <p className="field-note" role="note">
-          التوصيل متاح حاليًا داخل بغداد فقط. يمكنك إرسال الطلب، وسنتواصل معك بشأن التوصيل إلى محافظتك.
-        </p>
-      )}
 
     </>
   );

@@ -12,6 +12,17 @@ export const site = {
   paymentNote: "الدفع نقداً عند الاستلام",
   // Printed on every courier label (note), sent to Telegram, and shown to the customer.
   courierNote: "يرجى تسليم بوكس الفلين الى مندوب التوصيل، والتأكد من الطلب",
+  // Orders placed before this hour are delivered the next day (shown to customers).
+  deliveryCutoff: "8 مساءً",
+  // The cold-chain message: a site-wide banner, and in every message sent to a customer.
+  coldNote: {
+    title: "مهم: يُحفظ دائماً في البراد",
+    text:
+      "لأن منتجاتنا لا تحتوي على مواد حافظة أو سكر مضاف أو دهون مضافة، فلازم دائماً تكون مبرّدة. " +
+      "بعد ما تستلمونه من المندوب، سلّموا المندوب بوكس الفلين وخلّوه بالبراد مباشرة.",
+    problem: "في حال وصلكم المنتج مو بارد، يرجى التواصل مع فريق الدعم مباشرة",
+    thanks: "شكراً لاختياركم ÉLUE",
+  },
   // Who the WhatsApp code comes from. OTPIQ's default sender shows as
   // "Premium Technology" (+1 555 335 9750), not ELUE.
   // Change this once ELUE's own WhatsApp number is connected in OTPIQ.
@@ -22,6 +33,14 @@ export const site = {
   // Public address used in links the server sends (Telegram).
   address: "https://elue-iq.com",
 };
+
+// "How your order gets to you", shown on the home page and in the cart.
+export const deliverySteps = [
+  { title: "اطلبوا", text: "اختاروا نكهاتكم وأكملوا الطلب، وسجّلوا الدخول برقم الواتساب لمتابعته." },
+  { title: "نجهّزه بحب", text: "نستلم طلبكم، ونجهّزه ونغلّفه بعناية داخل بوكس الفلين." },
+  { title: "يوصلكم المندوب", text: `اطلبوا قبل الساعة ${site.deliveryCutoff} ويصلكم غداً.` },
+  { title: "للبراد مباشرة", text: "تأكدوا من الطلب، وسلّموا المندوب بوكس الفلين، وحطّوا الترافل بالبراد فوراً." },
+];
 
 // The site's public address. Link previews (WhatsApp, Instagram, Telegram,
 // Google) need full https addresses for the image and page, so this must be

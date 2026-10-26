@@ -1,5 +1,5 @@
 // Iraq's 19 governorates (Halabja became the 19th in 2025).
-// Baghdad first because that is where ÉLUE delivers today; the rest alphabetically.
+// Baghdad first, the rest alphabetically.
 
 export const PROVINCES = [
   "بغداد",
@@ -25,7 +25,6 @@ export const PROVINCES = [
 
 export type Province = (typeof PROVINCES)[number];
 
-export const DELIVERY_PROVINCES: readonly string[] = ["بغداد"];
 
 export function isProvince(v: string): v is Province {
   return (PROVINCES as readonly string[]).includes(v);
