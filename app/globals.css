@@ -3319,3 +3319,78 @@ body:has(.admin-app) .site-footer {
   font-weight: 400;
   text-align: right;
 }
+
+/* ---------- Cold-chain banner (every page) ---------- */
+.cold-banner {
+  background: var(--terracotta);
+  color: var(--paper);
+}
+.cold-banner__inner {
+  max-width: var(--max);
+  margin: 0 auto;
+  padding: 0.7rem var(--gutter);
+  display: grid;
+  gap: 0.15rem;
+  font-size: 0.86rem;
+  line-height: 1.6;
+}
+.cold-banner__title {
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+.cold-banner__phone {
+  color: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+body:has(.admin-app) .cold-banner {
+  display: none;
+}
+.order-pay--cold {
+  font-weight: 600;
+  color: var(--terracotta);
+}
+
+/* ---------- How your order gets to you ---------- */
+.delivery-steps {
+  display: grid;
+  gap: 1rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+@media (min-width: 900px) {
+  .delivery-steps {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+.delivery-steps__item {
+  display: flex;
+  gap: 0.9rem;
+  align-items: flex-start;
+  padding: 1.1rem 1.2rem;
+  border: 1px solid var(--sand-deep);
+  border-radius: var(--radius-panel);
+  background: var(--paper);
+}
+.delivery-steps__num {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: var(--terracotta);
+  color: var(--paper);
+  font-weight: 700;
+}
+.delivery-steps__item h3 {
+  font-size: 1.05rem;
+  margin: 0 0 0.2rem;
+}
+.delivery-steps__item p {
+  color: var(--muted);
+  font-size: 0.93rem;
+  line-height: 1.7;
+}

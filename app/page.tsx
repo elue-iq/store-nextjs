@@ -4,6 +4,7 @@ import { nutNote, products, sharedPoints } from "@/lib/products";
 import { formatIQD, site, siteUrl } from "@/lib/site";
 import { JarLabel } from "@/components/JarLabel";
 import { AddToCartButton } from "@/components/AddToCart";
+import { DeliverySteps } from "@/components/DeliverySteps";
 
 const ingredients = [
   {
@@ -158,6 +159,16 @@ export default function Home() {
             </p>
           </div>
         </div>
+      </section>
+
+      <section className="section" aria-labelledby="delivery-title">
+        <div className="section__head">
+          <h2 id="delivery-title">كيف يوصلك طلبك؟</h2>
+          <p>
+            من الطلب إلى البراد بأربع خطوات. الدفع نقداً عند الاستلام، وأجور التوصيل {formatIQD(site.deliveryFee)}.
+          </p>
+        </div>
+        <DeliverySteps />
       </section>
 
       <section className="section cta">

@@ -4,6 +4,7 @@
 // (Works for orders the customer made and for orders the team made for them.)
 
 import { formatIraqiMobile } from "./phone";
+import { site } from "./site";
 
 type Who = { name: string; phone: string; orderNumber: string };
 
@@ -19,7 +20,10 @@ function message(o: Who, link: string, withNumber: boolean): string {
     `استلمنا طلبكم${withNumber ? ` (${o.orderNumber})` : ""} وراح نجهزه بكل حب وحرص.\n\n` +
     `لمتابعة الطلب:\n${link}\n\n` +
     `قد تحتاجون لتسجيل الدخول من خلال رقم الواتساب ${formatIraqiMobile(o.phone)} 🧡\n\n` +
-    `فريق دعم ÉLUE دائماً سعيد بسماع أي اقتراح أو استفسار.`
+    `❄️ ${site.coldNote.title}\n${site.coldNote.text}\n` +
+    `${site.coldNote.problem} ${site.whatsappDisplay.replace(/ /g, "")}\n\n` +
+    `فريق دعم ÉLUE دائماً سعيد بسماع أي اقتراح أو استفسار.\n` +
+    `${site.coldNote.thanks}`
   );
 }
 

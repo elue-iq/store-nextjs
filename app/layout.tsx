@@ -10,6 +10,7 @@ import { AuthProvider } from "@/components/AuthProvider";
 import { StockProvider } from "@/components/StockProvider";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
+import { ColdBanner } from "@/components/ColdBanner";
 import { siteUrl } from "@/lib/site";
 
 const description =
@@ -54,6 +55,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <StockProvider>
               <CartProvider>
                 <Header />
+                <ColdBanner />
                 <main>{children}</main>
                 <Footer />
               </CartProvider>
