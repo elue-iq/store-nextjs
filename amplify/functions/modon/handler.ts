@@ -178,9 +178,9 @@ async function applyStatus(m: ModonOrder): Promise<string | null> {
   }
   const eta = modonTime(m.deliver_estimation_datetime);
 
-  await client.models.Order.update({
+  const { errors } = await client.models.Order.update({
     ...(line ? { trackStatus: line } : {}),
-    ...(trackEvents ? { trackEvents } : {}),
+    ...(trackEvents ? { trackEvents: JSON.stringify(trackEvents) } : {}),
     trackEta: eta,
     id: o.id,
     modonStatusId: m.status_id != null ? String(m.status_id) : o.modonStatusId,
@@ -190,6 +190,10 @@ async function applyStatus(m: ModonOrder): Promise<string | null> {
     modonUpdatedAt: new Date().toISOString(),
     ...(next && !keep && next !== o.status ? { status: next } : {}),
   });
+  if (errors?.length) {
+    console.error("saving the Modon status failed", o.orderNumber, JSON.stringify(errors).slice(0, 600));
+    throw new Error("save_failed");
+  }
   return o.orderNumber;
 }
 
@@ -267,7 +271,7 @@ async function adminAction(args: {
         modonStatusId: "1",
         modonStatus: "طلب جديد لدى مدن",
         trackStatus: customerTrack("1"),
-        trackEvents: [{ at: now, text: customerTrack("1")! }],
+        trackEvents: JSON.stringify([{ at: now, text: customerTrack("1")! }]),
         trackEta: null,
         modonNote: null,
         modonRegionId: regionId,
