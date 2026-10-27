@@ -49,6 +49,18 @@ export function AdminModon({ order: o }: { order: Order }) {
   const [busy, setBusy] = useState(false);
   const sent = Boolean(o.modonQr);
   const cancelled = o.status === "CANCELLED";
+  const finished = o.status === "DELIVERED" || cancelled;
+
+  // Opening the order asks Modon for the latest status, so nobody has to press a button.
+  // Not once the order is delivered or cancelled (nothing more can change), and not
+  // again within a minute of the last update, to keep the API calls down.
+  useEffect(() => {
+    if (!sent || finished) return;
+    const last = o.modonUpdatedAt ? Date.parse(o.modonUpdatedAt) : 0;
+    if (Date.now() - last < 60_000) return;
+    void callModon({ action: "refresh", orderId: o.id });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [o.id]);
 
   // Regions for the picker, with the closest match to what the customer typed selected.
   useEffect(() => {
@@ -209,9 +221,6 @@ export function AdminModon({ order: o }: { order: Order }) {
             طباعة الملصق
           </a>
         )}
-        <button type="button" className="btn btn--quiet btn--small" disabled={busy} onClick={() => void run("refresh", "حُدّثت حالة مدن.")}>
-          تحديث الحالة
-        </button>
       </div>
       {!cancelled &&
         (editing ? (
