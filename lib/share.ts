@@ -12,19 +12,25 @@ function origin(): string {
   return typeof window === "undefined" ? "https://elue-iq.com" : window.location.origin;
 }
 
-// Same warm message for both buttons; only the link (and the order number) differ.
+// Same short message for both buttons; only the link (and the order number) differ.
 function message(o: Who, link: string, withNumber: boolean): string {
-  return (
-    `مرحباً ${o.name} 🧡\n\n` +
-    `شكراً لطلبكم من ÉLUE.\n` +
-    `استلمنا طلبكم${withNumber ? ` (${o.orderNumber})` : ""} وراح نجهزه بكل حب وحرص.\n\n` +
-    `لمتابعة الطلب:\n${link}\n\n` +
-    `قد تحتاجون لتسجيل الدخول من خلال رقم الواتساب ${formatIraqiMobile(o.phone)} 🧡\n\n` +
-    `❄️ ${site.coldNote.title}\n${site.coldNote.text}\n` +
-    `${site.coldNote.problem} ${site.whatsappDisplay.replace(/ /g, "")}\n\n` +
-    `فريق دعم ÉLUE دائماً سعيد بسماع أي اقتراح أو استفسار.\n` +
-    `${site.coldNote.thanks}`
-  );
+  const lines = [
+    `مرحباً ${o.name} 🧡`,
+    `شكراً لطلبكم من ÉLUE، استلمنا طلبكم${withNumber ? ` (${o.orderNumber})` : ""} وراح نجهزه بكل حب وحرص.`,
+    "",
+    "📦 لمتابعة الطلب:",
+    link,
+    `🔑 قد تحتاجون لتسجيل الدخول برقم الواتساب: ${formatIraqiMobile(o.phone)}`,
+    "",
+    `❄️ ${site.coldNote.title}`,
+    "• منتجاتنا بلا مواد حافظة أو سكر مضاف أو دهون مضافة، لذلك يلزم أن تبقى مبرّدة",
+    "• عند الاستلام، نرجو تسليم بوكس الفلين للمندوب ووضع المنتج في البراد مباشرة",
+    `• في حال وصول طلبكم غير مبرّد، يرجى التواصل معنا فوراً 📞 ${site.whatsappDisplay.replace(/ /g, "")}`,
+    "",
+    "💬 يسعدنا سماع اقتراحاتكم واستفساراتكم",
+    `${site.coldNote.thanks} 🧡`,
+  ];
+  return lines.join("\n");
 }
 
 export function shareOrderUrl(o: Who): string {

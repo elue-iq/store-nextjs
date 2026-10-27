@@ -35,6 +35,10 @@ export async function callModon(args: {
   }
 }
 
+// When each order last asked Modon for its status from this screen (one call a minute at most,
+// even if the order screen is opened again or re-rendered).
+const lastAsked = new Map<string, number>();
+
 // The «التوصيل عبر مدن» block on an order screen in /admin.
 export function AdminModon({ order: o }: { order: Order }) {
   const toast = useToast();
@@ -57,7 +61,8 @@ export function AdminModon({ order: o }: { order: Order }) {
   useEffect(() => {
     if (!sent || finished) return;
     const last = o.modonUpdatedAt ? Date.parse(o.modonUpdatedAt) : 0;
-    if (Date.now() - last < 60_000) return;
+    if (Date.now() - Math.max(last, lastAsked.get(o.id) ?? 0) < 60_000) return;
+    lastAsked.set(o.id, Date.now());
     void callModon({ action: "refresh", orderId: o.id });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [o.id]);
