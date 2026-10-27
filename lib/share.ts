@@ -13,14 +13,15 @@ function origin(): string {
 }
 
 // Same short message for both buttons; only the link (and the order number) differ.
-function message(o: Who, link: string, withNumber: boolean): string {
+function message(o: Who, link: string): string {
   const lines = [
     `مرحباً ${o.name} 🧡`,
-    `شكراً لطلبكم من ÉLUE، استلمنا طلبكم${withNumber ? ` (${o.orderNumber})` : ""} وراح نجهزه بكل حب وحرص.`,
+    "شكراً لطلبكم من ÉLUE، استلمنا طلبكم وراح نجهزه بكل حب وحرص.",
     "",
     "📦 لمتابعة الطلب:",
     link,
-    `🔑 قد تحتاجون لتسجيل الدخول برقم الواتساب: ${formatIraqiMobile(o.phone)}`,
+    // Digits without spaces (and a left-to-right mark) so the number never flips in Arabic text.
+    `🔑 قد تحتاجون لتسجيل الدخول برقم الواتساب: \u200E${formatIraqiMobile(o.phone).replace(/ /g, "")}`,
     "",
     `❄️ ${site.coldNote.title}`,
     "• منتجاتنا بلا مواد حافظة أو سكر مضاف أو دهون مضافة، لذلك يلزم أن تبقى مبرّدة",
@@ -35,9 +36,9 @@ function message(o: Who, link: string, withNumber: boolean): string {
 
 export function shareOrderUrl(o: Who): string {
   const link = `${origin()}/account?order=${encodeURIComponent(o.orderNumber)}`;
-  return `https://wa.me/${o.phone}?text=${encodeURIComponent(message(o, link, true))}`;
+  return `https://wa.me/${o.phone}?text=${encodeURIComponent(message(o, link))}`;
 }
 
 export function shareAccountUrl(o: Who): string {
-  return `https://wa.me/${o.phone}?text=${encodeURIComponent(message(o, `${origin()}/account`, false))}`;
+  return `https://wa.me/${o.phone}?text=${encodeURIComponent(message(o, `${origin()}/account`))}`;
 }
