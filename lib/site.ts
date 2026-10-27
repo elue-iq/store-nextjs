@@ -11,8 +11,6 @@ export const site = {
   // Shown on the order page. Change it if you start taking online payments.
   paymentNote: "الدفع نقداً عند الاستلام",
   // Printed on every courier label (note), sent to Telegram, and shown to the customer.
-  // Own line on every courier label note.
-  fragileNote: "قابل للكسر",
   courierNote: "يرجى تسليم بوكس الفلين الى مندوب التوصيل، والتأكد من الطلب",
   // Orders placed before this hour are delivered the next day (shown to customers).
   deliveryCutoff: "8 مساءً",
