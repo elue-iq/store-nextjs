@@ -39,6 +39,27 @@ export async function callModon(args: {
 // even if the order screen is opened again or re-rendered).
 const lastAsked = new Map<string, number>();
 
+// Tap a region to choose it. (A <select> list showed its first row as picked while nothing was
+// chosen, so tapping that row did nothing.)
+function RegionList({ regions, value, onPick }: { regions: ModonRegion[]; value: number | null; onPick: (id: number) => void }) {
+  return (
+    <div className="modon__regions" role="listbox" aria-label="المنطقة لدى مدن">
+      {regions.map((r) => (
+        <button
+          key={r.id}
+          type="button"
+          role="option"
+          aria-selected={r.id === value}
+          className={r.id === value ? "modon__region is-picked" : "modon__region"}
+          onClick={() => onPick(r.id)}
+        >
+          {r.name}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // The «التوصيل عبر مدن» block on an order screen in /admin.
 export function AdminModon({ order: o }: { order: Order }) {
   const toast = useToast();
@@ -140,19 +161,7 @@ export function AdminModon({ order: o }: { order: Order }) {
                 placeholder={`ابحث بين ${regions.length} منطقة`}
               />
             </label>
-            <select
-              className="modon__regions"
-              size={6}
-              value={regionId ?? ""}
-              onChange={(e) => setRegionId(Number(e.target.value))}
-              aria-label="المنطقة لدى مدن"
-            >
-              {shown.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))}
-            </select>
+            <RegionList regions={shown} value={regionId} onPick={setRegionId} />
             <p className="modon__sum">
               يستلم المندوب من العميل{" "}
               <strong>{formatIQD(modonCollect(o.total, Boolean(o.paid), Boolean(o.freeDelivery)))}</strong>
@@ -249,19 +258,7 @@ export function AdminModon({ order: o }: { order: Order }) {
                     placeholder={`ابحث بين ${regions.length} منطقة`}
                   />
                 </label>
-                <select
-                  className="modon__regions"
-                  size={6}
-                  value={regionId ?? ""}
-                  onChange={(e) => setRegionId(Number(e.target.value))}
-                  aria-label="المنطقة لدى مدن"
-                >
-                  {shown.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name}
-                    </option>
-                  ))}
-                </select>
+                <RegionList regions={shown} value={regionId} onPick={setRegionId} />
                 <p className="modon__sum">
                   يستلم المندوب من العميل{" "}
                   <strong>{formatIQD(modonCollect(o.total, Boolean(o.paid), Boolean(o.freeDelivery)))}</strong>
