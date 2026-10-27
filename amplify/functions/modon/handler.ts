@@ -125,7 +125,7 @@ function orderForm(o: Order, regionId: number, qr?: string): FormData {
   form.append(
     "merchant_notes",
     // Order number on its own line: a line break keeps Arabic text from flipping around "EL-0006".
-    `${o.orderNumber}\n${[site.courierNote, o.note].filter(Boolean).join(" — ")}`.slice(0, 400),
+    `${o.orderNumber}\n${site.fragileNote}\n${[site.courierNote, o.note].filter(Boolean).join(" — ")}`.slice(0, 400),
   );
   // Modon support told us to register every ÉLUE order as «استبدال» (replacement = 1),
   // not «أصلي». Used for create-order and edit-order alike.
