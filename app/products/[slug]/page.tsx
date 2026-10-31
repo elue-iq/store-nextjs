@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getProduct, nutNote, products, sharedPoints } from "@/lib/products";
+import { getProduct, products, sharedPoints } from "@/lib/products";
 import { formatIQD, siteUrl } from "@/lib/site";
 import { JarLabel } from "@/components/JarLabel";
 import { ProductBuyBox } from "@/components/AddToCart";
@@ -46,6 +47,18 @@ export default async function ProductPage({ params }: Props) {
     image: product.image ? `${siteUrl()}${product.image}` : undefined,
     description: `${product.taste}. ${product.kcalPerPiece} kcal average piece, no added sugar.`,
     brand: { "@type": "Brand", name: "ÉLUE" },
+    nutrition: {
+      "@type": "NutritionInformation",
+      servingSize: `3 pieces (${product.nutrition.servingG} g)`,
+      calories: `${product.nutrition.kcalServing} kcal`,
+      fatContent: `${product.nutrition.fatG} g`,
+      saturatedFatContent: `${product.nutrition.satFatG} g`,
+      sodiumContent: `${product.nutrition.sodiumMg} mg`,
+      carbohydrateContent: `${product.nutrition.carbG} g`,
+      fiberContent: `${product.nutrition.fibreG} g`,
+      sugarContent: `${product.nutrition.sugarsG} g`,
+      proteinContent: `${product.nutrition.proteinG} g`,
+    },
     offers: {
       "@type": "Offer",
       url: `${siteUrl()}/products/${product.slug}`,
@@ -91,13 +104,25 @@ export default async function ProductPage({ params }: Props) {
             ))}
           </ul>
 
-          <h2 className="product__subhead">المكونات الرئيسية</h2>
-          <p>{product.ingredients.join("، ")}.</p>
-          {(product.slug === "hazelnut" || product.slug === "peanut-butter") && (
-            <p className="product__allergy">
-              <strong>تنبيه للحساسية:</strong> {nutNote}
-            </p>
-          )}
+          <h2 className="product__subhead">المكونات</h2>
+          <p>{product.nutrition.ingredientsAr}</p>
+          <p className="product__allergy">
+            <strong>يحتوي على:</strong> {product.nutrition.containsAr}
+          </p>
+
+          <h2 className="product__subhead">القيم الغذائية</h2>
+          <figure className="product__label">
+            <Image
+              src={product.nutrition.image}
+              alt={`القيم الغذائية والمكونات: ${product.nameAr}. ${product.nutrition.kcalServing} سعرة حرارية للحصة (3 حبات)، ${product.nutrition.kcalPiece} للحبة.`}
+              width={1000}
+              height={1556}
+              sizes="(max-width: 700px) 100vw, 480px"
+            />
+            <figcaption>
+              الحصة 3 حبات ({product.nutrition.servingG} غ)، والحبة الواحدة {product.nutrition.pieceG} غ. القيم تقديرية من مكونات الوصفة.
+            </figcaption>
+          </figure>
 
           <h2 className="product__subhead">طازجة، ومكانها الثلاجة</h2>
           <p>لا تحتوي على سكر مضاف ولا على مواد حافظة، لذلك نحفظها بالتبريد.</p>

@@ -3408,3 +3408,20 @@ body:has(.admin-app) .cold-banner {
   font-size: 0.93rem;
   line-height: 1.7;
 }
+
+/* Nutrition label picture on the product page. */
+.product__label {
+  margin: 0.5rem 0 1.5rem;
+  max-width: 30rem;
+}
+.product__label img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+.product__label figcaption {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  opacity: 0.75;
+}
