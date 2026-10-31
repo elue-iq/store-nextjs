@@ -266,3 +266,14 @@ export function eatixFields(r: SendResult, simulated: boolean) {
   if (r.error === "disabled") return { eatixStatus: "OFF", eatixError: null };
   return { eatixStatus: "FAILED", eatixError: r.error.slice(0, 300) };
 }
+
+// Diagnostic: asks Eatix to cancel an order that does not exist, with the given
+// store / channel values. Creates nothing; the reply shows whether Eatix knows
+// the store and channel (a "not found" for the order means they are accepted).
+export async function probe(cfg: EatixConfig, shopCode: string, channel: string): Promise<unknown> {
+  try {
+    return await authed(cfg, "/open/order/v1/cancel", { shopCode, channel, orderId: "PROBE-0", outOrderId: "PROBE-0" });
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "failed" };
+  }
+}

@@ -4,7 +4,7 @@ import { generateClient } from "aws-amplify/data";
 import { getAmplifyDataClientConfig } from "@aws-amplify/backend/function/runtime";
 import { env } from "$amplify/env/eatix";
 import type { Schema } from "../../data/resource";
-import { cancelOrder, eatixConfig, eatixFields, sendOrder, toEatixOrder } from "../../../lib/eatix";
+import { cancelOrder, eatixConfig, eatixFields, probe, sendOrder, toEatixOrder } from "../../../lib/eatix";
 
 // Admin actions for Eatix (ADMINS only):
 //   send   – push (or push again) an order to Eatix
@@ -22,6 +22,15 @@ const cfg = eatixConfig(env as unknown as Record<string, string>);
 
 export const handler: Schema["eatix"]["functionHandler"] = async (event) => {
   const { action, orderId } = event.arguments;
+
+  // Diagnostic (ADMINS only, creates nothing): which store / channel values does Eatix accept?
+  if (action === "probe") {
+    const ids = [cfg.shopCode, "2615781743"];
+    const results: Record<string, unknown> = {};
+    for (const shop of ids) for (const ch of ids) results[`shop=${shop} channel=${ch}`] = await probe(cfg, shop, ch);
+    return results;
+  }
+
   if (!orderId) throw new Error("missing_order");
   const { data: o } = await client.models.Order.get({ id: orderId });
   if (!o) throw new Error("not_found");
