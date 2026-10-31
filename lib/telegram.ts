@@ -40,7 +40,7 @@ export function buildOrderMessage(o: {
   const special = [
     o.paid ? `مدفوع مسبقاً${o.paidNote ? ` (${escapeHtml(o.paidNote)})` : ""}` : null,
     delivery === "gift" ? "توصيل مجاني هدية (نتحمّل الأجور)" : null,
-    delivery === "prepaid" ? "أجور التوصيل مدفوعة مسبقاً" : null,
+    delivery === "prepaid" ? `أجور التوصيل مدفوعة مسبقاً${!o.paid && o.paidNote ? ` (${escapeHtml(o.paidNote)})` : ""}` : null,
   ].filter(Boolean);
   return [
     `<b>طلب جديد ${ltr(o.orderNumber)}</b>${o.returning ? " · عميل سابق" : ""}`,

@@ -36,6 +36,14 @@ const CUSTOMER_FIELDS = [
   "total",
   "status",
   "telegramSent",
+  // Payment and delivery: what the driver collects is worked out from these.
+  "paid",
+  "freeDelivery",
+  "deliveryPaid",
+  // Delivery tracking (from the courier's updates).
+  "trackStatus",
+  "trackEta",
+  "trackEvents",
   "owner",
   "createdAt",
   "updatedAt",
