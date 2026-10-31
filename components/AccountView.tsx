@@ -334,13 +334,12 @@ function MyOrderDetail({ order: o }: { order: Order }) {
     router.push("/order");
   }
 
-  async function pdf() {
+  async function saveSummary() {
     try {
-      const { saveOrderPdf } = await import("@/lib/receipt");
-      await saveOrderPdf(o);
-      toast({ id: "pdf", message: "نزّلنا ملخص الطلب (PDF)." });
+      const { saveOrderImage } = await import("@/lib/receipt");
+      await saveOrderImage(o);
     } catch {
-      toast({ id: "pdf", tone: "attention", message: "تعذّر تجهيز الملف الآن. حاول مجددًا." });
+      toast({ id: "pdf", tone: "attention", message: "تعذّر تجهيز الصورة الآن. حاول مجددًا." });
     }
   }
 
@@ -397,8 +396,8 @@ function MyOrderDetail({ order: o }: { order: Order }) {
         >
           اسألنا عن هذا الطلب عبر واتساب
         </a>
-        <button type="button" className="link-button order-detail__pdf" onClick={() => void pdf()}>
-          تنزيل ملخص الطلب (PDF)
+        <button type="button" className="link-button order-detail__pdf" onClick={() => void saveSummary()}>
+          حفظ صورة ملخص الطلب
         </button>
       </div>
     </article>

@@ -4107,3 +4107,22 @@ button.dash-bars__row:focus-visible {
   flex-wrap: wrap;
   gap: 0.5rem;
 }
+
+/* «إرسال الطلب للعميل على واتساب» on the admin order screen. */
+.send-order {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.9rem 0 0.6rem;
+}
+.send-order small {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.order-detail__contact--3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.order-detail__contact--3 .btn {
+  padding-inline: 0.4rem;
+  white-space: nowrap;
+}

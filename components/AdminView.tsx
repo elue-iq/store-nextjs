@@ -10,6 +10,7 @@ import { usePullToRefresh } from "./usePullToRefresh";
 import { AdminOrderForm } from "./AdminOrderForm";
 import { AdminModon } from "./AdminModon";
 import { AdminEatix } from "./AdminEatix";
+import { SendOrderToCustomer } from "./SendOrderToCustomer";
 import { AdminDashboard } from "./AdminDashboard";
 import { OrderRow, baghdadDay, shortTime } from "./AdminOrderRow";
 import { buildCustomers, CustomerDetail, CustomerList, CustomersSummary } from "./AdminCustomers";
@@ -19,7 +20,6 @@ import { formatPoints, pointsFor } from "@/lib/loyalty";
 import { dataClient, newestFirst, STATUS_LABELS, STATUS_ORDER, type Order, type OrderStatus } from "@/lib/data";
 import { formatIraqiMobile, toLatinDigits } from "@/lib/phone";
 import { formatIQD } from "@/lib/site";
-import { shareOrderUrl } from "@/lib/share";
 import { fullAddress } from "@/lib/iraq";
 import { products } from "@/lib/products";
 
@@ -549,12 +549,12 @@ function OrderDetail({ order: o, today, me, onOpenCustomer }: { order: Order; to
     }
   }
 
-  async function pdf() {
+  async function saveSummary() {
     try {
-      const { saveOrderPdf } = await import("@/lib/receipt");
-      await saveOrderPdf(o);
+      const { saveOrderImage } = await import("@/lib/receipt");
+      await saveOrderImage(o);
     } catch {
-      toast({ id: "pdf", tone: "attention", message: "تعذّر تجهيز الملف الآن. حاول مجددًا." });
+      toast({ id: "pdf", tone: "attention", message: "تعذّر تجهيز الصورة الآن. حاول مجددًا." });
     }
   }
 
@@ -617,16 +617,17 @@ function OrderDetail({ order: o, today, me, onOpenCustomer }: { order: Order; to
             <path d="M15 5l-7 7 7 7" />
           </svg>
         </button>
-        <div className="order-detail__contact">
-          <a className="btn btn--small" href={`https://wa.me/${o.phone}`} target="_blank" rel="noopener noreferrer">
+        <SendOrderToCustomer order={o} />
+        <div className="order-detail__contact order-detail__contact--3">
+          <a className="btn btn--quiet btn--small" href={`https://wa.me/${o.phone}`} target="_blank" rel="noopener noreferrer">
             واتساب
           </a>
           <a className="btn btn--quiet btn--small" href={`tel:+${o.phone}`}>
             اتصال
           </a>
-          <a className="btn btn--quiet btn--small" href={shareOrderUrl(o)} target="_blank" rel="noopener noreferrer">
-            أرسل له رابط الطلب
-          </a>
+          <button type="button" className="btn btn--quiet btn--small" onClick={() => void saveSummary()}>
+            حفظ الصورة
+          </button>
         </div>
       </section>
 
@@ -716,9 +717,6 @@ function OrderDetail({ order: o, today, me, onOpenCustomer }: { order: Order; to
         )}
       </p>
 
-      <button type="button" className="link-button order-detail__pdf" onClick={() => void pdf()}>
-        تنزيل ملخص الطلب (PDF)
-      </button>
     </article>
   );
 }

@@ -1,27 +1,67 @@
-// WhatsApp message the team sends a customer so they can follow their order,
-// points and past orders. The customer opens the link, logs in once with the
-// WhatsApp code sent to their own number, and sees everything under «طلباتي».
+// WhatsApp message the team sends a customer: a short text summary of the order
+// (flavors, jars, total, delivery, what the driver collects) and the link to
+// follow it. The customer opens the link, logs in once with the WhatsApp code sent
+// to their own number, and sees everything under «طلباتي».
 // (Works for orders the customer made and for orders the team made for them.)
 
 import { formatIraqiMobile } from "./phone";
-import { site } from "./site";
+import { deliveryPayOf, formatIQD, site } from "./site";
 
 type Who = { name: string; phone: string; orderNumber: string };
+
+type OrderInfo = Who & {
+  items?: ({ slug: string; nameAr: string; qty: number; price: number } | null)[] | null;
+  jars?: number | null;
+  total?: number | null;
+  paid?: boolean | null;
+  freeDelivery?: boolean | null;
+  deliveryPaid?: boolean | null;
+};
 
 function origin(): string {
   return typeof window === "undefined" ? "https://elue-iq.com" : window.location.origin;
 }
 
-// Same short message for both buttons; only the link (and the order number) differ.
-function message(o: Who, link: string): string {
+function jarsWord(n: number): string {
+  if (n === 1) return "علبة واحدة";
+  if (n === 2) return "علبتان";
+  if (n <= 10) return `${n} علب`;
+  return `${n} علبة`;
+}
+
+// The order in a few lines, the same facts as the team's Telegram message.
+function summary(o: OrderInfo): string[] {
+  const items = (o.items ?? []).filter((i): i is NonNullable<typeof i> => Boolean(i));
+  if (!items.length || o.total == null) return [];
+  const jars = o.jars ?? items.reduce((n, i) => n + i.qty, 0);
+  const delivery = deliveryPayOf(o);
+  const collect = (o.paid ? 0 : o.total) + (delivery === "driver" ? site.deliveryFee : 0);
+  return [
+    "🧾 ملخص الطلب:",
+    ...items.map((i) => `• ${i.nameAr}: ${jarsWord(i.qty)}`),
+    `• المجموع (${jarsWord(jars)}): ${formatIQD(o.total)}${o.paid ? " ✅ مدفوع" : ""}`,
+    delivery === "gift"
+      ? "• التوصيل: مجاني 🎁"
+      : delivery === "prepaid"
+        ? "• أجور التوصيل: مدفوعة ✅"
+        : `• أجور التوصيل: ${formatIQD(site.deliveryFee)}`,
+    collect > 0 ? `💵 المبلغ عند الاستلام: ${formatIQD(collect)}` : "✅ لا يُطلب أي مبلغ عند الاستلام",
+    `• رقم الطلب: ${o.orderNumber}`,
+    "",
+  ];
+}
+
+// The message for the customer. With the order's items it starts with the summary.
+export function orderMessage(o: OrderInfo, link = `${origin()}/account?order=${encodeURIComponent(o.orderNumber)}`): string {
   const lines = [
     `مرحباً ${o.name} 🧡`,
     "شكراً لطلبكم من ÉLUE، استلمنا طلبكم وراح نجهزه بكل حب وحرص.",
     "",
+    ...summary(o),
     "📦 لمتابعة الطلب:",
     link,
     // Digits without spaces (and a left-to-right mark) so the number never flips in Arabic text.
-    `🔑 قد تحتاجون لتسجيل الدخول برقم الواتساب: \u200E${formatIraqiMobile(o.phone).replace(/ /g, "")}`,
+    `🔑 قد تحتاجون لتسجيل الدخول برقم الواتساب: ‎${formatIraqiMobile(o.phone).replace(/ /g, "")}`,
     "",
     `❄️ ${site.coldNote.title}`,
     "• منتجاتنا بلا مواد حافظة أو سكر مضاف أو دهون مضافة، لذلك يلزم أن تبقى مبرّدة",
@@ -34,11 +74,16 @@ function message(o: Who, link: string): string {
   return lines.join("\n");
 }
 
-export function shareOrderUrl(o: Who): string {
-  const link = `${origin()}/account?order=${encodeURIComponent(o.orderNumber)}`;
-  return `https://wa.me/${o.phone}?text=${encodeURIComponent(message(o, link))}`;
+// Opens the customer's own WhatsApp chat with the message ready to send.
+export function chatUrl(phone: string, text: string): string {
+  return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
 }
 
+export function shareOrderUrl(o: OrderInfo): string {
+  return chatUrl(o.phone, orderMessage(o));
+}
+
+// From the customer screen: the account link, without an order summary.
 export function shareAccountUrl(o: Who): string {
-  return `https://wa.me/${o.phone}?text=${encodeURIComponent(message(o, `${origin()}/account`))}`;
+  return chatUrl(o.phone, orderMessage({ name: o.name, phone: o.phone, orderNumber: o.orderNumber }, `${origin()}/account`));
 }

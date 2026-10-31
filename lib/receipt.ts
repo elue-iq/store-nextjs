@@ -1,8 +1,8 @@
-// Order summary PDF, made in the customer's browser right after ordering.
+// Order summary picture (PNG), made in the browser: easy to share on WhatsApp
+// and to keep in the phone's photos.
 //
 // The summary is drawn on a <canvas> (the browser shapes the Arabic text
-// correctly), then placed into a one-page PDF with jsPDF. jsPDF is loaded
-// only when needed, so it adds nothing to the normal page load.
+// correctly) and saved as a PNG.
 //
 // This is an order summary for the customer's records, not a tax invoice.
 
@@ -121,11 +121,13 @@ function draw(ctx: CanvasRenderingContext2D, d: ReceiptData): number {
   const delivery = deliveryPayOf(d);
   const collect = modonCollect(d.total, paid, delivery);
   y += 76;
-  text("المجموع", R, y, { size: 38, weight: 700, color: C.cocoa });
+  const jars = d.lines.reduce((n, l) => n + l.qty, 0);
+  const jarsText = jars === 1 ? "علبة واحدة" : jars === 2 ? "علبتان" : jars <= 10 ? `${jars} علب` : `${jars} علبة`;
+  text(`المجموع · ${jarsText}`, R, y, { size: 38, weight: 700, color: C.cocoa });
   text(formatIQD(d.total), M, y, { size: 44, weight: 700, color: C.terracotta, align: "left" });
   y += 52;
-  text("حالة الدفع", R, y, { size: 27, color: C.muted });
-  text(paid ? "مدفوع مسبقاً" : "غير مدفوع", M, y, { size: 27, weight: 600, align: "left" });
+  text("ثمن العلب", R, y, { size: 27, color: C.muted });
+  text(paid ? "مدفوع مسبقاً" : "عند الاستلام", M, y, { size: 27, weight: 600, align: "left" });
   y += 44;
   text("أجور التوصيل", R, y, { size: 27, color: C.muted });
   text(delivery === "gift" ? "مجاني" : delivery === "prepaid" ? "مدفوعة مسبقاً" : formatIQD(site.deliveryFee), M, y, {
@@ -189,7 +191,7 @@ async function loadFonts() {
   }
 }
 
-export async function buildReceiptPdf(data: ReceiptData): Promise<Blob> {
+export async function buildReceiptImage(data: ReceiptData): Promise<Blob> {
   await loadFonts();
 
   // First pass measures the height, second pass draws.
@@ -206,13 +208,9 @@ export async function buildReceiptPdf(data: ReceiptData): Promise<Blob> {
   ctx.fillRect(0, 0, W, height);
   draw(ctx, data);
 
-  const { jsPDF } = await import("jspdf");
-  const pageW = 420; // A5 width in points
-  const pageH = (pageW * height) / W;
-  const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: [pageW, pageH], compress: true });
-  pdf.setProperties({ title: `ÉLUE ${data.orderId}`, author: "ÉLUE", subject: "ملخص الطلب" });
-  pdf.addImage(canvas.toDataURL("image/jpeg", 0.92), "JPEG", 0, 0, pageW, pageH);
-  return pdf.output("blob");
+  return new Promise<Blob>((resolve, reject) =>
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("image_failed"))), "image/png"),
+  );
 }
 
 export function downloadBlob(blob: Blob, filename: string) {
@@ -228,10 +226,33 @@ export function downloadBlob(blob: Blob, filename: string) {
 }
 
 export function receiptFilename(orderId: string) {
-  return `ELUE-${orderId}.pdf`;
+  return `ELUE-${orderId}.png`;
 }
 
-// Builds the PDF data from a saved order (checkout success, "طلباتي").
+// iPhone / iPad (iPadOS reports itself as a Mac with touch).
+export function isIOS(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
+// Phones: the share sheet («حفظ الصورة» to Photos, WhatsApp…). Elsewhere: a download.
+// Must be called from a tap. Resolves false when the person closed the share sheet.
+export async function saveImage(blob: Blob, filename: string): Promise<boolean> {
+  const file = new File([blob], filename, { type: "image/png" });
+  if (navigator.canShare?.({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file] });
+      return true;
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return false;
+      // Share not allowed here (e.g. no recent tap): fall back to a download.
+    }
+  }
+  downloadBlob(blob, filename);
+  return true;
+}
+
+// Builds the summary data from a saved order (checkout success, "طلباتي", admin).
 export function receiptFromOrder(o: {
   orderNumber: string;
   createdAt: string;
@@ -274,7 +295,16 @@ export function receiptFromOrder(o: {
   };
 }
 
-export async function saveOrderPdf(o: Parameters<typeof receiptFromOrder>[0]) {
-  const blob = await buildReceiptPdf(receiptFromOrder(o));
-  downloadBlob(blob, receiptFilename(o.orderNumber));
+export function orderImage(o: Parameters<typeof receiptFromOrder>[0]): Promise<Blob> {
+  return buildReceiptImage(receiptFromOrder(o));
+}
+
+// share = true: share sheet on phones (from a tap); false: a plain download.
+export async function saveOrderImage(o: Parameters<typeof receiptFromOrder>[0], share = true): Promise<boolean> {
+  const blob = await orderImage(o);
+  if (!share) {
+    downloadBlob(blob, receiptFilename(o.orderNumber));
+    return true;
+  }
+  return saveImage(blob, receiptFilename(o.orderNumber));
 }

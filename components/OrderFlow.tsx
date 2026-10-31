@@ -104,21 +104,28 @@ export function OrderFlow() {
     };
   }, [signedIn, teamDevice, auth.owner]);
 
-  // ---- PDF ---------------------------------------------------------------
+  // ---- Order summary picture ---------------------------------------------
+  // Saved by itself right after ordering where a download is quiet (Android,
+  // computers); on iPhone it needs a tap (share sheet → «حفظ الصورة»).
 
   const savePdf = useCallback(
     async (p: Placed, automatic: boolean) => {
       try {
         const { lines: priced } = priceCart(p.items);
-        const { saveOrderPdf } = await import("@/lib/receipt");
-        await saveOrderPdf({
-          ...p,
-          items: priced.map((l) => ({ slug: l.product.slug, nameAr: l.product.nameAr, nameEn: l.product.nameEn, qty: l.qty, price: l.product.price })),
-        });
+        const { saveOrderImage, isIOS } = await import("@/lib/receipt");
+        if (automatic && isIOS()) return;
+        const saved = await saveOrderImage(
+          {
+            ...p,
+            items: priced.map((l) => ({ slug: l.product.slug, nameAr: l.product.nameAr, nameEn: l.product.nameEn, qty: l.qty, price: l.product.price })),
+          },
+          !automatic,
+        );
+        if (!saved) return;
         setPdfSaved(true);
-        toast({ id: automatic ? "checkout" : "pdf", message: "حفظنا ملخص الطلب (PDF) على جهازك." });
+        if (automatic) toast({ id: "checkout", message: "حفظنا صورة ملخص الطلب على جهازك." });
       } catch {
-        if (!automatic) toast({ id: "pdf", tone: "attention", message: "تعذّر تجهيز الملف الآن. حاول مجددًا." });
+        if (!automatic) toast({ id: "pdf", tone: "attention", message: "تعذّر تجهيز الصورة الآن. حاول مجددًا." });
       }
     },
     [toast],
@@ -250,8 +257,8 @@ export function OrderFlow() {
         </p>
         <p className="order-result__muted">
           {pdfSaved
-            ? "حفظنا ملخص الطلب (PDF) على جهازك، ليبقى رقم الطلب وتفاصيله معك."
-            : "يمكنك تنزيل ملخص الطلب (PDF) ليبقى رقم الطلب وتفاصيله معك."}
+            ? "حفظنا صورة ملخص الطلب على جهازك، ليبقى رقم الطلب وتفاصيله معك."
+            : "يمكنك حفظ صورة ملخص الطلب ليبقى رقم الطلب وتفاصيله معك."}
         </p>
         <div className="order-result__actions">
           <Link className="btn btn--full" href="/account">
@@ -261,7 +268,7 @@ export function OrderFlow() {
             راسلنا عبر واتساب
           </a>
           <button type="button" className="btn btn--quiet btn--full" onClick={() => void savePdf(placed, false)}>
-            تنزيل ملخص الطلب (PDF)
+            حفظ صورة ملخص الطلب
           </button>
           <Link href="/" className="link-button order-result__home">
             العودة إلى الصفحة الرئيسية
