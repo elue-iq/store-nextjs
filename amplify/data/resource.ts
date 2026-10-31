@@ -1,6 +1,7 @@
 import { a, defineData, type ClientSchema } from "@aws-amplify/backend";
 import { placeOrder } from "../functions/place-order/resource";
 import { modon } from "../functions/modon/resource";
+import { eatix } from "../functions/eatix/resource";
 
 // Orders live in DynamoDB (one table, managed by Amplify).
 //
@@ -75,6 +76,11 @@ const schema = a
         modonRegionName: a.string().authorization((allow) => [allow.group("ADMINS")]),
         modonSentAt: a.datetime().authorization((allow) => [allow.group("ADMINS")]),
         modonUpdatedAt: a.datetime().authorization((allow) => [allow.group("ADMINS")]),
+        // Eatix (cashier device copy of the order). Team only.
+        eatixId: a.string().authorization((allow) => [allow.group("ADMINS")]),
+        eatixStatus: a.string().authorization((allow) => [allow.group("ADMINS")]), // SENT | SIMULATED | FAILED | OFF | CANCELLED
+        eatixError: a.string().authorization((allow) => [allow.group("ADMINS")]),
+        eatixSentAt: a.datetime().authorization((allow) => [allow.group("ADMINS")]),
         owner: a.string().authorization((allow) => [allow.ownerDefinedIn("owner").to(["read"]), allow.group("ADMINS")]),
       })
       // Fast lookups: a customer's orders, and orders by phone number (admin search).
@@ -146,8 +152,16 @@ const schema = a
       .returns(a.json())
       .authorization((allow) => [allow.group("ADMINS")])
       .handler(a.handler.function(modon)),
+
+    // Eatix actions from the admin: send (again), cancel.
+    eatix: a
+      .mutation()
+      .arguments({ action: a.string().required(), orderId: a.string() })
+      .returns(a.json())
+      .authorization((allow) => [allow.group("ADMINS")])
+      .handler(a.handler.function(eatix)),
   })
-  .authorization((allow) => [allow.resource(placeOrder), allow.resource(modon)]);
+  .authorization((allow) => [allow.resource(placeOrder), allow.resource(modon), allow.resource(eatix)]);
 
 export type Schema = ClientSchema<typeof schema>;
 

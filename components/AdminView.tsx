@@ -9,6 +9,7 @@ import { AdminDrawer, type AdminView as View } from "./AdminDrawer";
 import { usePullToRefresh } from "./usePullToRefresh";
 import { AdminOrderForm } from "./AdminOrderForm";
 import { AdminModon } from "./AdminModon";
+import { AdminEatix } from "./AdminEatix";
 import { buildCustomers, CustomerDetail, CustomerList, CustomersSummary } from "./AdminCustomers";
 import { jarsLabel } from "./AddToCart";
 import { DeliveryTracking, OrderItemsList, StatusChip, StatusTrack } from "./OrderBits";
@@ -661,6 +662,8 @@ function OrderDetail({ order: o, today, me, onOpenCustomer }: { order: Order; to
       </section>
 
       <AdminModon order={o} />
+
+      <AdminEatix order={o} />
 
       <DeliveryTracking order={o} />
 
