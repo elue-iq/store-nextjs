@@ -12,6 +12,10 @@ export const site = {
   paymentNote: "الدفع نقداً عند الاستلام",
   // Printed on every courier label (note), sent to Telegram, and shown to the customer.
   courierNote: "يرجى تسليم بوكس الفلين الى مندوب التوصيل، والتأكد من الطلب",
+  // Local delivery team, sent orders from the admin order screen on WhatsApp.
+  // whatsapp: international digits (07XXXXXXXXX -> 9647XXXXXXXXX). Empty: WhatsApp
+  // asks which chat or group to send to.
+  localCourier: { name: "تيم الفهود", whatsapp: "" },
   // Orders placed before this hour are delivered the next day (shown to customers).
   deliveryCutoff: "8 مساءً",
   // The cold-chain message: a site-wide banner, and in every message sent to a customer.

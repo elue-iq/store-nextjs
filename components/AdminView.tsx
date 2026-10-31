@@ -10,7 +10,7 @@ import { usePullToRefresh } from "./usePullToRefresh";
 import { AdminOrderForm } from "./AdminOrderForm";
 import { AdminModon } from "./AdminModon";
 import { AdminEatix } from "./AdminEatix";
-import { SendOrderToCustomer } from "./SendOrderToCustomer";
+import { SendOrderToCustomer, SendOrderToLocalCourier } from "./SendOrderToCustomer";
 import { AdminDashboard } from "./AdminDashboard";
 import { OrderRow, baghdadDay, shortTime } from "./AdminOrderRow";
 import { buildCustomers, CustomerDetail, CustomerList, CustomersSummary } from "./AdminCustomers";
@@ -668,6 +668,8 @@ function OrderDetail({ order: o, today, me, onOpenCustomer }: { order: Order; to
       </section>
 
       <AdminModon order={o} />
+
+      <SendOrderToLocalCourier order={o} />
 
       <AdminEatix order={o} />
 
