@@ -7,7 +7,7 @@
 // This is an order summary for the customer's records, not a tax invoice.
 
 import { LOGO_PATH, LOGO_VIEWBOX } from "./brand-mark";
-import { formatIQD, site } from "./site";
+import { deliveryPayOf, formatIQD, site } from "./site";
 import { fullAddress } from "./iraq";
 import { getProduct } from "./products";
 import { modonCollect } from "./modon";
@@ -24,7 +24,8 @@ export type ReceiptData = {
   address: string;
   note?: string;
   paid?: boolean; // customer already paid for the jars
-  freeDelivery?: boolean; // ÉLUE covers the delivery fee
+  freeDelivery?: boolean; // ÉLUE covers the delivery fee (gift)
+  deliveryPaid?: boolean; // customer already paid the delivery fee
 };
 
 const W = 1240;
@@ -117,8 +118,8 @@ function draw(ctx: CanvasRenderingContext2D, d: ReceiptData): number {
 
   // Total, and what the driver collects.
   const paid = Boolean(d.paid);
-  const free = Boolean(d.freeDelivery);
-  const collect = modonCollect(d.total, paid, free);
+  const delivery = deliveryPayOf(d);
+  const collect = modonCollect(d.total, paid, delivery);
   y += 76;
   text("المجموع", R, y, { size: 38, weight: 700, color: C.cocoa });
   text(formatIQD(d.total), M, y, { size: 44, weight: 700, color: C.terracotta, align: "left" });
@@ -127,7 +128,11 @@ function draw(ctx: CanvasRenderingContext2D, d: ReceiptData): number {
   text(paid ? "مدفوع مسبقاً" : "غير مدفوع", M, y, { size: 27, weight: 600, align: "left" });
   y += 44;
   text("أجور التوصيل", R, y, { size: 27, color: C.muted });
-  text(free ? "مجاني" : formatIQD(site.deliveryFee), M, y, { size: 27, weight: 600, align: "left" });
+  text(delivery === "gift" ? "مجاني" : delivery === "prepaid" ? "مدفوعة مسبقاً" : formatIQD(site.deliveryFee), M, y, {
+    size: 27,
+    weight: 600,
+    align: "left",
+  });
   y += 56;
   text("المبلغ المستحق عند الاستلام", R, y, { size: 31, weight: 700, color: C.cocoa });
   text(collect > 0 ? formatIQD(collect) : "لا شيء", M, y, { size: 36, weight: 700, color: C.terracotta, align: "left" });
@@ -240,6 +245,7 @@ export function receiptFromOrder(o: {
   note?: string | null;
   paid?: boolean | null;
   freeDelivery?: boolean | null;
+  deliveryPaid?: boolean | null;
 }): ReceiptData {
   const time = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Baghdad", dateStyle: "short", timeStyle: "short" }).format(
     new Date(o.createdAt),
@@ -264,6 +270,7 @@ export function receiptFromOrder(o: {
     note: o.note || undefined,
     paid: Boolean(o.paid),
     freeDelivery: Boolean(o.freeDelivery),
+    deliveryPaid: Boolean(o.deliveryPaid),
   };
 }
 

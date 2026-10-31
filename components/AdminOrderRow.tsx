@@ -25,7 +25,11 @@ export function OrderRow({ order: o, today, onOpen }: { order: Order; today: str
           <strong dir="ltr">{o.orderNumber}</strong>
           <StatusChip status={o.status} />
           {o.paid && <span className="order-row__paid">مدفوع</span>}
-          {o.freeDelivery && <span className="order-row__paid order-row__free">توصيل مجاني</span>}
+          {o.deliveryPaid ? (
+            <span className="order-row__paid">التوصيل مدفوع</span>
+          ) : (
+            o.freeDelivery && <span className="order-row__paid order-row__free">توصيل مجاني</span>
+          )}
         </span>
         <span className="order-row__name">{o.name}</span>
         <span className={o.cashierOrderId ? "order-row__cashier" : "order-row__cashier is-missing"}>

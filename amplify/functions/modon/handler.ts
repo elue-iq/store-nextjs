@@ -15,7 +15,7 @@ import {
   type ModonRegion,
   type TrackEvent,
 } from "../../../lib/modon";
-import { site } from "../../../lib/site";
+import { deliveryPayOf, site } from "../../../lib/site";
 
 // Modon Express integration.
 //
@@ -120,7 +120,7 @@ function orderForm(o: Order, regionId: number, qr?: string): FormData {
   form.append("location", [o.area, o.address].filter(Boolean).join(" - ") || o.area || o.province || "-");
   form.append("type_name", TYPE_NAME);
   form.append("items_number", String(o.jars));
-  form.append("price", String(modonCollect(o.total, Boolean(o.paid), Boolean(o.freeDelivery))));
+  form.append("price", String(modonCollect(o.total, Boolean(o.paid), deliveryPayOf(o))));
   form.append("package_size", String(PACKAGE_SIZE));
   form.append(
     "merchant_notes",
@@ -264,7 +264,7 @@ async function adminAction(args: {
         modonId: String(d?.id ?? d?.qr_id ?? ""),
         modonQr: String(d?.qr_id ?? d?.id ?? ""),
         modonLink: d?.qr_link ? String(d.qr_link) : null,
-        modonPrice: Number(d?.price ?? modonCollect(o.total, Boolean(o.paid), Boolean(o.freeDelivery))),
+        modonPrice: Number(d?.price ?? modonCollect(o.total, Boolean(o.paid), deliveryPayOf(o))),
         modonFee: d?.company_price != null ? Number(d.company_price) : null,
         modonStatusId: "1",
         modonStatus: "طلب جديد لدى مدن",
@@ -291,7 +291,7 @@ async function adminAction(args: {
       if (!reply.status) fail(reply, "update");
       await client.models.Order.update({
         id: o.id,
-        modonPrice: modonCollect(o.total, Boolean(o.paid), Boolean(o.freeDelivery)),
+        modonPrice: modonCollect(o.total, Boolean(o.paid), deliveryPayOf(o)),
         modonRegionId: regionId,
         ...(args.regionName ? { modonRegionName: args.regionName } : {}),
         modonUpdatedAt: new Date().toISOString(),

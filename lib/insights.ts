@@ -62,7 +62,7 @@ export type Filters = {
   province: string; // "" = all
   channel: "" | "web" | "team";
   source: string; // "" = all, otherwise a sourceLabel()
-  payment: "" | "paid" | "cod" | "free";
+  payment: "" | "paid" | "cod" | "deliveryPaid" | "free";
   customer: "" | "new" | "returning";
   showTests: boolean;
 };
@@ -213,8 +213,9 @@ export type Kpis = {
   newCustomers: number;
   returningCustomers: number;
   delivered: number;
-  prepaid: number;
-  freeDelivery: number;
+  prepaid: number; // jars paid in advance
+  deliveryPrepaid: number; // delivery fee paid in advance by the customer
+  freeDelivery: number; // delivery as a gift from ÉLUE
   freeDeliveryCost: number; // courier fees we covered (known once sent to Modon)
 };
 
@@ -250,6 +251,7 @@ function kpisOf(list: Order[], flavors: string[], types: Map<string, "new" | "re
   let jars = 0;
   let delivered = 0;
   let prepaid = 0;
+  let deliveryPrepaid = 0;
   let freeDelivery = 0;
   let freeDeliveryCost = 0;
   const phones = new Set<string>();
@@ -262,7 +264,8 @@ function kpisOf(list: Order[], flavors: string[], types: Map<string, "new" | "re
     if (types.get(o.id) === "new" && o.status !== "CANCELLED") newPhones.add(o.phone);
     if (o.status === "DELIVERED") delivered += 1;
     if (o.paid) prepaid += 1;
-    if (o.freeDelivery && o.status !== "CANCELLED") {
+    if (o.deliveryPaid) deliveryPrepaid += 1;
+    if (o.freeDelivery && !o.deliveryPaid && o.status !== "CANCELLED") {
       freeDelivery += 1;
       freeDeliveryCost += o.modonFee ?? 0;
     }
@@ -278,6 +281,7 @@ function kpisOf(list: Order[], flavors: string[], types: Map<string, "new" | "re
     returningCustomers: phones.size - newPhones.size,
     delivered,
     prepaid,
+    deliveryPrepaid,
     freeDelivery,
     freeDeliveryCost,
   };
@@ -314,7 +318,8 @@ export function computeInsights(all: Order[], f: Filters, today: string): Insigh
     if (f.source && sourceLabel(o) !== f.source) return false;
     if (f.payment === "paid" && !o.paid) return false;
     if (f.payment === "cod" && o.paid) return false;
-    if (f.payment === "free" && !o.freeDelivery) return false;
+    if (f.payment === "deliveryPaid" && !o.deliveryPaid) return false;
+    if (f.payment === "free" && (!o.freeDelivery || o.deliveryPaid)) return false;
     if (f.customer && types.get(o.id) !== f.customer) return false;
     return true;
   });
@@ -471,8 +476,8 @@ export function ordersCsv(orders: Order[], types: Map<string, "new" | "returning
     ...products.map((p) => p.nameAr),
     "العلب",
     "المجموع (د.ع)",
-    "مدفوع مسبقاً",
-    "توصيل مجاني",
+    "العلب مدفوعة مسبقاً",
+    "أجور التوصيل",
     "أجور مدن",
     "رقم مدن",
     "حالة مدن",
@@ -498,7 +503,7 @@ export function ordersCsv(orders: Order[], types: Map<string, "new" | "returning
       o.jars,
       o.total,
       o.paid ? "نعم" : "",
-      o.freeDelivery ? "نعم" : "",
+      o.deliveryPaid ? "مدفوعة مسبقاً" : o.freeDelivery ? "هدية (توصيل مجاني)" : "عند الاستلام",
       o.modonFee ?? "",
       o.modonQr,
       o.modonStatus,

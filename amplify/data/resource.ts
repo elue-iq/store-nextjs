@@ -54,9 +54,12 @@ const schema = a
         // (so their order shows it); the note is team only.
         paid: a.boolean(), // inherits model auth: owner read, team read/write
         paidNote: a.string().authorization((allow) => [allow.group("ADMINS")]), // how it was paid (e.g. Qi)
-        // ÉLUE covers the delivery fee (free-delivery offer); the driver then
-        // collects only the jars. Readable by the customer so their order shows it.
+        // ÉLUE covers the delivery fee (free delivery as a gift / offer); the driver
+        // then collects only the jars. Readable by the customer so their order shows it.
         freeDelivery: a.boolean(),
+        // The customer already paid the delivery fee (card, transfer…); the driver
+        // then collects only the jars. Not a cost to ÉLUE (unlike freeDelivery).
+        deliveryPaid: a.boolean(),
         // Delivery tracking for the customer (from the courier's status updates,
         // in our own wording): current line, expected arrival, and the steps so far.
         // Written only by the modon function; the customer can read them.
@@ -134,6 +137,8 @@ const schema = a
         paidNote: a.string(),
         // Team only: ÉLUE covers the delivery (driver collects jars only).
         freeDelivery: a.boolean(),
+        // Team only: customer already paid the delivery fee (driver collects jars only).
+        deliveryPaid: a.boolean(),
       })
       .returns(a.ref("PlaceOrderResult"))
       .authorization((allow) => [allow.authenticated()])

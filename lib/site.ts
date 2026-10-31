@@ -61,14 +61,35 @@ export function formatIQD(amount: number): string {
   return `${amount.toLocaleString("en-US")} ${site.currency}`;
 }
 
+// How an order's delivery fee is settled (set by the team; customers always pay the driver):
+// - "driver":  the customer pays it to the driver on delivery (normal)
+// - "prepaid": the customer already paid it (card, Qi transfer…). Not a cost to ÉLUE.
+// - "gift":    ÉLUE pays it: free delivery as a gift / offer. A real cost to ÉLUE.
+// Stored as two fields on the order: deliveryPaid (prepaid) and freeDelivery (gift).
+export type DeliveryPay = "driver" | "prepaid" | "gift";
+
+export function deliveryPayOf(o: { freeDelivery?: boolean | null; deliveryPaid?: boolean | null }): DeliveryPay {
+  if (o.deliveryPaid) return "prepaid";
+  if (o.freeDelivery) return "gift";
+  return "driver";
+}
+
+export const DELIVERY_PAY_LABELS: Record<DeliveryPay, string> = {
+  driver: "يدفعها العميل للمندوب",
+  prepaid: "أجور التوصيل مدفوعة مسبقاً",
+  gift: "توصيل مجاني (هدية من ÉLUE)",
+};
+
 // Under the order total (checkout, receipt, «طلباتي»): delivery is paid to the driver.
 // One sentence saying what the driver collects and why. The same wording goes on
 // the courier label (note), the Telegram message, and the customer's screens.
-export function collectStatement(total: number, paid = false, freeDelivery = false): string {
+export function collectStatement(total: number, paid = false, delivery: DeliveryPay = "driver"): string {
   const fee = site.deliveryFee;
-  if (paid && freeDelivery) return "الطلب مدفوع مسبقاً والتوصيل مجاني. لا يُطلب أي مبلغ عند الاستلام";
+  if (paid && delivery === "gift") return "الطلب مدفوع مسبقاً والتوصيل مجاني. لا يُطلب أي مبلغ عند الاستلام";
+  if (paid && delivery === "prepaid") return "الطلب وأجور التوصيل مدفوعة مسبقاً. لا يُطلب أي مبلغ عند الاستلام";
   if (paid) return `الطلب مدفوع مسبقاً. المطلوب عند الاستلام ${formatIQD(fee)} (أجور التوصيل فقط)`;
-  if (freeDelivery) return `التوصيل مجاني. المطلوب عند الاستلام ${formatIQD(total)} (ثمن الطلب فقط)`;
+  if (delivery === "gift") return `التوصيل مجاني. المطلوب عند الاستلام ${formatIQD(total)} (ثمن الطلب فقط)`;
+  if (delivery === "prepaid") return `أجور التوصيل مدفوعة مسبقاً. المطلوب عند الاستلام ${formatIQD(total)} (ثمن الطلب فقط)`;
   return `المطلوب عند الاستلام ${formatIQD(total + fee)} (الطلب ${formatIQD(total)} + التوصيل ${formatIQD(fee)})`;
 }
 

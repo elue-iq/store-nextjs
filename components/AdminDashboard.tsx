@@ -282,7 +282,14 @@ export function AdminDashboard({
   if (f.payment)
     chips.push({
       key: "pa",
-      text: f.payment === "paid" ? "مدفوع مسبقاً" : f.payment === "cod" ? "الدفع عند الاستلام" : "توصيل مجاني",
+      text:
+        f.payment === "paid"
+          ? "العلب مدفوعة مسبقاً"
+          : f.payment === "cod"
+            ? "العلب تُدفع عند الاستلام"
+            : f.payment === "deliveryPaid"
+              ? "التوصيل مدفوع مسبقاً"
+              : "توصيل مجاني (هدية)",
       clear: () => set({ payment: "" }),
     });
   if (f.customer) chips.push({ key: "cu", text: f.customer === "new" ? "عملاء جدد" : "عملاء عائدون", clear: () => set({ customer: "" }) });
@@ -424,9 +431,10 @@ export function AdminDashboard({
               الدفع
               <select className="admin-sort" value={f.payment} onChange={(e) => set({ payment: e.target.value as Filters["payment"] })}>
                 <option value="">الكل</option>
-                <option value="cod">الدفع عند الاستلام</option>
-                <option value="paid">مدفوع مسبقاً</option>
-                <option value="free">توصيل مجاني</option>
+                <option value="cod">العلب تُدفع عند الاستلام</option>
+                <option value="paid">العلب مدفوعة مسبقاً</option>
+                <option value="deliveryPaid">التوصيل مدفوع مسبقاً</option>
+                <option value="free">توصيل مجاني (هدية)</option>
               </select>
             </label>
             <label>
@@ -502,11 +510,15 @@ export function AdminDashboard({
           delta={prevCancelRate === null ? null : deltaOf(cancelRate, prevCancelRate, false)}
         />
         <StatTile
-          label="توصيل مجاني"
+          label="توصيل مجاني (هدية)"
           value={n0(k.freeDelivery)}
           sub={k.freeDeliveryCost ? `تكلفة علينا ${formatIQD(k.freeDeliveryCost)}` : k.freeDelivery ? "التكلفة تظهر بعد الإرسال إلى مدن" : undefined}
         />
-        <StatTile label="مدفوع مسبقاً" value={n0(k.prepaid)} sub={k.orders ? `${pct(k.prepaid / k.orders)} من الطلبات` : undefined} />
+        <StatTile
+          label="مدفوع مسبقاً"
+          value={n0(k.prepaid)}
+          sub={`العلب: ${k.orders ? pct(k.prepaid / k.orders) : "0%"} من الطلبات · التوصيل: ${n0(k.deliveryPrepaid)} طلب`}
+        />
       </dl>
       {p && <p className="dash-vs">الأسهم {vsText}.</p>}
 

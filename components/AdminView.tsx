@@ -646,7 +646,11 @@ function OrderDetail({ order: o, today, me, onOpenCustomer }: { order: Order; to
         {o.paid && (
           <p className="order-detail__paid">مدفوع مسبقاً{o.paidNote ? ` · ${o.paidNote}` : ""}</p>
         )}
-        {o.freeDelivery && <p className="order-detail__paid">توصيل مجاني (نتحمّل أجور التوصيل)</p>}
+        {o.deliveryPaid ? (
+          <p className="order-detail__paid">أجور التوصيل مدفوعة مسبقاً من العميل</p>
+        ) : (
+          o.freeDelivery && <p className="order-detail__paid">توصيل مجاني هدية (نتحمّل أجور التوصيل)</p>
+        )}
         {o.status !== "CANCELLED" && (
           <p className="order-detail__points">
             {o.status === "DELIVERED"

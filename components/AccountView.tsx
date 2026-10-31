@@ -12,7 +12,7 @@ import { DeliveryTracking, OrderItemsList, StatusChip, StatusTrack } from "./Ord
 import { DeliveryFields } from "./DeliveryFields";
 import { baghdadTime, dataClient, newestFirst, type Order } from "@/lib/data";
 import { formatIraqiMobile } from "@/lib/phone";
-import { collectStatement, formatIQD, site } from "@/lib/site";
+import { collectStatement, deliveryPayOf, formatIQD, site } from "@/lib/site";
 import { getProduct } from "@/lib/products";
 import { fullAddress } from "@/lib/iraq";
 import { formatPoints, pointsFor, pointsSummary } from "@/lib/loyalty";
@@ -363,7 +363,7 @@ function MyOrderDetail({ order: o }: { order: Order }) {
           <strong>{formatIQD(o.total)}</strong>
         </p>
         <p className="order-detail__muted">
-          {collectStatement(o.total, Boolean(o.paid), Boolean(o.freeDelivery))}
+          {collectStatement(o.total, Boolean(o.paid), deliveryPayOf(o))}
         </p>
         <p className="order-detail__muted">{site.courierNote}</p>
         <p className="order-detail__muted">{site.coldNote.text}</p>

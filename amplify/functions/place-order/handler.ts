@@ -211,8 +211,11 @@ export const handler: Schema["placeOrder"]["functionHandler"] = async (event) =>
   // Only the team can mark an order prepaid (customer paid the jars already)
   // or free-delivery (ÉLUE covers the fee).
   const paid = isTeam ? Boolean(args.paid) : false;
-  const paidNote = paid ? String(args.paidNote ?? "").trim().slice(0, 120) || null : null;
-  const freeDelivery = isTeam ? Boolean(args.freeDelivery) : false;
+  // How it was paid (Qi, card…): kept when the jars or the delivery fee were paid in advance.
+  const paidNote = paid || (isTeam && args.deliveryPaid) ? String(args.paidNote ?? "").trim().slice(0, 120) || null : null;
+  // Delivery fee: already paid by the customer, or a gift from ÉLUE (never both).
+  const deliveryPaid = isTeam ? Boolean(args.deliveryPaid) : false;
+  const freeDelivery = isTeam && !deliveryPaid ? Boolean(args.freeDelivery) : false;
   const { name, province, area, address } = cleanDelivery({
     name: String(args.name ?? ""),
     province: String(args.province ?? ""),
@@ -276,6 +279,7 @@ export const handler: Schema["placeOrder"]["functionHandler"] = async (event) =>
       paid,
       paidNote,
       freeDelivery,
+      deliveryPaid,
       createdBy: forCustomer ? callerPhone : null,
       owner,
     });
@@ -308,6 +312,7 @@ export const handler: Schema["placeOrder"]["functionHandler"] = async (event) =>
       paid,
       paidNote,
       freeDelivery,
+      deliveryPaid,
     });
     // The dev copy never messages the team's Telegram group.
     const telegramSent = PRODUCTION ? await sendToTelegram(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_CHAT_ID, message) : false;

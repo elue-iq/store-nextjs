@@ -2958,7 +2958,8 @@ body:has(.admin-app) .site-footer {
 }
 
 /* ---------- Prepaid orders ---------- */
-.admin-order-form__check {
+.admin-order-form__check,
+.panel-form .admin-order-form__check {
   display: flex;
   gap: 0.5rem;
   align-items: flex-start;
@@ -2966,12 +2967,26 @@ body:has(.admin-app) .site-footer {
   line-height: 1.5;
   cursor: pointer;
 }
-.admin-order-form__check input {
+.admin-order-form__check input,
+.panel-form .admin-order-form__check input {
   margin-top: 0.2rem;
+  padding: 0;
   width: 1.1rem;
   height: 1.1rem;
   accent-color: var(--terracotta);
   flex: none;
+}
+.admin-order-form__group {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0.9rem 0 0.6rem;
+  padding: 0;
+  border: 0;
+}
+.admin-order-form__group legend {
+  margin-bottom: 0.4rem;
+  font-size: 0.92rem;
+  font-weight: 700;
 }
 .admin-order-form__collect {
   display: grid;
