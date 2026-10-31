@@ -25,9 +25,15 @@ export const handler: Schema["eatix"]["functionHandler"] = async (event) => {
 
   // Diagnostic (ADMINS only, creates nothing): which store / channel values does Eatix accept?
   if (action === "probe") {
-    const ids = [cfg.shopCode, "2615781743"];
+    const shops = [cfg.shopCode, "2615781743"];
+    const channels = [cfg.channel, "a0daadb32b774ffca81a7f5481bdd8ba", "ELUE", "2615781743"];
     const results: Record<string, unknown> = {};
-    for (const shop of ids) for (const ch of ids) results[`shop=${shop} channel=${ch}`] = await probe(cfg, shop, ch);
+    for (const shop of shops) {
+      for (const ch of channels) {
+        results[`shop=${shop} channel=${ch}`] = await probe(cfg, shop, ch);
+        await new Promise((r) => setTimeout(r, 1200)); // Eatix answers "open_018: do not operate frequently" to bursts
+      }
+    }
     return results;
   }
 
