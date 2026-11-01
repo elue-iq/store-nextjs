@@ -2,7 +2,7 @@
 // Plain TypeScript with relative imports only, so it bundles into the function.
 
 import { formatIraqiMobile } from "./phone";
-import { collectStatement, formatIQD, site } from "./site";
+import { collectStatement, deliveryPayOf, formatIQD, site } from "./site";
 import type { OrderLine } from "./order-text";
 import { fullAddress } from "./iraq";
 
@@ -31,13 +31,16 @@ export function buildOrderMessage(o: {
   cashierOrderId?: string | null;
   paid?: boolean | null; // customer already paid the jars
   paidNote?: string | null;
-  freeDelivery?: boolean | null; // ÉLUE covers the delivery fee
+  freeDelivery?: boolean | null; // ÉLUE covers the delivery fee (gift)
+  deliveryPaid?: boolean | null; // customer already paid the delivery fee
 }): string {
   const jars = o.lines.reduce((n, l) => n + l.qty, 0);
-  const collect = (o.paid ? 0 : o.total) + (o.freeDelivery ? 0 : site.deliveryFee);
+  const delivery = deliveryPayOf(o);
+  const collect = (o.paid ? 0 : o.total) + (delivery === "driver" ? site.deliveryFee : 0);
   const special = [
     o.paid ? `مدفوع مسبقاً${o.paidNote ? ` (${escapeHtml(o.paidNote)})` : ""}` : null,
-    o.freeDelivery ? "توصيل مجاني (نتحمّل الأجور)" : null,
+    delivery === "gift" ? "توصيل مجاني هدية (نتحمّل الأجور)" : null,
+    delivery === "prepaid" ? `أجور التوصيل مدفوعة مسبقاً${!o.paid && o.paidNote ? ` (${escapeHtml(o.paidNote)})` : ""}` : null,
   ].filter(Boolean);
   return [
     `<b>طلب جديد ${ltr(o.orderNumber)}</b>${o.returning ? " · عميل سابق" : ""}`,
@@ -47,8 +50,8 @@ export function buildOrderMessage(o: {
     `<b>المجموع: ${formatIQD(o.total)}</b>`,
     special.length ? `<b>${special.join(" · ")}</b>` : null,
     `<b>يستلم المندوب من العميل: ${formatIQD(collect)}</b>`,
-    collectStatement(o.total, Boolean(o.paid), Boolean(o.freeDelivery)),
-    o.paid || o.freeDelivery ? null : site.paymentNote,
+    collectStatement(o.total, Boolean(o.paid), delivery),
+    o.paid || delivery !== "driver" ? null : site.paymentNote,
     site.courierNote,
     "",
     `الاسم: ${escapeHtml(o.name)}`,

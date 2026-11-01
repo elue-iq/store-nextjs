@@ -1,6 +1,7 @@
 import { a, defineData, type ClientSchema } from "@aws-amplify/backend";
 import { placeOrder } from "../functions/place-order/resource";
 import { modon } from "../functions/modon/resource";
+import { eatix } from "../functions/eatix/resource";
 
 // Orders live in DynamoDB (one table, managed by Amplify).
 //
@@ -53,9 +54,12 @@ const schema = a
         // (so their order shows it); the note is team only.
         paid: a.boolean(), // inherits model auth: owner read, team read/write
         paidNote: a.string().authorization((allow) => [allow.group("ADMINS")]), // how it was paid (e.g. Qi)
-        // ÉLUE covers the delivery fee (free-delivery offer); the driver then
-        // collects only the jars. Readable by the customer so their order shows it.
+        // ÉLUE covers the delivery fee (free delivery as a gift / offer); the driver
+        // then collects only the jars. Readable by the customer so their order shows it.
         freeDelivery: a.boolean(),
+        // The customer already paid the delivery fee (card, transfer…); the driver
+        // then collects only the jars. Not a cost to ÉLUE (unlike freeDelivery).
+        deliveryPaid: a.boolean(),
         // Delivery tracking for the customer (from the courier's status updates,
         // in our own wording): current line, expected arrival, and the steps so far.
         // Written only by the modon function; the customer can read them.
@@ -75,6 +79,11 @@ const schema = a
         modonRegionName: a.string().authorization((allow) => [allow.group("ADMINS")]),
         modonSentAt: a.datetime().authorization((allow) => [allow.group("ADMINS")]),
         modonUpdatedAt: a.datetime().authorization((allow) => [allow.group("ADMINS")]),
+        // Eatix (cashier device copy of the order). Team only.
+        eatixId: a.string().authorization((allow) => [allow.group("ADMINS")]),
+        eatixStatus: a.string().authorization((allow) => [allow.group("ADMINS")]), // SENT | SIMULATED | FAILED | OFF | CANCELLED
+        eatixError: a.string().authorization((allow) => [allow.group("ADMINS")]),
+        eatixSentAt: a.datetime().authorization((allow) => [allow.group("ADMINS")]),
         owner: a.string().authorization((allow) => [allow.ownerDefinedIn("owner").to(["read"]), allow.group("ADMINS")]),
       })
       // Fast lookups: a customer's orders, and orders by phone number (admin search).
@@ -128,6 +137,8 @@ const schema = a
         paidNote: a.string(),
         // Team only: ÉLUE covers the delivery (driver collects jars only).
         freeDelivery: a.boolean(),
+        // Team only: customer already paid the delivery fee (driver collects jars only).
+        deliveryPaid: a.boolean(),
       })
       .returns(a.ref("PlaceOrderResult"))
       .authorization((allow) => [allow.authenticated()])
@@ -146,8 +157,16 @@ const schema = a
       .returns(a.json())
       .authorization((allow) => [allow.group("ADMINS")])
       .handler(a.handler.function(modon)),
+
+    // Eatix actions from the admin: send (again), cancel.
+    eatix: a
+      .mutation()
+      .arguments({ action: a.string().required(), orderId: a.string() })
+      .returns(a.json())
+      .authorization((allow) => [allow.group("ADMINS")])
+      .handler(a.handler.function(eatix)),
   })
-  .authorization((allow) => [allow.resource(placeOrder), allow.resource(modon)]);
+  .authorization((allow) => [allow.resource(placeOrder), allow.resource(modon), allow.resource(eatix)]);
 
 export type Schema = ClientSchema<typeof schema>;
 

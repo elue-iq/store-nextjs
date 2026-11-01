@@ -25,6 +25,7 @@ import { priceCart, type CartItem } from "../../../lib/order-text";
 import { checkDelivery, cleanDelivery } from "../../../lib/validate";
 import { normalizeIraqiMobile } from "../../../lib/phone";
 import { buildOrderMessage, sendToTelegram } from "../../../lib/telegram";
+import { eatixConfig, eatixFields, sendOrder, toEatixOrder } from "../../../lib/eatix";
 import { OPEN_STATUSES, ORDER_RULES } from "../../../lib/order-rules";
 
 // placeOrder: the only way an order is created.
@@ -117,6 +118,7 @@ async function ensureCustomer(phone: string): Promise<{ owner: string | null; cr
 }
 
 const dynamo = new DynamoDBClient({});
+const eatixCfg = eatixConfig(env as unknown as Record<string, string>);
 
 // Production is the "amplify" branch; any other branch (dev) is a test copy:
 // order numbers start with DEV- and nothing is sent to the team's Telegram.
@@ -209,8 +211,11 @@ export const handler: Schema["placeOrder"]["functionHandler"] = async (event) =>
   // Only the team can mark an order prepaid (customer paid the jars already)
   // or free-delivery (ÉLUE covers the fee).
   const paid = isTeam ? Boolean(args.paid) : false;
-  const paidNote = paid ? String(args.paidNote ?? "").trim().slice(0, 120) || null : null;
-  const freeDelivery = isTeam ? Boolean(args.freeDelivery) : false;
+  // How it was paid (Qi, card…): kept when the jars or the delivery fee were paid in advance.
+  const paidNote = paid || (isTeam && args.deliveryPaid) ? String(args.paidNote ?? "").trim().slice(0, 120) || null : null;
+  // Delivery fee: already paid by the customer, or a gift from ÉLUE (never both).
+  const deliveryPaid = isTeam ? Boolean(args.deliveryPaid) : false;
+  const freeDelivery = isTeam && !deliveryPaid ? Boolean(args.freeDelivery) : false;
   const { name, province, area, address } = cleanDelivery({
     name: String(args.name ?? ""),
     province: String(args.province ?? ""),
@@ -274,6 +279,7 @@ export const handler: Schema["placeOrder"]["functionHandler"] = async (event) =>
       paid,
       paidNote,
       freeDelivery,
+      deliveryPaid,
       createdBy: forCustomer ? callerPhone : null,
       owner,
     });
@@ -306,11 +312,25 @@ export const handler: Schema["placeOrder"]["functionHandler"] = async (event) =>
       paid,
       paidNote,
       freeDelivery,
+      deliveryPaid,
     });
     // The dev copy never messages the team's Telegram group.
     const telegramSent = PRODUCTION ? await sendToTelegram(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_CHAT_ID, message) : false;
     if (!PRODUCTION) console.log("DEV order, Telegram skipped:\n" + message);
     if (telegramSent) await client.models.Order.update({ id: order.id, telegramSent: true });
+
+    // Copy of the order to Eatix (cashier device). Best effort: a failure is
+    // recorded on the order (retry on /admin) and never blocks the order.
+    try {
+      const r = PRODUCTION
+        ? await sendOrder(eatixCfg, toEatixOrder(order as Parameters<typeof toEatixOrder>[0]))
+        : ({ ok: true, eatixId: `DEV${Date.now()}` } as const);
+      const { errors: eErrors } = await client.models.Order.update({ id: order.id, ...eatixFields(r, !PRODUCTION) });
+      if (eErrors?.length) console.error("saving the Eatix result failed", JSON.stringify(eErrors));
+      if (!r.ok && r.error !== "disabled") console.error("Eatix push failed", r.error);
+    } catch (err) {
+      console.error("Eatix push crashed", err);
+    }
 
     return { id: order.id, orderNumber: number, createdAt: order.createdAt, telegramSent };
   };

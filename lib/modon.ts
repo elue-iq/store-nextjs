@@ -1,7 +1,7 @@
 // Modon Express (delivery company) — shared by the modon function and the admin page.
 // Plain TypeScript with relative imports only, so it bundles into the function.
 
-import { site } from "./site";
+import { site, type DeliveryPay } from "./site";
 
 // Modon's city ids (GET /citys). Halabja has no city of its own at Modon: it is
 // served from Sulaymaniyah.
@@ -29,21 +29,28 @@ export const MODON_CITY: Record<string, number> = {
 
 export type ModonRegion = { id: number; name: string };
 
-// What the driver collects from the customer. Two independent cases:
+// What the driver collects from the customer. Two independent parts:
 // - paid: the customer already paid the jars (e.g. Qi transfer), so the jars
 //   drop out and only the delivery fee is collected.
-// - freeDelivery: ÉLUE covers the delivery, so the fee drops out and only the
-//   jars are collected. Modon still keeps its fee and pays ÉLUE that much less.
-// Both can be true at once (prepaid jars + free delivery = driver collects 0).
-export function modonCollect(total: number, paid = false, freeDelivery = false): number {
-  return (paid ? 0 : total) + (freeDelivery ? 0 : site.deliveryFee);
+// - delivery: "prepaid" (customer already paid the fee) or "gift" (ÉLUE covers it):
+//   either way the fee drops out and only the jars are collected. Modon still keeps
+//   its fee and pays ÉLUE that much less.
+// Both can apply at once (prepaid jars + no delivery fee = driver collects 0).
+export function modonCollect(total: number, paid = false, delivery: DeliveryPay = "driver"): number {
+  return (paid ? 0 : total) + (delivery === "driver" ? site.deliveryFee : 0);
 }
 
 // One short line describing how the collected amount breaks down, for the admin.
-export function collectBreakdown(total: number, paid: boolean, freeDelivery: boolean): string {
+export function collectBreakdown(total: number, paid: boolean, delivery: DeliveryPay): string {
   const parts: string[] = [];
   parts.push(paid ? "الطلب مدفوع مسبقاً" : `${total.toLocaleString("en-US")} الطلب`);
-  parts.push(freeDelivery ? "التوصيل مجاني" : `${site.deliveryFee.toLocaleString("en-US")} التوصيل`);
+  parts.push(
+    delivery === "gift"
+      ? "التوصيل مجاني (هدية)"
+      : delivery === "prepaid"
+        ? "التوصيل مدفوع مسبقاً"
+        : `${site.deliveryFee.toLocaleString("en-US")} التوصيل`,
+  );
   return parts.join(" · ");
 }
 

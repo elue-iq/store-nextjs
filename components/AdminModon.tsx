@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useToast } from "./Toast";
 import { dataClient, type Order } from "@/lib/data";
 import { collectBreakdown, MODON_CITY, modonCollect, normalizeArabic, suggestRegion, type ModonRegion } from "@/lib/modon";
-import { formatIQD, site } from "@/lib/site";
+import { deliveryPayOf, formatIQD, site } from "@/lib/site";
 
 // Errors from the modon function come back as "code:message".
 function modonError(errors: { message?: string }[] | null | undefined, fallback: string): string {
@@ -164,8 +164,8 @@ export function AdminModon({ order: o }: { order: Order }) {
             <RegionList regions={shown} value={regionId} onPick={setRegionId} />
             <p className="modon__sum">
               يستلم المندوب من العميل{" "}
-              <strong>{formatIQD(modonCollect(o.total, Boolean(o.paid), Boolean(o.freeDelivery)))}</strong>
-              <small>{collectBreakdown(o.total, Boolean(o.paid), Boolean(o.freeDelivery))}</small>
+              <strong>{formatIQD(modonCollect(o.total, Boolean(o.paid), deliveryPayOf(o)))}</strong>
+              <small>{collectBreakdown(o.total, Boolean(o.paid), deliveryPayOf(o))}</small>
             </p>
             {confirmSend ? (
               <div className="modon__confirm" role="alert">
@@ -207,9 +207,10 @@ export function AdminModon({ order: o }: { order: Order }) {
         <div>
           <dt>يستلم المندوب</dt>
           <dd>
-            {formatIQD(o.modonPrice ?? modonCollect(o.total, Boolean(o.paid), Boolean(o.freeDelivery)))}
+            {formatIQD(o.modonPrice ?? modonCollect(o.total, Boolean(o.paid), deliveryPayOf(o)))}
             {o.paid && <small className="modon__paid"> · مدفوع</small>}
-            {o.freeDelivery && <small className="modon__paid"> · توصيل مجاني</small>}
+            {deliveryPayOf(o) === "gift" && <small className="modon__paid"> · توصيل مجاني</small>}
+            {deliveryPayOf(o) === "prepaid" && <small className="modon__paid"> · التوصيل مدفوع</small>}
           </dd>
         </div>
         {o.modonFee != null && (
@@ -261,8 +262,8 @@ export function AdminModon({ order: o }: { order: Order }) {
                 <RegionList regions={shown} value={regionId} onPick={setRegionId} />
                 <p className="modon__sum">
                   يستلم المندوب من العميل{" "}
-                  <strong>{formatIQD(modonCollect(o.total, Boolean(o.paid), Boolean(o.freeDelivery)))}</strong>
-                  <small>{collectBreakdown(o.total, Boolean(o.paid), Boolean(o.freeDelivery))}</small>
+                  <strong>{formatIQD(modonCollect(o.total, Boolean(o.paid), deliveryPayOf(o)))}</strong>
+                  <small>{collectBreakdown(o.total, Boolean(o.paid), deliveryPayOf(o))}</small>
                 </p>
                 <button
                   type="button"

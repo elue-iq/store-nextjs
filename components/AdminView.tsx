@@ -9,26 +9,19 @@ import { AdminDrawer, type AdminView as View } from "./AdminDrawer";
 import { usePullToRefresh } from "./usePullToRefresh";
 import { AdminOrderForm } from "./AdminOrderForm";
 import { AdminModon } from "./AdminModon";
+import { AdminEatix } from "./AdminEatix";
+import { SendOrderToCustomer, SendOrderToLocalCourier } from "./SendOrderToCustomer";
+import { AdminDashboard } from "./AdminDashboard";
+import { OrderRow, baghdadDay, shortTime } from "./AdminOrderRow";
 import { buildCustomers, CustomerDetail, CustomerList, CustomersSummary } from "./AdminCustomers";
 import { jarsLabel } from "./AddToCart";
-import { DeliveryTracking, OrderItemsList, StatusChip, StatusTrack } from "./OrderBits";
+import { DeliveryTracking, OrderItemsList, StatusTrack } from "./OrderBits";
 import { formatPoints, pointsFor } from "@/lib/loyalty";
-import { baghdadTime, dataClient, newestFirst, STATUS_LABELS, STATUS_ORDER, type Order, type OrderStatus } from "@/lib/data";
+import { dataClient, newestFirst, STATUS_LABELS, STATUS_ORDER, type Order, type OrderStatus } from "@/lib/data";
 import { formatIraqiMobile, toLatinDigits } from "@/lib/phone";
 import { formatIQD } from "@/lib/site";
-import { shareOrderUrl } from "@/lib/share";
 import { fullAddress } from "@/lib/iraq";
-
-const baghdadDay = (iso: string) =>
-  new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Baghdad", year: "numeric", month: "2-digit", day: "2-digit" }).format(
-    new Date(iso),
-  );
-
-// "14:05" for today, "10-21 14:05" for earlier days.
-function shortTime(iso: string, today: string): string {
-  const full = baghdadTime(iso); // YYYY-MM-DD HH:mm
-  return baghdadDay(iso) === today ? full.slice(11) : full.slice(5);
-}
+import { products } from "@/lib/products";
 
 type Filter = "ALL" | OrderStatus;
 type Sort = "newest" | "oldest";
@@ -42,6 +35,12 @@ function orderFromUrl(): string | null {
   if (params.has("new")) return params.has("for") ? `new:${params.get("for")}` : "new";
   const customer = params.get("customer");
   return customer ? `c:${customer}` : params.get("order");
+}
+
+// Which section the list screen shows (?view=dashboard etc.), so a refresh stays there.
+function viewFromUrl(): View {
+  const v = new URLSearchParams(window.location.search).get("view");
+  return v === "dashboard" || v === "customers" || v === "products" ? v : "orders";
 }
 
 function screenUrl(id: string): string {
@@ -75,6 +74,7 @@ export function AdminView() {
   const [filter, setFilter] = useState<Filter>("ALL");
   const [sort, setSort] = useState<Sort>("newest");
   const [query, setQuery] = useState("");
+  const [flavor, setFlavor] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
   const [view, setView] = useState<View>("orders");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -84,6 +84,7 @@ export function AdminView() {
 
   useEffect(() => {
     setSelected(orderFromUrl());
+    setView(viewFromUrl());
     const onPop = () => {
       const id = orderFromUrl();
       setSelected(id);
@@ -194,6 +195,7 @@ export function AdminView() {
     const qDigits = q.replace(/\D/g, "").replace(/^0+/, "");
     const list = (orders ?? []).filter((o) => {
       if (filter !== "ALL" && o.status !== filter) return false;
+      if (flavor && !o.items.some((i) => i?.slug === flavor)) return false;
       if (!q) return true;
       return (
         o.orderNumber.toLowerCase().includes(q) ||
@@ -204,7 +206,7 @@ export function AdminView() {
       );
     });
     return sort === "newest" ? list : [...list].reverse();
-  }, [orders, filter, query, sort]);
+  }, [orders, filter, query, sort, flavor]);
 
   // ---- Access -------------------------------------------------------------
 
@@ -351,6 +353,7 @@ export function AdminView() {
       onClose={() => setMenuOpen(false)}
       onView={(v) => {
         setView(v);
+        window.history.replaceState(null, "", v === "orders" ? "/admin" : `/admin?view=${v}`);
         setMenuOpen(false);
         window.scrollTo({ top: 0 });
       }}
@@ -368,6 +371,17 @@ export function AdminView() {
         {pullEl}
         {listHead("المنتجات", "حالة التوفر لكل نكهة")}
         <AdminStock />
+        {drawer}
+      </div>
+    );
+  }
+
+  if (view === "dashboard") {
+    return (
+      <div className="admin-screen">
+        {pullEl}
+        {listHead("لوحة المعلومات", synced ? "كل الأرقام حسب الفترة والفلاتر" : "جارٍ تحميل الطلبات…")}
+        <AdminDashboard orders={orders} onOpenOrder={openOrder} onOpenCustomer={(phone) => openOrder(`c:${phone}`)} />
         {drawer}
       </div>
     );
@@ -410,6 +424,17 @@ export function AdminView() {
           <dd>{stats.counts.NEW}</dd>
         </div>
       </dl>
+      <button
+        type="button"
+        className="link-button admin-to-dash"
+        onClick={() => {
+          setView("dashboard");
+          window.history.replaceState(null, "", "/admin?view=dashboard");
+          window.scrollTo({ top: 0 });
+        }}
+      >
+        كل الأرقام والفلاتر في لوحة المعلومات ←
+      </button>
 
       <div className="admin-tools">
         <button type="button" className="btn btn--full admin-new" onClick={() => openOrder("new")}>
@@ -432,10 +457,20 @@ export function AdminView() {
               </button>
             ))}
           </div>
-          <select className="admin-sort" value={sort} onChange={(e) => setSort(e.target.value as Sort)} aria-label="الترتيب">
-            <option value="newest">الأحدث أولًا</option>
-            <option value="oldest">الأقدم أولًا</option>
-          </select>
+          <div className="admin-tools__selects">
+            <select className="admin-sort" value={flavor} onChange={(e) => setFlavor(e.target.value)} aria-label="النكهة">
+              <option value="">كل النكهات</option>
+              {products.map((p) => (
+                <option key={p.slug} value={p.slug}>
+                  {p.nameAr}
+                </option>
+              ))}
+            </select>
+            <select className="admin-sort" value={sort} onChange={(e) => setSort(e.target.value as Sort)} aria-label="الترتيب">
+              <option value="newest">الأحدث أولًا</option>
+              <option value="oldest">الأقدم أولًا</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -456,40 +491,7 @@ export function AdminView() {
       <ul className="order-rows">
         {shown.map((o) => (
           <li key={o.id}>
-            <button
-              type="button"
-              className={`order-row order-row--${o.status.toLowerCase()}`}
-              onClick={() => openOrder(o.orderNumber)}
-            >
-              <span className="order-row__main">
-                <span className="order-row__top">
-                  <strong dir="ltr">{o.orderNumber}</strong>
-                  <StatusChip status={o.status} />
-                  {o.paid && <span className="order-row__paid">مدفوع</span>}
-                  {o.freeDelivery && <span className="order-row__paid order-row__free">توصيل مجاني</span>}
-                </span>
-                <span className="order-row__name">{o.name}</span>
-                <span className={o.cashierOrderId ? "order-row__cashier" : "order-row__cashier is-missing"}>
-                  {o.cashierOrderId ? <>كاشير: <span dir="ltr">{o.cashierOrderId}</span></> : "بلا رقم كاشير"}
-                  {o.createdBy && " · أنشأه الفريق"}
-                  {o.modonQr && (
-                    <>
-                      {" · "}مدن: <span dir="ltr">{o.modonQr}</span>
-                    </>
-                  )}
-                </span>
-                <span className="order-row__sub">
-                  {[o.province, o.area].filter(Boolean).join("، ") || fullAddress(o)}
-                </span>
-              </span>
-              <span className="order-row__side">
-                <strong>{formatIQD(o.total)}</strong>
-                <span dir="ltr">{shortTime(o.createdAt, today)}</span>
-              </span>
-              <svg className="order-row__chevron" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M15 5l-7 7 7 7" />
-              </svg>
-            </button>
+            <OrderRow order={o} today={today} onOpen={openOrder} />
           </li>
         ))}
       </ul>
@@ -547,12 +549,12 @@ function OrderDetail({ order: o, today, me, onOpenCustomer }: { order: Order; to
     }
   }
 
-  async function pdf() {
+  async function saveSummary() {
     try {
-      const { saveOrderPdf } = await import("@/lib/receipt");
-      await saveOrderPdf(o);
+      const { saveOrderImage } = await import("@/lib/receipt");
+      await saveOrderImage(o);
     } catch {
-      toast({ id: "pdf", tone: "attention", message: "تعذّر تجهيز الملف الآن. حاول مجددًا." });
+      toast({ id: "pdf", tone: "attention", message: "تعذّر تجهيز الصورة الآن. حاول مجددًا." });
     }
   }
 
@@ -615,16 +617,17 @@ function OrderDetail({ order: o, today, me, onOpenCustomer }: { order: Order; to
             <path d="M15 5l-7 7 7 7" />
           </svg>
         </button>
-        <div className="order-detail__contact">
-          <a className="btn btn--small" href={`https://wa.me/${o.phone}`} target="_blank" rel="noopener noreferrer">
+        <SendOrderToCustomer order={o} />
+        <div className="order-detail__contact order-detail__contact--3">
+          <a className="btn btn--quiet btn--small" href={`https://wa.me/${o.phone}`} target="_blank" rel="noopener noreferrer">
             واتساب
           </a>
           <a className="btn btn--quiet btn--small" href={`tel:+${o.phone}`}>
             اتصال
           </a>
-          <a className="btn btn--quiet btn--small" href={shareOrderUrl(o)} target="_blank" rel="noopener noreferrer">
-            أرسل له رابط الطلب
-          </a>
+          <button type="button" className="btn btn--quiet btn--small" onClick={() => void saveSummary()}>
+            حفظ الصورة
+          </button>
         </div>
       </section>
 
@@ -644,7 +647,11 @@ function OrderDetail({ order: o, today, me, onOpenCustomer }: { order: Order; to
         {o.paid && (
           <p className="order-detail__paid">مدفوع مسبقاً{o.paidNote ? ` · ${o.paidNote}` : ""}</p>
         )}
-        {o.freeDelivery && <p className="order-detail__paid">توصيل مجاني (نتحمّل أجور التوصيل)</p>}
+        {o.deliveryPaid ? (
+          <p className="order-detail__paid">أجور التوصيل مدفوعة مسبقاً من العميل</p>
+        ) : (
+          o.freeDelivery && <p className="order-detail__paid">توصيل مجاني هدية (نتحمّل أجور التوصيل)</p>
+        )}
         {o.status !== "CANCELLED" && (
           <p className="order-detail__points">
             {o.status === "DELIVERED"
@@ -661,6 +668,10 @@ function OrderDetail({ order: o, today, me, onOpenCustomer }: { order: Order; to
       </section>
 
       <AdminModon order={o} />
+
+      <SendOrderToLocalCourier order={o} />
+
+      <AdminEatix order={o} />
 
       <DeliveryTracking order={o} />
 
@@ -708,9 +719,6 @@ function OrderDetail({ order: o, today, me, onOpenCustomer }: { order: Order; to
         )}
       </p>
 
-      <button type="button" className="link-button order-detail__pdf" onClick={() => void pdf()}>
-        تنزيل ملخص الطلب (PDF)
-      </button>
     </article>
   );
 }

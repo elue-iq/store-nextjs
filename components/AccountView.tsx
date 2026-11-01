@@ -12,7 +12,7 @@ import { DeliveryTracking, OrderItemsList, StatusChip, StatusTrack } from "./Ord
 import { DeliveryFields } from "./DeliveryFields";
 import { baghdadTime, dataClient, newestFirst, type Order } from "@/lib/data";
 import { formatIraqiMobile } from "@/lib/phone";
-import { collectStatement, formatIQD, site } from "@/lib/site";
+import { collectStatement, deliveryPayOf, formatIQD, site } from "@/lib/site";
 import { getProduct } from "@/lib/products";
 import { fullAddress } from "@/lib/iraq";
 import { formatPoints, pointsFor, pointsSummary } from "@/lib/loyalty";
@@ -36,6 +36,14 @@ const CUSTOMER_FIELDS = [
   "total",
   "status",
   "telegramSent",
+  // Payment and delivery: what the driver collects is worked out from these.
+  "paid",
+  "freeDelivery",
+  "deliveryPaid",
+  // Delivery tracking (from the courier's updates).
+  "trackStatus",
+  "trackEta",
+  "trackEvents",
   "owner",
   "createdAt",
   "updatedAt",
@@ -334,13 +342,12 @@ function MyOrderDetail({ order: o }: { order: Order }) {
     router.push("/order");
   }
 
-  async function pdf() {
+  async function saveSummary() {
     try {
-      const { saveOrderPdf } = await import("@/lib/receipt");
-      await saveOrderPdf(o);
-      toast({ id: "pdf", message: "نزّلنا ملخص الطلب (PDF)." });
+      const { saveOrderImage } = await import("@/lib/receipt");
+      await saveOrderImage(o);
     } catch {
-      toast({ id: "pdf", tone: "attention", message: "تعذّر تجهيز الملف الآن. حاول مجددًا." });
+      toast({ id: "pdf", tone: "attention", message: "تعذّر تجهيز الصورة الآن. حاول مجددًا." });
     }
   }
 
@@ -363,7 +370,7 @@ function MyOrderDetail({ order: o }: { order: Order }) {
           <strong>{formatIQD(o.total)}</strong>
         </p>
         <p className="order-detail__muted">
-          {collectStatement(o.total, Boolean(o.paid), Boolean(o.freeDelivery))}
+          {collectStatement(o.total, Boolean(o.paid), deliveryPayOf(o))}
         </p>
         <p className="order-detail__muted">{site.courierNote}</p>
         <p className="order-detail__muted">{site.coldNote.text}</p>
@@ -397,8 +404,8 @@ function MyOrderDetail({ order: o }: { order: Order }) {
         >
           اسألنا عن هذا الطلب عبر واتساب
         </a>
-        <button type="button" className="link-button order-detail__pdf" onClick={() => void pdf()}>
-          تنزيل ملخص الطلب (PDF)
+        <button type="button" className="link-button order-detail__pdf" onClick={() => void saveSummary()}>
+          حفظ صورة ملخص الطلب
         </button>
       </div>
     </article>

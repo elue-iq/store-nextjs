@@ -6,19 +6,21 @@ import { auth } from "./auth/resource";
 import { data } from "./data/resource";
 import { placeOrder } from "./functions/place-order/resource";
 import { modon } from "./functions/modon/resource";
+import { eatix } from "./functions/eatix/resource";
 import { FunctionUrlAuthType } from "aws-cdk-lib/aws-lambda";
 
 import { createAuthChallenge } from "./auth/create-auth-challenge/resource";
 import { verifyAuthChallenge } from "./auth/verify-auth-challenge/resource";
 import { CfnFunction } from "aws-cdk-lib/aws-lambda";
 
-const backend = defineBackend({ auth, data, placeOrder, modon, createAuthChallenge, verifyAuthChallenge });
+const backend = defineBackend({ auth, data, placeOrder, modon, eatix, createAuthChallenge, verifyAuthChallenge });
 
 // Which copy this is: "amplify" = the live site; anything else (dev) is a test
 // copy that never sends real Modon orders or Telegram messages.
 const stage = process.env.AWS_BRANCH ?? "sandbox";
 backend.placeOrder.addEnvironment("STAGE", stage);
 backend.modon.addEnvironment("STAGE", stage);
+backend.eatix.addEnvironment("STAGE", stage);
 
 // Login settings for the website's Cognito app client:
 // - only the WhatsApp-code sign-in (custom auth) plus token refresh
@@ -72,6 +74,7 @@ for (const fn of [backend.createAuthChallenge, backend.verifyAuthChallenge]) {
 const ceilings: [typeof backend.placeOrder, number][] = [
   [backend.placeOrder, 10],
   [backend.modon, 5],
+  [backend.eatix, 3],
   [backend.createAuthChallenge, 10],
   [backend.verifyAuthChallenge, 10],
 ];

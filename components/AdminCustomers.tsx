@@ -267,7 +267,11 @@ export function CustomerDetail({
                     <strong dir="ltr">{o.orderNumber}</strong>
                     <StatusChip status={o.status} />
                     {o.paid && <span className="order-row__paid">مدفوع</span>}
-                    {o.freeDelivery && <span className="order-row__paid order-row__free">توصيل مجاني</span>}
+                    {o.deliveryPaid ? (
+            <span className="order-row__paid">التوصيل مدفوع</span>
+          ) : (
+            o.freeDelivery && <span className="order-row__paid order-row__free">توصيل مجاني</span>
+          )}
                   </span>
                   <span className="order-row__sub">
                     {o.items
