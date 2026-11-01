@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useToast } from "./Toast";
 import type { Order } from "@/lib/data";
+import type { receiptFromOrder } from "@/lib/receipt";
 import { chatUrl, orderMessage, reviewRequestMessage } from "@/lib/share";
 
 type Mode = "share" | "chat";
@@ -17,7 +18,7 @@ type Mode = "share" | "chat";
 // - iPhone and computers: the chat opens with the text ready, and the picture is
 //   copied, ready to paste in the same chat. (iPhone's share sheet drops the
 //   picture when text is shared with it, so it can't do both at once.)
-function SendOnWhatsApp({
+export function SendOnWhatsApp({
   order: o,
   phone,
   text,
@@ -26,7 +27,7 @@ function SendOnWhatsApp({
   chatHint,
   shareHint,
 }: {
-  order: Order;
+  order: Parameters<typeof receiptFromOrder>[0];
   phone: string; // "" = WhatsApp asks which chat or group
   text: string;
   label: string;

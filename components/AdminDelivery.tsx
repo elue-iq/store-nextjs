@@ -212,10 +212,12 @@ export function AdminDelivery({ order: o, onOpenCouriers }: { order: Order; onOp
             <p>
               <strong>{o.courierName}</strong> · تيليغرام
             </p>
-            <p className={o.courierStatus === "SENT" ? "delivery__ok" : "order-card__warn"}>
-              {o.courierStatus === "SENT" && o.courierSentAt
-                ? `✓ أُرسل إليهم ${baghdadTime(o.courierSentAt).slice(5)}`
-                : `✗ لم يصل الطلب${o.courierError ? `: ${o.courierError}` : ""}`}
+            <p className={o.courierStatus === "SENT" || o.courierStatus === "SELF" ? "delivery__ok" : "order-card__warn"}>
+              {o.courierStatus === "SELF" && o.courierSentAt
+                ? `✓ أضافه المندوب بمسح الملصق ${baghdadTime(o.courierSentAt).slice(5)}`
+                : o.courierStatus === "SENT" && o.courierSentAt
+                  ? `✓ أُرسل إليهم ${baghdadTime(o.courierSentAt).slice(5)}`
+                  : `✗ لم يصل الطلب${o.courierError ? `: ${o.courierError}` : ""}`}
             </p>
             {!cancelled && (
               <div className="modon__actions">
@@ -223,7 +225,7 @@ export function AdminDelivery({ order: o, onOpenCouriers }: { order: Order; onOp
                   طباعة الملصق (PDF)
                 </button>
                 <button type="button" className="btn btn--ghost" disabled={busy} onClick={() => void resend()}>
-                  {o.courierStatus === "SENT" ? "إعادة الإرسال" : "حاول الإرسال مجددًا"}
+                  {o.courierStatus === "SENT" ? "إعادة الإرسال" : o.courierStatus === "SELF" ? "إرسال على تيليغرام" : "حاول الإرسال مجددًا"}
                 </button>
                 {confirm === "unassign" ? (
                   <button type="button" className="btn btn--ghost is-confirm" disabled={busy} onClick={() => void unassign()}>

@@ -4921,3 +4921,8 @@ button.dash-bars__row:focus-visible {
   cursor: pointer;
   color: var(--clay, #a65b45);
 }
+
+.courier-card.is-new {
+  outline: 2px solid var(--clay, #a65b45);
+  outline-offset: 2px;
+}
