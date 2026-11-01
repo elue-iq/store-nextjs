@@ -1,7 +1,11 @@
 // A minimal PDF writer: one JPEG picture per page, page size in points.
 // Enough for shipping labels (4×6 in = 288×432 pt) that print the same everywhere.
 
-export type PdfPage = { jpeg: Uint8Array; width: number; height: number }; // pixels of the JPEG
+// A page picture: a JPEG, or a 1-bit black/white bitmap (0 = black, rows padded to bytes),
+// zlib-compressed when `flate` is true. Width and height are in pixels.
+export type PdfPage =
+  | { kind: "jpeg"; data: Uint8Array; width: number; height: number }
+  | { kind: "bits"; data: Uint8Array; flate: boolean; width: number; height: number };
 
 const enc = (s: string) => new TextEncoder().encode(s);
 
@@ -39,10 +43,12 @@ export function makePdf(pages: PdfPage[], pageW: number, pageH: number): Blob {
     begin(contentId);
     push(`<< /Length ${content.length} >>\nstream\n${content}\nendstream\nendobj\n`);
     begin(imageId);
-    push(
-      `<< /Type /XObject /Subtype /Image /Width ${p.width} /Height ${p.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${p.jpeg.length} >>\nstream\n`,
-    );
-    push(p.jpeg);
+    const image =
+      p.kind === "jpeg"
+        ? "/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode"
+        : `/ColorSpace /DeviceGray /BitsPerComponent 1${p.flate ? " /Filter /FlateDecode" : ""}`;
+    push(`<< /Type /XObject /Subtype /Image /Width ${p.width} /Height ${p.height} ${image} /Length ${p.data.length} >>\nstream\n`);
+    push(p.data);
     push("\nendstream\nendobj\n");
   });
 
