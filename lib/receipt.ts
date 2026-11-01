@@ -178,14 +178,18 @@ function draw(ctx: CanvasRenderingContext2D, d: ReceiptData): number {
   return y + 84;
 }
 
-async function loadFonts() {
+export async function loadFonts() {
   if (typeof document === "undefined" || !document.fonts) return;
   try {
     await Promise.all([
       document.fonts.load(`700 40px ${AR}`, "ملخص طلبك EL-0"),
       document.fonts.load(`400 30px ${AR}`, "العنوان 0771"),
       document.fonts.load(`600 30px ${AR}`, "دارك 15,000"),
+      // The shipping label: regular and bold Cairo, Arabic letters, Latin (É) and digits.
+      document.fonts.load(`400 30px ${AR}`, "اسم الزبون ÉLUE EL-0012 07701234567"),
+      document.fonts.load(`700 30px ${AR}`, "اسم الزبون ÉLUE EL-0012 07701234567"),
     ]);
+    await document.fonts.ready;
   } catch {
     // Fall back to the system font; the summary is still readable.
   }

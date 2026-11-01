@@ -6,6 +6,7 @@ import { useCart } from "./CartProvider";
 import { useToast } from "./Toast";
 import { getProduct } from "@/lib/products";
 import { useStock } from "./StockProvider";
+import { pixelAddToCart } from "@/lib/pixel";
 
 // "علبة واحدة"، "علبتان"، "3 علب"، "11 علبة"
 export function jarsLabel(n: number): string {
@@ -20,6 +21,7 @@ function useAddWithToast() {
   const toast = useToast();
   return (slug: string, qty: number, withAction = true) => {
     add(slug, qty);
+    pixelAddToCart(slug, qty);
     const name = getProduct(slug)?.nameAr ?? "";
     toast({
       id: "cart",

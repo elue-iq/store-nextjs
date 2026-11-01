@@ -16,6 +16,7 @@ type OrderInfo = Who & {
   paid?: boolean | null;
   freeDelivery?: boolean | null;
   deliveryPaid?: boolean | null;
+  province?: string | null;
 };
 
 function origin(): string {
@@ -45,10 +46,11 @@ function summary(o: OrderInfo): string[] {
       : delivery === "prepaid"
         ? "• أجور التوصيل: مدفوعة ✅"
         : `• أجور التوصيل: ${formatIQD(site.deliveryFee)}`,
+    o.province === site.baghdadWindow.province ? `• موعد التوصيل: ${site.baghdadWindow.short} (وإذا تعذّر بنفس اليوم يتأجل لليوم التالي)` : null,
     collect > 0 ? `💵 المبلغ عند الاستلام: ${formatIQD(collect)}` : "✅ لا يُطلب أي مبلغ عند الاستلام",
     `• رقم الطلب: ${o.orderNumber}`,
     "",
-  ];
+  ].filter((l): l is string => l !== null);
 }
 
 // The message for the customer. With the order's items it starts with the summary.
@@ -80,38 +82,6 @@ export function chatUrl(phone: string, text: string): string {
   return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
 }
 
-// For a delivery team (e.g. تيم الفهود): who, where, what, and how much to collect.
-export function courierMessage(o: OrderInfo & { province?: string | null; area?: string | null; address: string; note?: string | null }): string {
-  const items = (o.items ?? []).filter((i): i is NonNullable<typeof i> => Boolean(i));
-  const jars = o.jars ?? items.reduce((n, i) => n + i.qty, 0);
-  const total = o.total ?? 0;
-  const delivery = deliveryPayOf(o);
-  const collect = (o.paid ? 0 : total) + (delivery === "driver" ? site.deliveryFee : 0);
-  const parts = [
-    o.paid ? "الطلب مدفوع" : `الطلب ${formatIQD(total)}`,
-    delivery === "driver" ? `التوصيل ${formatIQD(site.deliveryFee)}` : delivery === "prepaid" ? "التوصيل مدفوع" : "التوصيل مجاني",
-  ];
-  const lines = [
-    "🛵 طلب توصيل من ÉLUE",
-    `• رقم الطلب: ${o.orderNumber}`,
-    `• الزبون: ${o.name}`,
-    `• الهاتف: \u200E${formatIraqiMobile(o.phone).replace(/ /g, "")}`,
-    `• العنوان: ${[o.province, o.area, o.address].filter(Boolean).join("، ")}`,
-    o.note ? `• ملاحظة: ${o.note}` : null,
-    "",
-    "📦 الطلب:",
-    ...items.map((i) => `• ${i.nameAr}: ${jarsWord(i.qty)}`),
-    `• عدد العلب: ${jars}`,
-    "",
-    collect > 0 ? `💵 المطلوب من الزبون: ${formatIQD(collect)} (${parts.join(" + ")})` : "✅ لا يُطلب أي مبلغ من الزبون (مدفوع مسبقاً)",
-    "",
-    "❄️ الطلب يجب أن يبقى مبرّداً حتى التسليم",
-    "• بعد التسليم، استرجع بوكس الفلين من الزبون وتأكد من الطلب",
-    `📞 للاستفسار: \u200E${site.whatsappDisplay.replace(/ /g, "")}`,
-  ];
-  return lines.filter((l): l is string => l !== null).join("\n");
-}
-
 export function shareOrderUrl(o: OrderInfo): string {
   return chatUrl(o.phone, orderMessage(o));
 }
@@ -119,4 +89,13 @@ export function shareOrderUrl(o: OrderInfo): string {
 // From the customer screen: the account link, without an order summary.
 export function shareAccountUrl(o: Who): string {
   return chatUrl(o.phone, orderMessage({ name: o.name, phone: o.phone, orderNumber: o.orderNumber }, `${origin()}/account`));
+}
+
+// Asks a customer for their review after delivery (the team sends it on WhatsApp).
+export function reviewRequestMessage(o: { name: string; orderNumber: string }, origin: string): string {
+  return [
+    `مرحباً ${o.name.trim().split(/\s+/)[0]}، وصلك طلبك ${o.orderNumber} من ÉLUE؟ 🤎`,
+    "قيّم التوصيل والطعم بدقيقة وحدة. ننشر كل التقييمات كما هي، 100% شفافية:",
+    `${origin}/review?order=${encodeURIComponent(o.orderNumber)}`,
+  ].join("\n");
 }

@@ -12,14 +12,30 @@ export const site = {
   paymentNote: "الدفع نقداً عند الاستلام",
   // Printed on every courier label (note), sent to Telegram, and shown to the customer.
   courierNote: "يرجى تسليم بوكس الفلين الى مندوب التوصيل، والتأكد من الطلب",
-  // Local delivery team, sent orders from the admin order screen on WhatsApp.
-  // They work in a WhatsApp group, so whatsapp stays empty: WhatsApp then asks which
-  // chat to send to and the team picks the group. (A website can't open a group with
-  // a ready message, and the group's invite link must not be put in the site code.)
-  // A phone number here (07XXXXXXXXX -> 9647XXXXXXXXX) would open that chat directly.
-  localCourier: { name: "تيم الفهود", whatsapp: "" },
+  // The note written on the order sent to Modon (merchant_notes) and on local courier labels.
+  returnBoxNote: "راجع الفلين، يلزم ارجاعها",
+  // A customer must review their latest delivered order before ordering again
+  // (a short, playful form). false = reviews are optional (current choice).
+  reviewRequiredToReorder: false,
+  // Meta Pixel (dataset) ID: the number from Events Manager. Leave empty to keep the pixel off.
+  metaPixelId: "",
+  // The meta tag content from Business Settings > Brand safety > Domains (domain verification). Empty = no tag.
+  metaDomainVerification: "",
+  // Meta does not take Iraqi dinar for the pixel, so values go as US dollars at this fixed rate.
+  pixelIqdPerUsd: 1310,
   // Orders placed before this hour are delivered the next day (shown to customers).
   deliveryCutoff: "8 مساءً",
+  // Delivery inside Baghdad happens in this window; the customer must accept it
+  // before ordering (a note + checkbox when the province is Baghdad).
+  baghdadWindow: {
+    province: "بغداد",
+    short: "من الساعة 6 إلى 10 مساءً",
+    note: "التوصيل داخل بغداد يكون من الساعة 6 إلى 10 مساءً. وإذا ما كدرنا نوصّل طلبكم بنفس اليوم، ينتقل تلقائياً لليوم التالي.",
+    accept: "اطلعت على موعد التوصيل وأوافق عليه",
+  },
+  // Modon Express support: where «الإبلاغ عن مشكلة» sends the report (WhatsApp).
+  // International format, digits only (+964 535 111 991).
+  modonSupport: { whatsapp: "964535111991", display: "+964 535 111 991" },
   // The cold-chain message: a site-wide banner, and in every message sent to a customer.
   coldNote: {
     title: "مهم: يُحفظ دائماً في البراد",
@@ -101,4 +117,61 @@ export function collectStatement(total: number, paid = false, delivery: Delivery
 
 export function deliveryNote(): string {
   return `+ أجور التوصيل ${formatIQD(site.deliveryFee)} تُدفع للمندوب عند الاستلام`;
+}
+
+// How the customer paid in advance (jars and/or delivery fee). Stored on the order as
+// payMethod (+ payRef, the transfer / transaction number the team types in).
+// No payMethod and nothing prepaid = cash to the driver.
+export type PayMethod = "QI" | "ZAINCASH" | "OTHER" | "GIFT";
+
+export const PAY_METHOD_LABELS: Record<PayMethod, string> = {
+  QI: "Qi Card",
+  ZAINCASH: "زين كاش",
+  OTHER: "دفع آخر",
+  GIFT: "هدية",
+};
+
+// The methods the team picks when the customer paid in advance (GIFT is chosen on the jars line).
+export const PAID_METHODS: PayMethod[] = ["QI", "ZAINCASH", "OTHER"];
+
+// Methods that need a transaction / transfer number.
+export function needsPayRef(m?: string | null): boolean {
+  return m === "QI" || m === "ZAINCASH" || m === "OTHER";
+}
+
+type PayFields = {
+  paid?: boolean | null;
+  deliveryPaid?: boolean | null;
+  freeDelivery?: boolean | null;
+  payMethod?: string | null;
+  paidNote?: string | null;
+};
+
+// One key per way an order was paid, for filters and breakdowns:
+// "cod" = cash to the driver, a PayMethod, or "unknown" = paid in advance but the
+// method was never recorded (older orders).
+export type PayKey = "cod" | PayMethod | "unknown";
+
+export function payKeyOf(o: PayFields): PayKey {
+  if (o.payMethod === "QI" || o.payMethod === "ZAINCASH" || o.payMethod === "OTHER" || o.payMethod === "GIFT") return o.payMethod;
+  if (o.paid || o.deliveryPaid) return "unknown";
+  return "cod";
+}
+
+export const PAY_KEY_LABELS: Record<PayKey, string> = {
+  cod: "نقداً عند الاستلام",
+  QI: "Qi Card",
+  ZAINCASH: "زين كاش",
+  OTHER: "دفع آخر",
+  GIFT: "هدية",
+  unknown: "مدفوع بلا طريقة محددة",
+};
+
+// Short text for the method of an order, e.g. "Qi Card" or "دفع آخر (حوالة بنكية)".
+export function payMethodText(o: PayFields): string {
+  const key = payKeyOf(o);
+  if (key === "cod") return PAY_KEY_LABELS.cod;
+  if (key === "unknown") return PAY_KEY_LABELS.unknown;
+  if (key === "OTHER" && o.paidNote) return `${PAY_KEY_LABELS.OTHER} (${o.paidNote})`;
+  return PAY_KEY_LABELS[key];
 }

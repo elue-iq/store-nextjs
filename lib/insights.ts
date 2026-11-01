@@ -14,6 +14,7 @@
 import type { Order, OrderStatus } from "./data";
 import { products } from "./products";
 import { formatIraqiMobile } from "./phone";
+import { PAY_KEY_LABELS, payKeyOf, type PayKey } from "./site";
 
 // ---- Days ----------------------------------------------------------------------
 
@@ -63,6 +64,7 @@ export type Filters = {
   channel: "" | "web" | "team";
   source: string; // "" = all, otherwise a sourceLabel()
   payment: "" | "paid" | "cod" | "deliveryPaid" | "free";
+  method: "" | PayKey; // how it was paid: cash, Qi Card, ZainCash…
   customer: "" | "new" | "returning";
   showTests: boolean;
 };
@@ -79,6 +81,7 @@ export const DEFAULT_FILTERS: Filters = {
   channel: "",
   source: "",
   payment: "",
+  method: "",
   customer: "",
   showTests: false,
 };
@@ -93,6 +96,7 @@ export function activeFilterCount(f: Filters): number {
     (f.channel ? 1 : 0) +
     (f.source ? 1 : 0) +
     (f.payment ? 1 : 0) +
+    (f.method ? 1 : 0) +
     (f.customer ? 1 : 0) +
     (f.showTests ? 1 : 0)
   );
@@ -167,14 +171,20 @@ export function sourceLabel(o: Order): string {
 const lines = (o: Order) => (o.items ?? []).filter((i): i is NonNullable<typeof i> => Boolean(i));
 
 // The part of an order that counts under the flavor filter.
+// Orders given away (payMethod GIFT) carry jars but no revenue.
+export function isGift(o: Order): boolean {
+  return payKeyOf(o) === "GIFT";
+}
+
 export function partOf(o: Order, flavors: string[]): { jars: number; revenue: number } {
-  if (!flavors.length) return { jars: o.jars, revenue: o.total };
+  const gift = isGift(o);
+  if (!flavors.length) return { jars: o.jars, revenue: gift ? 0 : o.total };
   let jars = 0;
   let revenue = 0;
   for (const l of lines(o)) {
     if (!flavors.includes(l.slug)) continue;
     jars += l.qty;
-    revenue += l.qty * l.price;
+    revenue += gift ? 0 : l.qty * l.price;
   }
   return { jars, revenue };
 }
@@ -217,6 +227,8 @@ export type Kpis = {
   deliveryPrepaid: number; // delivery fee paid in advance by the customer
   freeDelivery: number; // delivery as a gift from ÉLUE
   freeDeliveryCost: number; // courier fees we covered (known once sent to Modon)
+  gifts: number; // orders given away (not revenue)
+  giftValue: number; // what they would have cost
 };
 
 export type Bucket = { key: string; label: string; from: string; to: string; revenue: number; orders: number; jars: number };
@@ -237,6 +249,7 @@ export type Insights = {
   areas: Row[];
   sources: Row[];
   channels: Row[];
+  payMethods: Row[]; // orders by how they were paid
   sizes: Row[]; // orders by number of jars
   hours: number[]; // orders per Baghdad hour 0–23
   weekdays: number[]; // orders per weekday, Sunday first
@@ -254,6 +267,8 @@ function kpisOf(list: Order[], flavors: string[], types: Map<string, "new" | "re
   let deliveryPrepaid = 0;
   let freeDelivery = 0;
   let freeDeliveryCost = 0;
+  let gifts = 0;
+  let giftValue = 0;
   const phones = new Set<string>();
   const newPhones = new Set<string>();
   for (const o of list) {
@@ -263,7 +278,11 @@ function kpisOf(list: Order[], flavors: string[], types: Map<string, "new" | "re
     phones.add(o.phone);
     if (types.get(o.id) === "new" && o.status !== "CANCELLED") newPhones.add(o.phone);
     if (o.status === "DELIVERED") delivered += 1;
-    if (o.paid) prepaid += 1;
+    if (isGift(o) && o.status !== "CANCELLED") {
+      gifts += 1;
+      giftValue += o.total;
+    }
+    if (o.paid && !isGift(o)) prepaid += 1;
     if (o.deliveryPaid) deliveryPrepaid += 1;
     if (o.freeDelivery && !o.deliveryPaid && o.status !== "CANCELLED") {
       freeDelivery += 1;
@@ -274,7 +293,8 @@ function kpisOf(list: Order[], flavors: string[], types: Map<string, "new" | "re
     orders: list.length,
     revenue,
     jars,
-    aov: list.length ? Math.round(revenue / list.length) : 0,
+    // Average over the orders that were sold (gifts are not sales).
+    aov: list.length - list.filter(isGift).length ? Math.round(revenue / (list.length - list.filter(isGift).length)) : 0,
     jarsPerOrder: list.length ? jars / list.length : 0,
     customers: phones.size,
     newCustomers: newPhones.size,
@@ -284,6 +304,8 @@ function kpisOf(list: Order[], flavors: string[], types: Map<string, "new" | "re
     deliveryPrepaid,
     freeDelivery,
     freeDeliveryCost,
+    gifts,
+    giftValue,
   };
 }
 
@@ -320,6 +342,7 @@ export function computeInsights(all: Order[], f: Filters, today: string): Insigh
     if (f.payment === "cod" && o.paid) return false;
     if (f.payment === "deliveryPaid" && !o.deliveryPaid) return false;
     if (f.payment === "free" && (!o.freeDelivery || o.deliveryPaid)) return false;
+    if (f.method && payKeyOf(o) !== f.method) return false;
     if (f.customer && types.get(o.id) !== f.customer) return false;
     return true;
   });
@@ -372,7 +395,7 @@ export function computeInsights(all: Order[], f: Filters, today: string): Insigh
       const r = flavorMap.get(l.slug) ?? { key: l.slug, label: l.nameAr, orders: 0, jars: 0, revenue: 0 };
       r.orders += 1;
       r.jars += l.qty;
-      r.revenue += l.qty * l.price;
+      r.revenue += isGift(o) ? 0 : l.qty * l.price;
       flavorMap.set(l.slug, r);
     }
   }
@@ -385,6 +408,7 @@ export function computeInsights(all: Order[], f: Filters, today: string): Insigh
   const areas = new Map<string, Row>();
   const sources = new Map<string, Row>();
   const channels = new Map<string, Row>();
+  const payMethods = new Map<string, Row>();
   const sizes = new Map<string, Row>();
   const hours = Array<number>(24).fill(0);
   const weekdays = Array<number>(7).fill(0);
@@ -397,6 +421,7 @@ export function computeInsights(all: Order[], f: Filters, today: string): Insigh
     const src = sourceLabel(o);
     add(sources, src, src, p.jars, p.revenue);
     add(channels, o.createdBy ? "team" : "web", o.createdBy ? "أنشأه الفريق" : "من الموقع", p.jars, p.revenue);
+    add(payMethods, payKeyOf(o), PAY_KEY_LABELS[payKeyOf(o)], p.jars, p.revenue);
     const size = p.jars >= 5 ? "5+" : String(p.jars);
     add(sizes, size, p.jars >= 5 ? "5 علب أو أكثر" : p.jars === 1 ? "علبة واحدة" : p.jars === 2 ? "علبتان" : `${p.jars} علب`, p.jars, p.revenue);
     hours[hourOf(o.createdAt)] += 1;
@@ -427,6 +452,7 @@ export function computeInsights(all: Order[], f: Filters, today: string): Insigh
     areas: [...areas.values()].sort((a, b) => b.orders - a.orders || b.revenue - a.revenue),
     sources: rank(sources),
     channels: rank(channels),
+    payMethods: rank(payMethods),
     sizes: [...sizes.values()].sort((a, b) => a.key.localeCompare(b.key)),
     hours,
     weekdays,
@@ -477,6 +503,8 @@ export function ordersCsv(orders: Order[], types: Map<string, "new" | "returning
     "العلب",
     "المجموع (د.ع)",
     "العلب مدفوعة مسبقاً",
+    "طريقة الدفع",
+    "رقم العملية",
     "أجور التوصيل",
     "أجور مدن",
     "رقم مدن",
@@ -503,6 +531,8 @@ export function ordersCsv(orders: Order[], types: Map<string, "new" | "returning
       o.jars,
       o.total,
       o.paid ? "نعم" : "",
+      PAY_KEY_LABELS[payKeyOf(o)],
+      o.payRef,
       o.deliveryPaid ? "مدفوعة مسبقاً" : o.freeDelivery ? "هدية (توصيل مجاني)" : "عند الاستلام",
       o.modonFee ?? "",
       o.modonQr,

@@ -3,8 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useToast } from "./Toast";
 import type { Order } from "@/lib/data";
-import { chatUrl, courierMessage, orderMessage } from "@/lib/share";
-import { site } from "@/lib/site";
+import { chatUrl, orderMessage, reviewRequestMessage } from "@/lib/share";
 
 type Mode = "share" | "chat";
 
@@ -115,32 +114,20 @@ export function SendOrderToCustomer({ order: o }: { order: Order }) {
   );
 }
 
-// To the local delivery team (site.localCourier): who, where, what, how much to collect.
-export function SendOrderToLocalCourier({ order: o }: { order: Order }) {
-  const team = site.localCourier;
-  const cancelled = o.status === "CANCELLED";
-  if (cancelled) return null;
+// After delivery: asks the customer for their review (a link to /review, with the transparency promise).
+export function SendReviewRequest({ order: o }: { order: Order }) {
+  if (o.status !== "DELIVERED" || o.reviewed) return null;
   return (
-    <section className="order-detail__block">
-      <h2>التوصيل عبر {team.name}</h2>
-      {o.modonQr && (
-        <p className="panel-note">
-          هذا الطلب مُرسل إلى مدن (<span dir="ltr">{o.modonQr}</span>). لا ترسله إلى {team.name} إلا بعد حذفه من مدن.
-        </p>
-      )}
-      <SendOnWhatsApp
-        order={o}
-        phone={team.whatsapp}
-        text={courierMessage(o)}
-        label={`إرسال الطلب إلى ${team.name}`}
-        primary={false}
-        shareHint={`اختر واتساب ثم مجموعة «${team.name}»: تُرسل صورة الملخص ومعها تفاصيل التوصيل.`}
-        chatHint={
-          team.whatsapp
-            ? `تُفتح محادثة ${team.name} والتفاصيل جاهزة، وتُنسخ صورة الملخص: الصقها في المحادثة.`
-            : `يفتح واتساب والتفاصيل جاهزة: اختر مجموعة «${team.name}»، ثم الصق صورة الملخص في المجموعة.`
-        }
-      />
-    </section>
+    <div className="send-order">
+      <a
+        className="btn btn--quiet btn--full"
+        href={chatUrl(o.phone, reviewRequestMessage(o, window.location.origin))}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        اطلب من العميل تقييم الطلب (واتساب)
+      </a>
+      <small>تُفتح محادثة العميل ومعها رابط التقييم. بعد التقييم يقدر يطلب مرة ثانية.</small>
+    </div>
   );
 }

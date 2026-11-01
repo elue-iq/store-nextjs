@@ -27,6 +27,8 @@ import { normalizeIraqiMobile } from "../../../lib/phone";
 import { buildOrderMessage, sendToTelegram } from "../../../lib/telegram";
 import { eatixConfig, eatixFields, sendOrder, toEatixOrder } from "../../../lib/eatix";
 import { OPEN_STATUSES, ORDER_RULES } from "../../../lib/order-rules";
+import { needsPayRef, site } from "../../../lib/site";
+import { pendingReview } from "../../../lib/reviews";
 
 // placeOrder: the only way an order is created.
 // 1. Checks the customer is logged in (their WhatsApp number comes from the login, not the form).
@@ -152,16 +154,21 @@ async function unlockCustomer(owner: string) {
 }
 
 // The customer's limits: one open order, a few orders a day.
-async function checkCustomerLimits(owner: string) {
+async function checkCustomerLimits(owner: string, isTeam: boolean) {
   const { data } = await client.models.Order.listOrderByOwner(
     { owner },
-    { limit: 200, selectionSet: ["orderNumber", "status", "createdAt"] },
+    { limit: 200, selectionSet: ["orderNumber", "status", "createdAt", "reviewed"] },
   );
   const orders = data ?? [];
   const open = orders.filter((o) => (OPEN_STATUSES as readonly string[]).includes(o.status));
   if (open.length >= ORDER_RULES.maxOpenOrders) {
     open.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     throw new Error(`open_order:${open[0].orderNumber}`);
+  }
+  // The latest delivered order must be reviewed first (customers only; see lib/reviews.ts).
+  if (site.reviewRequiredToReorder && !isTeam) {
+    const waiting = pendingReview(orders);
+    if (waiting) throw new Error(`review_required:${waiting.orderNumber}`);
   }
   const dayAgo = new Date(Date.now() - 24 * 3600_000).toISOString();
   if (orders.filter((o) => o.createdAt > dayAgo).length >= ORDER_RULES.maxOrdersPer24h) {
@@ -211,11 +218,22 @@ export const handler: Schema["placeOrder"]["functionHandler"] = async (event) =>
   // Only the team can mark an order prepaid (customer paid the jars already)
   // or free-delivery (ÉLUE covers the fee).
   const paid = isTeam ? Boolean(args.paid) : false;
-  // How it was paid (Qi, card…): kept when the jars or the delivery fee were paid in advance.
-  const paidNote = paid || (isTeam && args.deliveryPaid) ? String(args.paidNote ?? "").trim().slice(0, 120) || null : null;
   // Delivery fee: already paid by the customer, or a gift from ÉLUE (never both).
   const deliveryPaid = isTeam ? Boolean(args.deliveryPaid) : false;
   const freeDelivery = isTeam && !deliveryPaid ? Boolean(args.freeDelivery) : false;
+  // How it was paid in advance (Qi Card, ZainCash, other…) and its transaction number.
+  // Required whenever the customer prepaid the jars or the delivery fee (a free-jars gift needs no number).
+  const rawMethod = String(args.payMethod ?? "").trim().toUpperCase();
+  const prepaid = paid || deliveryPaid;
+  const payMethod = isTeam && prepaid && ["QI", "ZAINCASH", "OTHER", "GIFT"].includes(rawMethod) ? rawMethod : null;
+  const payRef = payMethod && needsPayRef(payMethod) ? String(args.payRef ?? "").trim().slice(0, 80) || null : null;
+  // For «دفع آخر»: what it was (e.g. bank transfer).
+  const paidNote = isTeam && prepaid ? String(args.paidNote ?? "").trim().slice(0, 120) || null : null;
+  if (isTeam && prepaid) {
+    if (!payMethod) throw new Error('invalid_fields:{"payMethod":"اختر طريقة الدفع."}');
+    if (needsPayRef(payMethod) && !payRef) throw new Error('invalid_fields:{"payRef":"اكتب رقم العملية أو الحوالة."}');
+  }
+  const slotAccepted = Boolean(args.slotAccepted);
   const { name, province, area, address } = cleanDelivery({
     name: String(args.name ?? ""),
     province: String(args.province ?? ""),
@@ -278,8 +296,11 @@ export const handler: Schema["placeOrder"]["functionHandler"] = async (event) =>
       cashierOrderId,
       paid,
       paidNote,
+      payMethod,
+      payRef,
       freeDelivery,
       deliveryPaid,
+      slotAccepted,
       createdBy: forCustomer ? callerPhone : null,
       owner,
     });
@@ -311,6 +332,8 @@ export const handler: Schema["placeOrder"]["functionHandler"] = async (event) =>
       cashierOrderId,
       paid,
       paidNote,
+      payMethod,
+      payRef,
       freeDelivery,
       deliveryPaid,
     });
@@ -339,7 +362,7 @@ export const handler: Schema["placeOrder"]["functionHandler"] = async (event) =>
   const lockedOwner = forCustomer ? null : owner;
   if (lockedOwner && !(await lockCustomer(lockedOwner))) throw new Error("busy");
   try {
-    if (lockedOwner) await checkCustomerLimits(lockedOwner);
+    if (lockedOwner) await checkCustomerLimits(lockedOwner, isTeam);
     return await saveAndNotify();
   } finally {
     if (lockedOwner) await unlockCustomer(lockedOwner);

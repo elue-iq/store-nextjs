@@ -11,7 +11,8 @@ import { StockProvider } from "@/components/StockProvider";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { ColdBanner } from "@/components/ColdBanner";
-import { siteUrl } from "@/lib/site";
+import { MetaPixel } from "@/components/MetaPixel";
+import { site, siteUrl } from "@/lib/site";
 
 const description =
   "ترافل شوكولاتة قليل السعرات ومحسوبها، بلا سكر مضاف. أربع نكهات، وسعرات كل قطعة مدوّنة على العلبة. التوصيل لكل محافظات العراق.";
@@ -35,6 +36,7 @@ export const metadata: Metadata = {
     images: [{ url: "/hero/og.jpg", width: 1200, height: 630, alt: "ÉLUE chocolate truffle" }],
   },
   twitter: { card: "summary_large_image", images: ["/hero/og.jpg"] },
+  ...(site.metaDomainVerification ? { other: { "facebook-domain-verification": site.metaDomainVerification } } : {}),
 };
 
 export const viewport: Viewport = {
@@ -50,6 +52,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             نسخة التطوير — للتجربة فقط. الطلبات هنا لا تصل إلى الفريق ولا إلى مدن.
           </div>
         )}
+        <MetaPixel />
         <ToastProvider>
           <AuthProvider>
             <StockProvider>

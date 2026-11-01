@@ -8,9 +8,11 @@ import { AdminStock } from "./AdminStock";
 import { AdminDrawer, type AdminView as View } from "./AdminDrawer";
 import { usePullToRefresh } from "./usePullToRefresh";
 import { AdminOrderForm } from "./AdminOrderForm";
-import { AdminModon } from "./AdminModon";
 import { AdminEatix } from "./AdminEatix";
-import { SendOrderToCustomer, SendOrderToLocalCourier } from "./SendOrderToCustomer";
+import { SendOrderToCustomer, SendReviewRequest } from "./SendOrderToCustomer";
+import { AdminDelivery, callDispatch } from "./AdminDelivery";
+import { AdminCouriers } from "./AdminCouriers";
+import { AdminReviews } from "./AdminReviews";
 import { AdminDashboard } from "./AdminDashboard";
 import { OrderRow, baghdadDay, shortTime } from "./AdminOrderRow";
 import { buildCustomers, CustomerDetail, CustomerList, CustomersSummary } from "./AdminCustomers";
@@ -19,7 +21,7 @@ import { DeliveryTracking, OrderItemsList, StatusTrack } from "./OrderBits";
 import { formatPoints, pointsFor } from "@/lib/loyalty";
 import { dataClient, newestFirst, STATUS_LABELS, STATUS_ORDER, type Order, type OrderStatus } from "@/lib/data";
 import { formatIraqiMobile, toLatinDigits } from "@/lib/phone";
-import { formatIQD } from "@/lib/site";
+import { formatIQD, payKeyOf, PAY_KEY_LABELS, payMethodText, type PayKey } from "@/lib/site";
 import { fullAddress } from "@/lib/iraq";
 import { products } from "@/lib/products";
 
@@ -40,7 +42,7 @@ function orderFromUrl(): string | null {
 // Which section the list screen shows (?view=dashboard etc.), so a refresh stays there.
 function viewFromUrl(): View {
   const v = new URLSearchParams(window.location.search).get("view");
-  return v === "dashboard" || v === "customers" || v === "products" ? v : "orders";
+  return v === "dashboard" || v === "customers" || v === "products" || v === "delivery" || v === "reviews" ? v : "orders";
 }
 
 function screenUrl(id: string): string {
@@ -75,6 +77,8 @@ export function AdminView() {
   const [sort, setSort] = useState<Sort>("newest");
   const [query, setQuery] = useState("");
   const [flavor, setFlavor] = useState("");
+  const [pay, setPay] = useState<"" | PayKey | "freeDelivery">("");
+  const [courier, setCourier] = useState(""); // "" = all, "none", "MODON", or a local courier's id
   const [selected, setSelected] = useState<string | null>(null);
   const [view, setView] = useState<View>("orders");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -183,7 +187,8 @@ export function AdminView() {
     return {
       todayOrders: todays.length,
       todayJars: todays.reduce((n, o) => n + o.jars, 0),
-      todayTotal: todays.reduce((n, o) => n + o.total, 0),
+      // Gifts are not sales.
+      todayTotal: todays.reduce((n, o) => n + (payKeyOf(o) === "GIFT" ? 0 : o.total), 0),
       counts,
     };
   }, [orders, today]);
@@ -196,6 +201,11 @@ export function AdminView() {
     const list = (orders ?? []).filter((o) => {
       if (filter !== "ALL" && o.status !== filter) return false;
       if (flavor && !o.items.some((i) => i?.slug === flavor)) return false;
+      if (pay === "freeDelivery" ? !o.freeDelivery || o.deliveryPaid : pay && payKeyOf(o) !== pay) return false;
+      if (courier) {
+        const mine = o.modonQr || o.courierKind === "MODON" ? "MODON" : o.courierKind === "LOCAL" && o.courierId ? o.courierId : "none";
+        if (courier === "LOCAL" ? !(o.courierKind === "LOCAL" && o.courierId) : mine !== courier) return false;
+      }
       if (!q) return true;
       return (
         o.orderNumber.toLowerCase().includes(q) ||
@@ -203,13 +213,45 @@ export function AdminView() {
         // Modon's order number (on the sticker) and its internal id.
         (o.modonQr ?? "").toLowerCase().includes(q) ||
         (o.modonId ?? "").toLowerCase().includes(q) ||
+        // The payment's transaction number, and the courier's name.
+        (o.payRef ?? "").toLowerCase().includes(q) ||
+        (o.courierName ?? "").toLowerCase().includes(q) ||
         o.name.toLowerCase().includes(q) ||
         fullAddress(o).toLowerCase().includes(q) ||
         (qDigits.length >= 3 && o.phone.includes(qDigits))
       );
     });
     return sort === "newest" ? list : [...list].reverse();
-  }, [orders, filter, query, sort, flavor]);
+  }, [orders, filter, query, sort, flavor, pay, courier]);
+
+  // Orders for the label PDF: the local-courier orders shown, minus cancelled ones.
+  const labelOrders = useMemo(
+    () => shown.filter((o) => o.courierKind === "LOCAL" && o.courierId && o.status !== "CANCELLED"),
+    [shown],
+  );
+  const [labelBusy, setLabelBusy] = useState(false);
+  async function downloadLabels() {
+    setLabelBusy(true);
+    try {
+      const { buildLabelsPdf, labelsFilename } = await import("@/lib/label");
+      const { downloadBlob } = await import("@/lib/receipt");
+      // Oldest first, so the sheet follows the order they came in.
+      const list = [...labelOrders].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+      downloadBlob(await buildLabelsPdf(list), labelsFilename(list));
+    } catch (err) {
+      console.error("labels failed", err);
+      toast({ id: "admin", tone: "attention", message: "تعذّر تجهيز الملصقات. حاول مرة ثانية." });
+    } finally {
+      setLabelBusy(false);
+    }
+  }
+
+  // Local couriers that have orders, for the delivery filter.
+  const courierOptions = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const o of orders ?? []) if (o.courierKind === "LOCAL" && o.courierId) seen.set(o.courierId, o.courierName ?? "—");
+    return [...seen.entries()];
+  }, [orders]);
 
   // ---- Access -------------------------------------------------------------
 
@@ -313,7 +355,19 @@ export function AdminView() {
           )}
         </div>
         {order ? (
-          <OrderDetail key={order.id} order={order} today={today} me={auth.phone} onOpenCustomer={() => openOrder(`c:${order.phone}`)} />
+          <OrderDetail
+            key={order.id}
+            order={order}
+            today={today}
+            me={auth.phone}
+            onOpenCustomer={() => openOrder(`c:${order.phone}`)}
+            onOpenCouriers={() => {
+              window.history.pushState(null, "", "/admin?view=delivery");
+              setView("delivery");
+              setSelected(null);
+              window.scrollTo({ top: 0 });
+            }}
+          />
         ) : orders === null ? (
           <p className="panel-loading">جارٍ تحميل الطلب…</p>
         ) : (
@@ -374,6 +428,28 @@ export function AdminView() {
         {pullEl}
         {listHead("المنتجات", "حالة التوفر لكل نكهة")}
         <AdminStock />
+        {drawer}
+      </div>
+    );
+  }
+
+  if (view === "delivery") {
+    return (
+      <div className="admin-screen">
+        {pullEl}
+        {listHead("شركات التوصيل", "الشركات المحلية وقناة تيليغرام لكل واحدة")}
+        <AdminCouriers />
+        {drawer}
+      </div>
+    );
+  }
+
+  if (view === "reviews") {
+    return (
+      <div className="admin-screen">
+        {pullEl}
+        {listHead("التقييمات", "تقييم الطعم والتوصيل من الزبائن")}
+        <AdminReviews onOpenOrder={openOrder} />
         {drawer}
       </div>
     );
@@ -448,7 +524,7 @@ export function AdminView() {
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="ابحث برقم الطلب أو الاسم أو الهاتف أو رقم الكاشير أو رقم مدن"
+          placeholder="ابحث برقم الطلب أو الاسم أو الهاتف أو رقم الكاشير أو مدن أو رقم العملية"
           aria-label="بحث"
         />
         <div className="admin-tools__row">
@@ -469,11 +545,36 @@ export function AdminView() {
                 </option>
               ))}
             </select>
+            <select className="admin-sort" value={pay} onChange={(e) => setPay(e.target.value as typeof pay)} aria-label="طريقة الدفع">
+              <option value="">كل طرق الدفع</option>
+              {(["cod", "QI", "ZAINCASH", "OTHER", "GIFT", "unknown"] as PayKey[]).map((k) => (
+                <option key={k} value={k}>
+                  {PAY_KEY_LABELS[k]}
+                </option>
+              ))}
+              <option value="freeDelivery">توصيل مجاني (هدية)</option>
+            </select>
+            <select className="admin-sort" value={courier} onChange={(e) => setCourier(e.target.value)} aria-label="شركة التوصيل">
+              <option value="">كل شركات التوصيل</option>
+              <option value="MODON">مدن Express</option>
+              {courierOptions.length > 0 && <option value="LOCAL">كل التوصيل المحلي</option>}
+              {courierOptions.map(([id, name]) => (
+                <option key={id} value={id}>
+                  {name}
+                </option>
+              ))}
+              <option value="none">بلا شركة توصيل</option>
+            </select>
             <select className="admin-sort" value={sort} onChange={(e) => setSort(e.target.value as Sort)} aria-label="الترتيب">
               <option value="newest">الأحدث أولًا</option>
               <option value="oldest">الأقدم أولًا</option>
             </select>
           </div>
+          {labelOrders.length > 0 && (
+            <button type="button" className="btn btn--ghost admin-labels" disabled={labelBusy} onClick={() => void downloadLabels()}>
+              {labelBusy ? "جارٍ تجهيز الملصقات…" : `تحميل ملصقات التوصيل المحلي (${labelOrders.length}) PDF`}
+            </button>
+          )}
         </div>
       </div>
 
@@ -503,7 +604,19 @@ export function AdminView() {
   );
 }
 
-function OrderDetail({ order: o, today, me, onOpenCustomer }: { order: Order; today: string; me: string; onOpenCustomer: () => void }) {
+function OrderDetail({
+  order: o,
+  today,
+  me,
+  onOpenCustomer,
+  onOpenCouriers,
+}: {
+  order: Order;
+  today: string;
+  me: string;
+  onOpenCustomer: () => void;
+  onOpenCouriers: () => void;
+}) {
   const toast = useToast();
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -549,6 +662,15 @@ function OrderDetail({ order: o, today, me, onOpenCustomer }: { order: Order; to
       toast({ id: "admin", tone: "attention", message: `تعذّر حفظ حالة الطلب ${o.orderNumber}. حاول مجددًا.` });
     } else {
       toast({ id: "admin", message: `${o.orderNumber}: ${STATUS_LABELS[status]}` });
+      // A cancelled order that was already sent to a local courier: tell them not to deliver it.
+      if (status === "CANCELLED" && o.courierKind === "LOCAL" && o.courierStatus === "SENT") {
+        const { error } = await callDispatch({ action: "cancel_notice", orderId: o.id });
+        toast({
+          id: "dispatch",
+          tone: error ? "attention" : undefined,
+          message: error ? "لم نستطع إبلاغ شركة التوصيل بالإلغاء: أبلغهم يدوياً." : `أُبلغت ${o.courierName} بإلغاء الطلب.`,
+        });
+      }
     }
   }
 
@@ -621,6 +743,7 @@ function OrderDetail({ order: o, today, me, onOpenCustomer }: { order: Order; to
           </svg>
         </button>
         <SendOrderToCustomer order={o} />
+        <SendReviewRequest order={o} />
         <div className="order-detail__contact order-detail__contact--3">
           <a className="btn btn--quiet btn--small" href={`https://wa.me/${o.phone}`} target="_blank" rel="noopener noreferrer">
             واتساب
@@ -647,14 +770,30 @@ function OrderDetail({ order: o, today, me, onOpenCustomer }: { order: Order; to
           <span>المجموع · {jarsLabel(o.jars)}</span>
           <strong>{formatIQD(o.total)}</strong>
         </p>
-        {o.paid && (
-          <p className="order-detail__paid">مدفوع مسبقاً{o.paidNote ? ` · ${o.paidNote}` : ""}</p>
-        )}
-        {o.deliveryPaid ? (
-          <p className="order-detail__paid">أجور التوصيل مدفوعة مسبقاً من العميل</p>
-        ) : (
-          o.freeDelivery && <p className="order-detail__paid">توصيل مجاني هدية (نتحمّل أجور التوصيل)</p>
-        )}
+        <div className="order-detail__pay">
+          <p className="order-detail__paid">
+            {payKeyOf(o) === "GIFT" ? "هدية من ÉLUE: العلب مجاناً" : o.paid ? "ثمن العلب مدفوع مسبقاً" : "ثمن العلب نقداً عند الاستلام"}
+          </p>
+          {o.deliveryPaid ? (
+            <p className="order-detail__paid">أجور التوصيل مدفوعة مسبقاً من العميل</p>
+          ) : (
+            o.freeDelivery && <p className="order-detail__paid">توصيل مجاني هدية (نتحمّل أجور التوصيل)</p>
+          )}
+          {(o.paid || o.deliveryPaid) && payKeyOf(o) !== "GIFT" && payKeyOf(o) !== "unknown" && (
+            <p>
+              طريقة الدفع: <strong>{payMethodText(o)}</strong>
+              {o.payRef && (
+                <>
+                  {" · رقم العملية: "}
+                  <strong dir="ltr">{o.payRef}</strong>
+                </>
+              )}
+            </p>
+          )}
+          {payKeyOf(o) === "unknown" && (
+            <p className="panel-note">لم تُسجَّل طريقة الدفع ولا رقم العملية. افتح «تعديل الطلب» واملأها.</p>
+          )}
+        </div>
         {o.status !== "CANCELLED" && (
           <p className="order-detail__points">
             {o.status === "DELIVERED"
@@ -670,9 +809,7 @@ function OrderDetail({ order: o, today, me, onOpenCustomer }: { order: Order; to
         )}
       </section>
 
-      <AdminModon order={o} />
-
-      <SendOrderToLocalCourier order={o} />
+      <AdminDelivery order={o} onOpenCouriers={onOpenCouriers} />
 
       <AdminEatix order={o} />
 

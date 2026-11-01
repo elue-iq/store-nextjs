@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Logo } from "./Logo";
 import { site } from "@/lib/site";
 
@@ -11,6 +12,9 @@ export function Footer() {
             <a href={site.instagramUrl} target="_blank" rel="noopener noreferrer">
               إنستغرام <span dir="ltr">{site.instagramHandle}</span>
             </a>
+          </li>
+          <li>
+            <Link href="/reviews">تقييمات الزبائن</Link>
           </li>
           <li>
             <a href={`https://wa.me/${site.whatsappNumber}`} target="_blank" rel="noopener noreferrer">

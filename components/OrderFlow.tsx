@@ -1,5 +1,8 @@
 "use client";
 
+import { pixelInitiateCheckout, pixelPurchase } from "@/lib/pixel";
+import { ReviewForm } from "./ReviewForm";
+import { pendingReview } from "@/lib/reviews";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useCart } from "./CartProvider";
@@ -49,20 +52,37 @@ export function OrderFlow() {
   const [saveToAccount, setSaveToAccount] = useState(true);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+  // Inside Baghdad the customer sees the delivery window (6–10 pm, else next day) and must accept it.
+  const [slotOk, setSlotOk] = useState(false);
+  const [slotErr, setSlotErr] = useState(false);
+  const inBaghdad = delivery.province === site.baghdadWindow.province;
 
   // An order still being handled blocks a new one (the server checks this too).
+  // «InitiateCheckout»: once, when the customer reaches the checkout with items.
+  const checkoutTracked = useRef(false);
+  useEffect(() => {
+    if (checkoutTracked.current || !cart.ready || step !== "checkout" || lines.length === 0) return;
+    checkoutTracked.current = true;
+    pixelInitiateCheckout(cart.items, total);
+  }, [cart.ready, cart.items, step, lines.length, total]);
+
   const [openOrder, setOpenOrder] = useState<string | null>(null);
+  // A delivered order waiting for its review: reviewed first, then the customer can order again.
+  const [reviewDue, setReviewDue] = useState<string | null>(null);
   const [placed, setPlaced] = useState<Placed | null>(null);
   const [pdfSaved, setPdfSaved] = useState(false);
   const autoSaveStarted = useRef(false);
   const fields = useRef<DeliveryFieldsHandle>(null);
 
   useEffect(() => {
-    if (!signedIn || teamDevice || !auth.owner) return setOpenOrder(null);
+    if (!signedIn || teamDevice || !auth.owner) {
+      setReviewDue(null);
+      return setOpenOrder(null);
+    }
     let cancelled = false;
     dataClient.models.Order.listOrderByOwner(
       { owner: auth.owner },
-      { limit: 200, selectionSet: ["orderNumber", "status", "createdAt"] },
+      { limit: 200, selectionSet: ["orderNumber", "status", "createdAt", "reviewed"] },
     )
       .then(({ data }) => {
         if (cancelled) return;
@@ -70,6 +90,7 @@ export function OrderFlow() {
           .filter((o) => (OPEN_STATUSES as readonly string[]).includes(o.status))
           .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
         setOpenOrder(open[0]?.orderNumber ?? null);
+        setReviewDue(site.reviewRequiredToReorder ? (pendingReview(data ?? [])?.orderNumber ?? null) : null);
       })
       .catch(() => {});
     return () => {
@@ -159,6 +180,12 @@ export function OrderFlow() {
     }
     const found = checkDelivery(delivery);
     if (Object.keys(found).length) return showErrors(found);
+    if (inBaghdad && !slotOk) {
+      setSlotErr(true);
+      toast({ id: "checkout", tone: "attention", message: "يُرجى الموافقة على موعد التوصيل في بغداد." });
+      document.getElementById("slot-accept")?.scrollIntoView({ block: "center", behavior: "smooth" });
+      return;
+    }
     const info = cleanDelivery(delivery);
 
     setBusy(true);
@@ -178,9 +205,11 @@ export function OrderFlow() {
         note: snapshot.note || undefined,
         source: cart.source || undefined,
         items: JSON.stringify(cart.items),
+        slotAccepted: inBaghdad ? true : undefined,
       });
       if (data?.orderNumber) {
         setPlaced({ ...snapshot, orderNumber: data.orderNumber, createdAt: data.createdAt });
+        pixelPurchase(cart.items, total, data.orderNumber);
         setStep("sent");
         cart.clear();
         toast({ id: "checkout", message: `استلمنا طلبك رقم ${ltr(data.orderNumber)}.` });
@@ -197,6 +226,9 @@ export function OrderFlow() {
           tone: "attention",
           message: "نفدت كمية بعض النكهات في سلتك قبل قليل. أزلها من السلة ثم أكّد الطلب.",
         });
+      } else if (code === "review_required") {
+        setReviewDue(errorDetail(gqlErrors) || "—");
+        window.scrollTo({ top: 0 });
       } else if (code === "open_order") {
         setOpenOrder(errorDetail(gqlErrors) || "—");
         window.scrollTo({ top: 0 });
@@ -289,6 +321,21 @@ export function OrderFlow() {
     );
   }
 
+  // A delivered order must be reviewed first (a short, playful form), then ordering opens again.
+  if (reviewDue && signedIn && !teamDevice && step === "checkout") {
+    return (
+      <ReviewForm
+        orderNumber={reviewDue}
+        intro="قبل ما تطلب مرة ثانية، شاركنا رأيك بطلبك الأخير. دقيقة وحدة، وبعدها سلتك جاهزة."
+        onDone={() => {
+          setReviewDue(null);
+          toast({ id: "checkout", message: "شكراً على تقييمك 🤎 تقدر تكمّل طلبك الآن." });
+          window.scrollTo({ top: 0 });
+        }}
+      />
+    );
+  }
+
   const fallbackHref = placed
     ? `https://wa.me/${site.whatsappNumber}?text=${encodeURIComponent(
         buildWhatsAppText(
@@ -337,7 +384,9 @@ export function OrderFlow() {
         <p className="order-pay">{site.paymentNote}</p>
         <p className="order-pay">{site.courierNote}</p>
         <p className="order-pay">التوصيل لكل محافظات العراق.</p>
-        <p className="order-pay">اطلبوا قبل الساعة {site.deliveryCutoff} ويصلكم غداً.</p>
+        <p className="order-pay">
+          اطلبوا قبل الساعة {site.deliveryCutoff} ويصلكم غداً. التوصيل داخل بغداد {site.baghdadWindow.short}.
+        </p>
         <p className="order-pay order-pay--cold">{site.coldNote.text}</p>
       </div>
 
@@ -434,6 +483,26 @@ export function OrderFlow() {
               <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={400} />
             </label>
 
+            {inBaghdad && (
+              <div className={slotErr && !slotOk ? "slot-accept has-error" : "slot-accept"} id="slot-accept">
+                <p>
+                  <strong>موعد التوصيل في بغداد</strong>
+                  {site.baghdadWindow.note}
+                </p>
+                <label className="check">
+                  <input
+                    type="checkbox"
+                    checked={slotOk}
+                    onChange={(e) => {
+                      setSlotOk(e.target.checked);
+                      if (e.target.checked) setSlotErr(false);
+                    }}
+                  />
+                  {site.baghdadWindow.accept}
+                </label>
+                {slotErr && !slotOk && <span className="field-error">يلزم الموافقة على الموعد لإكمال الطلب.</span>}
+              </div>
+            )}
             {openOrder && (
               <div className="field-note open-order" role="alert">
                 <p>

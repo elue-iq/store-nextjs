@@ -7,13 +7,16 @@ import { data } from "./data/resource";
 import { placeOrder } from "./functions/place-order/resource";
 import { modon } from "./functions/modon/resource";
 import { eatix } from "./functions/eatix/resource";
+import { dispatch } from "./functions/dispatch/resource";
+import { submitReview } from "./functions/submit-review/resource";
+import { courierApp } from "./functions/courier-app/resource";
 import { FunctionUrlAuthType } from "aws-cdk-lib/aws-lambda";
 
 import { createAuthChallenge } from "./auth/create-auth-challenge/resource";
 import { verifyAuthChallenge } from "./auth/verify-auth-challenge/resource";
 import { CfnFunction } from "aws-cdk-lib/aws-lambda";
 
-const backend = defineBackend({ auth, data, placeOrder, modon, eatix, createAuthChallenge, verifyAuthChallenge });
+const backend = defineBackend({ auth, data, placeOrder, modon, eatix, dispatch, submitReview, courierApp, createAuthChallenge, verifyAuthChallenge });
 
 // Which copy this is: "amplify" = the live site; anything else (dev) is a test
 // copy that never sends real Modon orders or Telegram messages.
@@ -21,6 +24,7 @@ const stage = process.env.AWS_BRANCH ?? "sandbox";
 backend.placeOrder.addEnvironment("STAGE", stage);
 backend.modon.addEnvironment("STAGE", stage);
 backend.eatix.addEnvironment("STAGE", stage);
+backend.dispatch.addEnvironment("STAGE", stage);
 
 // Login settings for the website's Cognito app client:
 // - only the WhatsApp-code sign-in (custom auth) plus token refresh
@@ -40,6 +44,12 @@ const userPool = backend.auth.resources.userPool;
 backend.placeOrder.addEnvironment("USER_POOL_ID", userPool.userPoolId);
 backend.placeOrder.resources.lambda.addToRolePolicy(
   new PolicyStatement({ actions: ["cognito-idp:AdminGetUser", "cognito-idp:ListUsers", "cognito-idp:AdminCreateUser", "cognito-idp:AdminSetUserPassword"], resources: [userPool.userPoolArn] }),
+);
+
+// courierApp reads the courier's WhatsApp number from the login record.
+backend.courierApp.addEnvironment("USER_POOL_ID", userPool.userPoolId);
+backend.courierApp.resources.lambda.addToRolePolicy(
+  new PolicyStatement({ actions: ["cognito-idp:AdminGetUser"], resources: [userPool.userPoolArn] }),
 );
 
 // Sequential order numbers (EL-0001, EL-0002, ...): one counter row, increased
@@ -75,6 +85,9 @@ const ceilings: [typeof backend.placeOrder, number][] = [
   [backend.placeOrder, 10],
   [backend.modon, 5],
   [backend.eatix, 3],
+  [backend.dispatch, 3],
+  [backend.submitReview, 5],
+  [backend.courierApp, 5],
   [backend.createAuthChallenge, 10],
   [backend.verifyAuthChallenge, 10],
 ];
