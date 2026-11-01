@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { requestOrdersRefresh } from "@/lib/ordersRefresh";
 import { useToast } from "./Toast";
 import { dataClient, type Order } from "@/lib/data";
 
@@ -23,6 +24,7 @@ export function AdminEatix({ order: o }: { order: Order }) {
     setBusy(true);
     try {
       const { errors } = await dataClient.mutations.eatix({ action, orderId: o.id });
+      requestOrdersRefresh();
       if (errors?.length) {
         const m = errors[0]?.message ?? "";
         const detail = m.includes(":") ? m.slice(m.indexOf(":") + 1).trim() : "";

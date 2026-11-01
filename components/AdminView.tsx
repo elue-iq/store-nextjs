@@ -7,6 +7,7 @@ import { LoginPanel } from "./LoginPanel";
 import { AdminStock } from "./AdminStock";
 import { AdminDrawer, type AdminView as View } from "./AdminDrawer";
 import { usePullToRefresh } from "./usePullToRefresh";
+import { ORDERS_REFRESH_EVENT } from "@/lib/ordersRefresh";
 import { AdminOrderForm } from "./AdminOrderForm";
 import { AdminEatix } from "./AdminEatix";
 import { SendOrderToCustomer, SendReviewRequest } from "./SendOrderToCustomer";
@@ -174,8 +175,46 @@ export function AdminView() {
     else nav.clearAppBadge?.().catch(() => {});
   }, [newCount]);
 
-  // Pull-to-refresh on the list screens only (detail screens and forms are push screens).
-  const ptr = usePullToRefresh(auth.status === "signedIn" && auth.isAdmin && !selected);
+  // Re-read every order now. Server functions (assign a courier, Modon, Eatix) and the courier
+  // app change orders without the live subscription noticing.
+  const reloadOrders = useCallback(async () => {
+    try {
+      setOrders(await loadAllOrders());
+    } catch (err) {
+      console.error("orders refresh failed", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (auth.status !== "signedIn" || !auth.isAdmin) return;
+    let last = 0;
+    const run = () => {
+      if (Date.now() - last < 1500) return;
+      last = Date.now();
+      void reloadOrders();
+    };
+    const onVisible = () => document.visibilityState === "visible" && run();
+    window.addEventListener(ORDERS_REFRESH_EVENT, run);
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", run);
+    return () => {
+      window.removeEventListener(ORDERS_REFRESH_EVENT, run);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", run);
+    };
+  }, [auth.status, auth.isAdmin, reloadOrders]);
+
+  // Pull-to-refresh: lists reload the app; order and customer screens refresh their data in place;
+  // the new-order form is left alone so a half-filled order is never lost.
+  const isForm = selected === "new" || Boolean(selected?.startsWith("new:"));
+  const ptr = usePullToRefresh(auth.status === "signedIn" && auth.isAdmin && !isForm, selected ? reloadOrders : undefined);
+
+  const pullEl =
+    ptr.pull > 0 || ptr.refreshing ? (
+      <div className="ptr" style={{ transform: `translateY(${ptr.pull}px)` }} aria-hidden="true">
+        <span className={ptr.refreshing ? "ptr__spin is-spinning" : "ptr__spin"} style={{ rotate: `${ptr.pull * 4}deg` }} />
+      </div>
+    ) : null;
 
   const today = baghdadDay(new Date().toISOString());
 
@@ -282,6 +321,7 @@ export function AdminView() {
     const known = forPhone ? customers.find((c) => c.phone === forPhone) : undefined;
     return (
       <div className="admin-screen admin-screen--detail">
+        {pullEl}
         <div className="admin-nav">
           <button type="button" className="admin-nav__back" onClick={backToList}>
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -313,6 +353,7 @@ export function AdminView() {
     const customer = customers.find((c) => c.phone === selected.slice(2));
     return (
       <div className="admin-screen admin-screen--detail">
+        {pullEl}
         <div className="admin-nav">
           <button type="button" className="admin-nav__back" onClick={backToList}>
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -341,6 +382,7 @@ export function AdminView() {
     const order = orders?.find((o) => o.orderNumber === selected || o.id === selected);
     return (
       <div className="admin-screen admin-screen--detail">
+        {pullEl}
         <div className="admin-nav">
           <button type="button" className="admin-nav__back" onClick={backToList}>
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -378,13 +420,6 @@ export function AdminView() {
   }
 
   // ---- List ---------------------------------------------------------------
-
-  const pullEl =
-    ptr.pull > 0 || ptr.refreshing ? (
-      <div className="ptr" style={{ transform: `translateY(${ptr.pull}px)` }} aria-hidden="true">
-        <span className={ptr.refreshing ? "ptr__spin is-spinning" : "ptr__spin"} style={{ rotate: `${ptr.pull * 4}deg` }} />
-      </div>
-    ) : null;
 
   const listHead = (title: string, sub: string) => (
     <div className="panel-head">

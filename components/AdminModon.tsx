@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { requestOrdersRefresh } from "@/lib/ordersRefresh";
 import { useToast } from "./Toast";
 import { dataClient, type Order } from "@/lib/data";
 import { collectBreakdown, MODON_CITY, modonCollect, normalizeArabic, suggestRegion, type ModonRegion } from "@/lib/modon";
@@ -26,6 +27,7 @@ export async function callModon(args: {
 }): Promise<{ data: Record<string, unknown> | null; error: string }> {
   try {
     const { data, errors } = await dataClient.mutations.modon(args);
+    requestOrdersRefresh();
     if (errors?.length) return { data: null, error: modonError(errors, "تعذّر الاتصال بمدن الآن. حاول مجددًا.") };
     const parsed = typeof data === "string" ? JSON.parse(data) : data;
     return { data: (parsed ?? {}) as Record<string, unknown>, error: "" };
