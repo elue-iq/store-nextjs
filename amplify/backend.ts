@@ -8,13 +8,14 @@ import { placeOrder } from "./functions/place-order/resource";
 import { modon } from "./functions/modon/resource";
 import { eatix } from "./functions/eatix/resource";
 import { dispatch } from "./functions/dispatch/resource";
+import { submitReview } from "./functions/submit-review/resource";
 import { FunctionUrlAuthType } from "aws-cdk-lib/aws-lambda";
 
 import { createAuthChallenge } from "./auth/create-auth-challenge/resource";
 import { verifyAuthChallenge } from "./auth/verify-auth-challenge/resource";
 import { CfnFunction } from "aws-cdk-lib/aws-lambda";
 
-const backend = defineBackend({ auth, data, placeOrder, modon, eatix, dispatch, createAuthChallenge, verifyAuthChallenge });
+const backend = defineBackend({ auth, data, placeOrder, modon, eatix, dispatch, submitReview, createAuthChallenge, verifyAuthChallenge });
 
 // Which copy this is: "amplify" = the live site; anything else (dev) is a test
 // copy that never sends real Modon orders or Telegram messages.
@@ -78,6 +79,7 @@ const ceilings: [typeof backend.placeOrder, number][] = [
   [backend.modon, 5],
   [backend.eatix, 3],
   [backend.dispatch, 3],
+  [backend.submitReview, 5],
   [backend.createAuthChallenge, 10],
   [backend.verifyAuthChallenge, 10],
 ];

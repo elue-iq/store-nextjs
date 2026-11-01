@@ -1,6 +1,8 @@
 "use client";
 
 import { pixelInitiateCheckout, pixelPurchase } from "@/lib/pixel";
+import { ReviewForm } from "./ReviewForm";
+import { pendingReview } from "@/lib/reviews";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useCart } from "./CartProvider";
@@ -65,17 +67,22 @@ export function OrderFlow() {
   }, [cart.ready, cart.items, step, lines.length, total]);
 
   const [openOrder, setOpenOrder] = useState<string | null>(null);
+  // A delivered order waiting for its review: reviewed first, then the customer can order again.
+  const [reviewDue, setReviewDue] = useState<string | null>(null);
   const [placed, setPlaced] = useState<Placed | null>(null);
   const [pdfSaved, setPdfSaved] = useState(false);
   const autoSaveStarted = useRef(false);
   const fields = useRef<DeliveryFieldsHandle>(null);
 
   useEffect(() => {
-    if (!signedIn || teamDevice || !auth.owner) return setOpenOrder(null);
+    if (!signedIn || teamDevice || !auth.owner) {
+      setReviewDue(null);
+      return setOpenOrder(null);
+    }
     let cancelled = false;
     dataClient.models.Order.listOrderByOwner(
       { owner: auth.owner },
-      { limit: 200, selectionSet: ["orderNumber", "status", "createdAt"] },
+      { limit: 200, selectionSet: ["orderNumber", "status", "createdAt", "reviewed"] },
     )
       .then(({ data }) => {
         if (cancelled) return;
@@ -83,6 +90,7 @@ export function OrderFlow() {
           .filter((o) => (OPEN_STATUSES as readonly string[]).includes(o.status))
           .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
         setOpenOrder(open[0]?.orderNumber ?? null);
+        setReviewDue(site.reviewRequiredToReorder ? (pendingReview(data ?? [])?.orderNumber ?? null) : null);
       })
       .catch(() => {});
     return () => {
@@ -218,6 +226,9 @@ export function OrderFlow() {
           tone: "attention",
           message: "نفدت كمية بعض النكهات في سلتك قبل قليل. أزلها من السلة ثم أكّد الطلب.",
         });
+      } else if (code === "review_required") {
+        setReviewDue(errorDetail(gqlErrors) || "—");
+        window.scrollTo({ top: 0 });
       } else if (code === "open_order") {
         setOpenOrder(errorDetail(gqlErrors) || "—");
         window.scrollTo({ top: 0 });
@@ -307,6 +318,21 @@ export function OrderFlow() {
           تصفّح النكهات
         </Link>
       </div>
+    );
+  }
+
+  // A delivered order must be reviewed first (a short, playful form), then ordering opens again.
+  if (reviewDue && signedIn && !teamDevice && step === "checkout") {
+    return (
+      <ReviewForm
+        orderNumber={reviewDue}
+        intro="قبل ما تطلب مرة ثانية، شاركنا رأيك بطلبك الأخير. دقيقة وحدة، وبعدها سلتك جاهزة."
+        onDone={() => {
+          setReviewDue(null);
+          toast({ id: "checkout", message: "شكراً على تقييمك 🤎 تقدر تكمّل طلبك الآن." });
+          window.scrollTo({ top: 0 });
+        }}
+      />
     );
   }
 

@@ -36,6 +36,11 @@ export function OrderRow({ order: o, today, onOpen }: { order: Order; today: str
             o.freeDelivery && <span className="order-row__paid order-row__free">توصيل مجاني</span>
           )}
           {pay === "unknown" && <span className="order-row__paid order-row__warn">بلا طريقة دفع</span>}
+          {o.status === "DELIVERED" && (
+            <span className={o.reviewed ? "order-row__paid order-row__free" : "order-row__paid"}>
+              {o.reviewed ? "★ مُقيَّم" : "بانتظار التقييم"}
+            </span>
+          )}
           {o.courierKind === "LOCAL" && o.courierName && (
             <span className="order-row__paid order-row__free">{o.courierName}</span>
           )}

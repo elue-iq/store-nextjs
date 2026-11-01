@@ -90,3 +90,12 @@ export function shareOrderUrl(o: OrderInfo): string {
 export function shareAccountUrl(o: Who): string {
   return chatUrl(o.phone, orderMessage({ name: o.name, phone: o.phone, orderNumber: o.orderNumber }, `${origin()}/account`));
 }
+
+// Asks a customer for their review after delivery (the team sends it on WhatsApp).
+export function reviewRequestMessage(o: { name: string; orderNumber: string }, origin: string): string {
+  return [
+    `مرحباً ${o.name.trim().split(/\s+/)[0]}، وصلك طلبك ${o.orderNumber} من ÉLUE؟ 🤎`,
+    "قيّم التوصيل والطعم بدقيقة وحدة. ننشر كل التقييمات كما هي، 100% شفافية:",
+    `${origin}/review?order=${encodeURIComponent(o.orderNumber)}`,
+  ].join("\n");
+}

@@ -15,6 +15,7 @@ import { formatIraqiMobile } from "@/lib/phone";
 import { collectStatement, deliveryPayOf, formatIQD, site } from "@/lib/site";
 import { getProduct } from "@/lib/products";
 import { fullAddress } from "@/lib/iraq";
+import { reviewPath } from "@/lib/reviews";
 import { formatPoints, pointsFor, pointsSummary } from "@/lib/loyalty";
 import { checkDelivery, type DeliveryInfo, type FieldErrors } from "@/lib/validate";
 import { EMPTY_DELIVERY, loadProfile, saveProfile, type Profile } from "@/lib/profile";
@@ -40,6 +41,8 @@ const CUSTOMER_FIELDS = [
   "paid",
   "freeDelivery",
   "deliveryPaid",
+  // Reviewed by the customer already?
+  "reviewed",
   // Delivery tracking (from the courier's updates).
   "trackStatus",
   "trackEta",
@@ -298,6 +301,7 @@ function MyOrders({
             <span className="order-row__side">
               <strong>{formatIQD(o.total)}</strong>
               <span dir="ltr">{baghdadTime(o.createdAt).slice(0, 10)}</span>
+              {o.status === "DELIVERED" && !o.reviewed && <em className="order-row__review">قيّم طلبك</em>}
             </span>
             <svg className="order-row__chevron" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M15 5l-7 7 7 7" />
@@ -388,6 +392,24 @@ function MyOrderDetail({ order: o }: { order: Order }) {
         <p>{fullAddress(o)}</p>
         {o.note && <p className="order-card__note">ملاحظة: {o.note}</p>}
       </section>
+
+      {o.status === "DELIVERED" && (
+        <section className="order-detail__block order-detail__review">
+          {o.reviewed ? (
+            <p>
+              🤎 شكراً، قيّمت هذا الطلب. <Link href="/reviews">شوف تقييمات الزبائن</Link>
+            </p>
+          ) : (
+            <>
+              <h2>شلون كان طلبك؟</h2>
+              <p className="order-detail__muted">قيّم التوصيل والطعم بدقيقة، وننشر تقييمك كما هو.</p>
+              <Link className="btn btn--full" href={reviewPath(o.orderNumber)}>
+                قيّم طلبك
+              </Link>
+            </>
+          )}
+        </section>
+      )}
 
       <div className="order-detail__actions">
         <button type="button" className="btn btn--full" onClick={reorder}>

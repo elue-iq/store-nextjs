@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useToast } from "./Toast";
 import type { Order } from "@/lib/data";
-import { chatUrl, orderMessage } from "@/lib/share";
+import { chatUrl, orderMessage, reviewRequestMessage } from "@/lib/share";
 
 type Mode = "share" | "chat";
 
@@ -111,5 +111,23 @@ export function SendOrderToCustomer({ order: o }: { order: Order }) {
       shareHint="اختر واتساب ثم محادثة العميل: تُرسل صورة الملخص ومعها النص."
       chatHint="تُفتح محادثة العميل والنص جاهز، وتُنسخ صورة الملخص: الصقها في المحادثة."
     />
+  );
+}
+
+// After delivery: asks the customer for their review (a link to /review, with the transparency promise).
+export function SendReviewRequest({ order: o }: { order: Order }) {
+  if (o.status !== "DELIVERED" || o.reviewed) return null;
+  return (
+    <div className="send-order">
+      <a
+        className="btn btn--quiet btn--full"
+        href={chatUrl(o.phone, reviewRequestMessage(o, window.location.origin))}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        اطلب من العميل تقييم الطلب (واتساب)
+      </a>
+      <small>تُفتح محادثة العميل ومعها رابط التقييم. بعد التقييم يقدر يطلب مرة ثانية.</small>
+    </div>
   );
 }

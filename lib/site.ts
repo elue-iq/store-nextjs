@@ -14,6 +14,9 @@ export const site = {
   courierNote: "يرجى تسليم بوكس الفلين الى مندوب التوصيل، والتأكد من الطلب",
   // The note written on the order sent to Modon (merchant_notes) and on local courier labels.
   returnBoxNote: "راجع الفلين، يلزم ارجاعها",
+  // A customer must review their latest delivered order before ordering again
+  // (a short, playful form). Set to false to make reviews optional.
+  reviewRequiredToReorder: true,
   // Meta Pixel (dataset) ID: the number from Events Manager. Leave empty to keep the pixel off.
   metaPixelId: "",
   // The meta tag content from Business Settings > Brand safety > Domains (domain verification). Empty = no tag.

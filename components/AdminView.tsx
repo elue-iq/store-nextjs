@@ -9,9 +9,10 @@ import { AdminDrawer, type AdminView as View } from "./AdminDrawer";
 import { usePullToRefresh } from "./usePullToRefresh";
 import { AdminOrderForm } from "./AdminOrderForm";
 import { AdminEatix } from "./AdminEatix";
-import { SendOrderToCustomer } from "./SendOrderToCustomer";
+import { SendOrderToCustomer, SendReviewRequest } from "./SendOrderToCustomer";
 import { AdminDelivery, callDispatch } from "./AdminDelivery";
 import { AdminCouriers } from "./AdminCouriers";
+import { AdminReviews } from "./AdminReviews";
 import { AdminDashboard } from "./AdminDashboard";
 import { OrderRow, baghdadDay, shortTime } from "./AdminOrderRow";
 import { buildCustomers, CustomerDetail, CustomerList, CustomersSummary } from "./AdminCustomers";
@@ -41,7 +42,7 @@ function orderFromUrl(): string | null {
 // Which section the list screen shows (?view=dashboard etc.), so a refresh stays there.
 function viewFromUrl(): View {
   const v = new URLSearchParams(window.location.search).get("view");
-  return v === "dashboard" || v === "customers" || v === "products" || v === "delivery" ? v : "orders";
+  return v === "dashboard" || v === "customers" || v === "products" || v === "delivery" || v === "reviews" ? v : "orders";
 }
 
 function screenUrl(id: string): string {
@@ -443,6 +444,17 @@ export function AdminView() {
     );
   }
 
+  if (view === "reviews") {
+    return (
+      <div className="admin-screen">
+        {pullEl}
+        {listHead("التقييمات", "تقييم الطعم والتوصيل من الزبائن")}
+        <AdminReviews onOpenOrder={openOrder} />
+        {drawer}
+      </div>
+    );
+  }
+
   if (view === "dashboard") {
     return (
       <div className="admin-screen">
@@ -731,6 +743,7 @@ function OrderDetail({
           </svg>
         </button>
         <SendOrderToCustomer order={o} />
+        <SendReviewRequest order={o} />
         <div className="order-detail__contact order-detail__contact--3">
           <a className="btn btn--quiet btn--small" href={`https://wa.me/${o.phone}`} target="_blank" rel="noopener noreferrer">
             واتساب
