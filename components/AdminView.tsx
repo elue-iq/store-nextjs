@@ -200,6 +200,9 @@ export function AdminView() {
       return (
         o.orderNumber.toLowerCase().includes(q) ||
         (o.cashierOrderId ?? "").toLowerCase().includes(q) ||
+        // Modon's order number (on the sticker) and its internal id.
+        (o.modonQr ?? "").toLowerCase().includes(q) ||
+        (o.modonId ?? "").toLowerCase().includes(q) ||
         o.name.toLowerCase().includes(q) ||
         fullAddress(o).toLowerCase().includes(q) ||
         (qDigits.length >= 3 && o.phone.includes(qDigits))
@@ -445,7 +448,7 @@ export function AdminView() {
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="ابحث بالرقم أو الاسم أو الهاتف أو رقم الكاشير"
+          placeholder="ابحث برقم الطلب أو الاسم أو الهاتف أو رقم الكاشير أو رقم مدن"
           aria-label="بحث"
         />
         <div className="admin-tools__row">
