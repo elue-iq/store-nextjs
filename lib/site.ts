@@ -13,8 +13,10 @@ export const site = {
   // Printed on every courier label (note), sent to Telegram, and shown to the customer.
   courierNote: "يرجى تسليم بوكس الفلين الى مندوب التوصيل، والتأكد من الطلب",
   // Local delivery team, sent orders from the admin order screen on WhatsApp.
-  // whatsapp: international digits (07XXXXXXXXX -> 9647XXXXXXXXX). Empty: WhatsApp
-  // asks which chat or group to send to.
+  // They work in a WhatsApp group, so whatsapp stays empty: WhatsApp then asks which
+  // chat to send to and the team picks the group. (A website can't open a group with
+  // a ready message, and the group's invite link must not be put in the site code.)
+  // A phone number here (07XXXXXXXXX -> 9647XXXXXXXXX) would open that chat directly.
   localCourier: { name: "تيم الفهود", whatsapp: "" },
   // Orders placed before this hour are delivered the next day (shown to customers).
   deliveryCutoff: "8 مساءً",

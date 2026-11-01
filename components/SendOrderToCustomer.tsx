@@ -134,11 +134,11 @@ export function SendOrderToLocalCourier({ order: o }: { order: Order }) {
         text={courierMessage(o)}
         label={`إرسال الطلب إلى ${team.name}`}
         primary={false}
-        shareHint={`اختر واتساب ثم محادثة ${team.name}: تُرسل صورة الملخص ومعها تفاصيل التوصيل.`}
+        shareHint={`اختر واتساب ثم مجموعة «${team.name}»: تُرسل صورة الملخص ومعها تفاصيل التوصيل.`}
         chatHint={
           team.whatsapp
             ? `تُفتح محادثة ${team.name} والتفاصيل جاهزة، وتُنسخ صورة الملخص: الصقها في المحادثة.`
-            : `يفتح واتساب والتفاصيل جاهزة: اختر محادثة ${team.name} أو مجموعتهم، ثم الصق صورة الملخص.`
+            : `يفتح واتساب والتفاصيل جاهزة: اختر مجموعة «${team.name}»، ثم الصق صورة الملخص في المجموعة.`
         }
       />
     </section>
