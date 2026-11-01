@@ -32,7 +32,7 @@ const TEST_KEY = "elue-pixeltest";
 
 export function pixelEnabled(): boolean {
   if (typeof window === "undefined" || !site.metaPixelId) return false;
-  if (window.location.pathname.startsWith("/admin")) return false;
+  if (window.location.pathname.startsWith("/admin") || window.location.pathname.startsWith("/courier")) return false;
   if (process.env.NEXT_PUBLIC_STAGE === "amplify") return true;
   try {
     return sessionStorage.getItem(TEST_KEY) === "1";

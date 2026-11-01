@@ -12,6 +12,7 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { ColdBanner } from "@/components/ColdBanner";
 import { MetaPixel } from "@/components/MetaPixel";
+import { ChromeGate } from "@/components/ChromeGate";
 import { site, siteUrl } from "@/lib/site";
 
 const description =
@@ -58,9 +59,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <StockProvider>
               <CartProvider>
                 <Header />
-                <ColdBanner />
+                <ChromeGate>
+                  <ColdBanner />
+                </ChromeGate>
                 <main>{children}</main>
-                <Footer />
+                <ChromeGate>
+                  <Footer />
+                </ChromeGate>
               </CartProvider>
             </StockProvider>
           </AuthProvider>
