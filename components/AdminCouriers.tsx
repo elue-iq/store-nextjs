@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 import { useToast } from "./Toast";
 import { callDispatch } from "./AdminDelivery";
-import { dataClient, type Courier } from "@/lib/data";
-import { chatIdError } from "@/lib/dispatch";
+import { dataClient, type Courier, type Order } from "@/lib/data";
+import { chatIdError, collectAmount } from "@/lib/dispatch";
+import { formatIQD } from "@/lib/site";
 import { formatIraqiMobile, normalizeIraqiMobile } from "@/lib/phone";
 import { chatUrl } from "@/lib/share";
 
@@ -14,7 +15,7 @@ const EMPTY: Draft = { id: "", name: "", chatId: "", phone: "", note: "" };
 // «شركات التوصيل» in /admin: the local couriers / delivery companies. Each has its own
 // Telegram chat (a channel or group the ÉLUE bot is a member of). An order given to a
 // courier is sent to its chat by the bot, and delivery problem reports go there too.
-export function AdminCouriers() {
+export function AdminCouriers({ orders, onOpenOrder }: { orders: Order[] | null; onOpenOrder: (orderNumber: string) => void }) {
   const toast = useToast();
   const [list, setList] = useState<Courier[] | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -194,6 +195,7 @@ export function AdminCouriers() {
               <span dir="ltr">{c.telegramChatId}</span>
               {c.phone && <small dir="ltr">{formatIraqiMobile(c.phone)} · يدخل تطبيق المندوب</small>}
               {c.note && <small>{c.note}</small>}
+              <CourierAccount courier={c} orders={orders} onOpenOrder={onOpenOrder} />
             </div>
             <div className="couriers__actions">
               <button
@@ -236,6 +238,40 @@ export function AdminCouriers() {
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+// What a courier holds: orders still with him (cash he will collect) and delivered ones (cash he owes ÉLUE).
+function CourierAccount({ courier, orders, onOpenOrder }: { courier: Courier; orders: Order[] | null; onOpenOrder: (n: string) => void }) {
+  const mine = (orders ?? []).filter((o) => o.courierKind === "LOCAL" && o.courierId === courier.id && o.status !== "CANCELLED");
+  if (orders === null) return null;
+  if (mine.length === 0) return <small>لا طلبات مسندة له بعد.</small>;
+  const withHim = mine.filter((o) => o.status !== "DELIVERED");
+  const done = mine.filter((o) => o.status === "DELIVERED");
+  const sum = (list: Order[]) => list.reduce((n, o) => n + collectAmount(o), 0);
+  const row = (o: Order) => (
+    <li key={o.id}>
+      <button type="button" className="link-button" onClick={() => onOpenOrder(o.orderNumber)}>
+        <span dir="ltr">{o.orderNumber}</span> · {o.name}
+      </button>
+      <span>
+        {formatIQD(collectAmount(o))} · {o.status === "DELIVERED" ? "مسلَّم" : o.status === "OUT_FOR_DELIVERY" ? "في الطريق" : "بانتظار التوصيل"}
+      </span>
+    </li>
+  );
+  return (
+    <div className="courier-account">
+      <p>
+        <strong>عنده:</strong> {withHim.length} طلب · يجمع {formatIQD(sum(withHim))}
+      </p>
+      <p>
+        <strong>مسلَّم:</strong> {done.length} طلب · عليه لـ ÉLUE {formatIQD(sum(done))}
+      </p>
+      <details>
+        <summary>كل الطلبات ({mine.length})</summary>
+        <ul>{[...mine].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map(row)}</ul>
+      </details>
     </div>
   );
 }

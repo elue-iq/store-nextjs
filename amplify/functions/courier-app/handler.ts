@@ -90,7 +90,8 @@ export const handler: Schema["courierApp"]["functionHandler"] = async (event) =>
     const shown = orders
       .filter((o) => o.courierKind === "LOCAL" && o.status !== "CANCELLED" && (o.status !== "DELIVERED" || o.updatedAt > since))
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-    return JSON.stringify({ courier: courier.name, orders: shown.map(view) });
+    console.log(`courierApp mine: ${courier.name} (${phone}) has ${orders.length} assigned, showing ${shown.length}`);
+    return JSON.stringify({ courier: courier.name, phone, orders: shown.map(view) });
   }
 
   if (!orderNumber) throw new Error("missing_order");

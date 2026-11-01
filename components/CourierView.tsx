@@ -69,6 +69,7 @@ export function CourierView() {
   const auth = useAuth();
   const toast = useToast();
   const [name, setName] = useState("");
+  const [loginPhone, setLoginPhone] = useState("");
   const [orders, setOrders] = useState<CourierOrder[] | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -81,6 +82,7 @@ export function CourierView() {
     if (!res.ok) return setError(ERROR_TEXT[res.code] ?? "تعذّر تحميل الطلبات. حدّث الصفحة.");
     setError("");
     setName(res.courier ?? "");
+    setLoginPhone(res.phone ?? "");
     setOrders(res.orders ?? []);
   }, []);
 
@@ -144,6 +146,7 @@ export function CourierView() {
     <div className="courier">
       <header className="courier__head">
         <h1>{name}</h1>
+        {loginPhone && <small dir="ltr">{formatIraqiMobile(loginPhone)}</small>}
         <p>
           {open.length ? `${open.length} طلب بانتظار التوصيل` : "لا طلبات بانتظار التوصيل"}{" "}
           <button type="button" className="link-button" onClick={() => void load()}>

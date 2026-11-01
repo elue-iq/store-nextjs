@@ -473,7 +473,7 @@ export function AdminView() {
       <div className="admin-screen">
         {pullEl}
         {listHead("شركات التوصيل", "الشركات المحلية وقناة تيليغرام لكل واحدة")}
-        <AdminCouriers />
+        <AdminCouriers orders={orders} onOpenOrder={(n) => openOrder(n)} />
         {drawer}
       </div>
     );
