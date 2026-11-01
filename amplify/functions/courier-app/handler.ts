@@ -90,7 +90,8 @@ export const handler: Schema["courierApp"]["functionHandler"] = async (event) =>
     const shown = orders
       .filter((o) => o.courierKind === "LOCAL" && o.status !== "CANCELLED" && (o.status !== "DELIVERED" || o.updatedAt > since))
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-    return JSON.stringify({ courier: courier.name, orders: shown.map(view) });
+    console.log(`courierApp mine: ${courier.name} (${phone}) has ${orders.length} assigned, showing ${shown.length}`);
+    return { courier: courier.name, phone, orders: shown.map(view) };
   }
 
   if (!orderNumber) throw new Error("missing_order");
@@ -98,13 +99,13 @@ export const handler: Schema["courierApp"]["functionHandler"] = async (event) =>
   if (!o) throw new Error("not_found");
   if (o.courierKind !== "LOCAL" || o.courierId !== courier.id) throw new Error("not_yours");
 
-  if (action === "get") return JSON.stringify({ order: view(o) });
+  if (action === "get") return { order: view(o) };
 
   if (action === "status") {
     if (status !== "OUT_FOR_DELIVERY" && status !== "DELIVERED") throw new Error("bad_status");
     if (o.status === "CANCELLED") throw new Error("cancelled");
     if (o.status === "DELIVERED") throw new Error("already_delivered");
-    if (status === o.status) return JSON.stringify({ order: view(o) });
+    if (status === o.status) return { order: view(o) };
     const { data, errors } = await client.models.Order.update({
       id: o.id,
       status,
@@ -116,7 +117,7 @@ export const handler: Schema["courierApp"]["functionHandler"] = async (event) =>
       console.error("courier status failed", JSON.stringify(errors));
       throw new Error("save_failed");
     }
-    return JSON.stringify({ order: view(data) });
+    return { order: view(data) };
   }
 
   throw new Error("bad_action");

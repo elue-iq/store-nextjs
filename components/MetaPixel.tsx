@@ -8,6 +8,7 @@ import { rememberPixelTest, startPixel, trackPixel } from "@/lib/pixel";
 export function MetaPixel() {
   const pathname = usePathname();
   useEffect(() => {
+    if (pathname.startsWith("/courier")) return; // staff screen, never reported
     rememberPixelTest();
     if (startPixel()) trackPixel("PageView");
   }, [pathname]);

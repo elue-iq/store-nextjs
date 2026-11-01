@@ -4893,3 +4893,31 @@ button.dash-bars__row:focus-visible {
   color: #fff;
   text-align: center;
 }
+
+.courier-account {
+  margin-top: 0.6rem;
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.95rem;
+}
+.courier-account p {
+  margin: 0;
+}
+.courier-account details ul {
+  list-style: none;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+.courier-account details li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-top: 1px solid var(--line, #e6d8c6);
+  padding-top: 0.35rem;
+}
+.courier-account summary {
+  cursor: pointer;
+  color: var(--clay, #a65b45);
+}

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Logo } from "./Logo";
 import { useCart } from "./CartProvider";
 import { useAuth } from "./AuthProvider";
@@ -10,6 +11,24 @@ export function Header() {
   const auth = useAuth();
   const signedIn = auth.status === "signedIn";
   const items = ready ? count : 0;
+  const pathname = usePathname();
+  // The courier app is its own screen: just the logo and a sign-out, no shop, cart or customer account.
+  if (pathname === "/courier" || pathname.startsWith("/courier/")) {
+    return (
+      <header className="site-header">
+        <div className="site-header__inner">
+          <span className="site-header__logo" aria-label="ÉLUE">
+            <Logo />
+          </span>
+          {signedIn && (
+            <button type="button" className="link-button" onClick={() => void auth.signOut()}>
+              تسجيل الخروج
+            </button>
+          )}
+        </div>
+      </header>
+    );
+  }
   return (
     <header className="site-header">
       <div className="site-header__inner">

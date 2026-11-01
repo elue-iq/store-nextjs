@@ -18,7 +18,10 @@ export async function callCourier(args: { action: "mine" | "get" | "status"; ord
   try {
     const { data, errors } = await dataClient.mutations.courierApp(args);
     if (errors?.length || !data) return { ok: false as const, code: errorCode(errors) || "failed" };
-    const body = (typeof data === "string" ? JSON.parse(data) : data) as { courier?: string; orders?: CourierOrder[]; order?: CourierOrder };
+    // a.json() can arrive double-encoded (a string holding JSON text): decode until it is an object.
+    let parsed: unknown = data;
+    for (let i = 0; i < 3 && typeof parsed === "string"; i++) parsed = JSON.parse(parsed);
+    const body = (parsed ?? {}) as { courier?: string; phone?: string; orders?: CourierOrder[]; order?: CourierOrder };
     return { ok: true as const, ...body };
   } catch (err) {
     console.error("courierApp failed", err);
