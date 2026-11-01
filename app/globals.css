@@ -4921,3 +4921,20 @@ button.dash-bars__row:focus-visible {
   cursor: pointer;
   color: var(--clay, #a65b45);
 }
+
+/* A scanned order, full screen above everything (the courier opens it from the label's QR). */
+.courier-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  overflow-y: auto;
+  background: var(--cream, #f5efe6);
+  padding: 1rem 1rem 3rem;
+}
+.courier-sheet__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+  font-size: 1.25rem;
+}

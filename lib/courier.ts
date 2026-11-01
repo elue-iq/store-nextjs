@@ -3,11 +3,16 @@
 import { dataClient, errorCode } from "./data";
 import type { DispatchOrder } from "./dispatch";
 
-export type CourierOrder = DispatchOrder & { status: string; createdAt: string; updatedAt: string };
+export type CourierOrder = Omit<DispatchOrder, "items"> & {
+  items?: ({ slug?: string; nameAr: string; nameEn: string; qty: number; price: number } | null)[] | null;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+};
 
 export const ERROR_TEXT: Record<string, string> = {
   not_courier: "هذا الرقم غير مسجّل كمندوب. تواصل مع ÉLUE.",
-  not_yours: "هذا الطلب غير مسند إليك.",
+  not_yours: "هذا الطلب مو مسند إليك. تواصل مع ÉLUE.",
   not_found: "ما لقينا هذا الطلب.",
   cancelled: "الطلب ملغى.",
   already_delivered: "الطلب مسلَّم من قبل.",

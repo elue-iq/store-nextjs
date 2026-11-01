@@ -97,7 +97,6 @@ export const handler: Schema["courierApp"]["functionHandler"] = async (event) =>
   if (!orderNumber) throw new Error("missing_order");
   const o = await findOrder(orderNumber);
   if (!o) throw new Error("not_found");
-  if (o.courierKind !== "LOCAL" || o.courierId !== courier.id) throw new Error("not_yours");
 
   if (action === "get") return { order: view(o) };
 

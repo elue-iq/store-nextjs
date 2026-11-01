@@ -6,15 +6,17 @@ import { CourierScanner } from "./CourierScanner";
 import { LoginPanel } from "./LoginPanel";
 import { useToast } from "./Toast";
 import { usePullToRefresh } from "./usePullToRefresh";
+import { SendOnWhatsApp } from "./SendOrderToCustomer";
 import { callCourier, ERROR_TEXT, orderNumberFrom, type CourierOrder } from "@/lib/courier";
 import { collectAmount } from "@/lib/dispatch";
 import { fullAddress } from "@/lib/iraq";
 import { formatIraqiMobile } from "@/lib/phone";
 import { formatIQD, site } from "@/lib/site";
+import { courierComingMessage } from "@/lib/share";
 
 const STATUS_AR: Record<string, string> = { NEW: "جديد", CONFIRMED: "جديد", OUT_FOR_DELIVERY: "في الطريق", DELIVERED: "تم التسليم" };
 
-function OrderCard({ o, busy, onStatus }: { o: CourierOrder; busy: boolean; onStatus: (o: CourierOrder, s: "OUT_FOR_DELIVERY" | "DELIVERED") => void }) {
+function OrderCard({ o, busy, onStatus, courierName }: { o: CourierOrder; busy: boolean; onStatus: (o: CourierOrder, s: "OUT_FOR_DELIVERY" | "DELIVERED") => void; courierName: string }) {
   const [confirm, setConfirm] = useState(false);
   const collect = collectAmount(o);
   const done = o.status === "DELIVERED";
@@ -41,6 +43,17 @@ function OrderCard({ o, busy, onStatus }: { o: CourierOrder; busy: boolean; onSt
           واتساب
         </a>
       </div>
+      {!done && (
+        <SendOnWhatsApp
+          order={{ ...o, items: o.items ?? [] }}
+          phone={o.phone}
+          text={courierComingMessage({ ...o, items: (o.items ?? []).map((i) => (i ? { ...i, slug: i.slug ?? "" } : null)) }, courierName)}
+          label="أبلغ الزبون: أنا بالطريق"
+          primary={false}
+          shareHint="اختر واتساب ثم محادثة الزبون: تُرسل صورة الطلب ومعها النص."
+          chatHint="تُفتح محادثة الزبون والنص جاهز، وتُنسخ صورة الطلب: الصقها في المحادثة."
+        />
+      )}
       {!done && (
         <div className="courier-card__actions">
           {o.status !== "OUT_FOR_DELIVERY" && (
@@ -75,7 +88,7 @@ export function CourierView() {
   const [busy, setBusy] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [typed, setTyped] = useState("");
-  const [found, setFound] = useState<CourierOrder | null>(null);
+  const [found, setFound] = useState<CourierOrder | null>(null); // the scanned order, shown full screen
 
   const load = useCallback(async () => {
     const res = await callCourier({ action: "mine" });
@@ -103,14 +116,16 @@ export function CourierView() {
 
   const ptr = usePullToRefresh(auth.status === "signedIn", load);
 
+
   async function lookup(text: string) {
     const number = orderNumberFrom(text);
     setScanning(false);
     if (!number) return toast({ id: "courier", tone: "attention", message: "هذا الرمز ليس طلب ÉLUE." });
+    // The admin assigns orders. Scanning only opens an order that is already his, full screen.
     const res = await callCourier({ action: "get", orderNumber: number });
     if (!res.ok || !res.order) return toast({ id: "courier", tone: "attention", message: ERROR_TEXT[res.ok ? "not_found" : res.code] ?? "تعذّر فتح الطلب." });
-    setFound(res.order);
     setTyped("");
+    setFound(res.order);
   }
 
   async function setStatus(o: CourierOrder, status: "OUT_FOR_DELIVERY" | "DELIVERED") {
@@ -119,7 +134,9 @@ export function CourierView() {
     setBusy(false);
     if (!res.ok) return toast({ id: "courier", tone: "attention", message: ERROR_TEXT[res.code] ?? "تعذّر تحديث الحالة. حاول مجدداً." });
     toast({ id: "courier", message: status === "DELIVERED" ? `✓ ${o.orderNumber}: تم التسليم` : `${o.orderNumber}: في الطريق` });
-    setFound(null);
+    // Delivered: back to the list. In delivery: stay on the order, now showing its new state.
+    if (status === "DELIVERED") setFound(null);
+    else if (res.order) setFound(res.order);
     await load();
   }
 
@@ -175,20 +192,22 @@ export function CourierView() {
       {scanning && <CourierScanner onCode={(t) => void lookup(t)} onClose={() => setScanning(false)} />}
 
       {found && (
-        <section className="courier__found">
-          <h2>الطلب الممسوح</h2>
-          <OrderCard key={found.orderNumber} o={found} busy={busy} onStatus={(o, s) => void setStatus(o, s)} />
-          <button type="button" className="link-button" onClick={() => setFound(null)}>
-            إغلاق
-          </button>
-        </section>
+        <div className="courier-sheet" role="dialog" aria-modal="true" aria-label={`الطلب ${found.orderNumber}`}>
+          <div className="courier-sheet__bar">
+            <strong dir="ltr">{found.orderNumber}</strong>
+            <button type="button" className="link-button" onClick={() => setFound(null)}>
+              إغلاق
+            </button>
+          </div>
+          <OrderCard key={found.orderNumber} o={found} busy={busy} onStatus={(o, s) => void setStatus(o, s)} courierName={name} />
+        </div>
       )}
 
       <section>
         <h2>طلباتي</h2>
         {open.length === 0 && <p className="hint">ما عندك طلبات حالياً. الطلبات الجديدة تصلك على تيليغرام وتظهر هنا.</p>}
         {open.map((o) => (
-          <OrderCard key={o.orderNumber} o={o} busy={busy} onStatus={(x, s) => void setStatus(x, s)} />
+          <OrderCard key={o.orderNumber} o={o} busy={busy} onStatus={(x, s) => void setStatus(x, s)} courierName={name} />
         ))}
       </section>
 
@@ -196,7 +215,7 @@ export function CourierView() {
         <section>
           <h2>سُلّمت مؤخراً</h2>
           {delivered.map((o) => (
-            <OrderCard key={o.orderNumber} o={o} busy={busy} onStatus={() => {}} />
+            <OrderCard key={o.orderNumber} o={o} busy={busy} onStatus={() => {}} courierName={name} />
           ))}
         </section>
       )}

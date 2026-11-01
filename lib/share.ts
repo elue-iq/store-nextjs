@@ -99,3 +99,17 @@ export function reviewRequestMessage(o: { name: string; orderNumber: string }, o
     `${origin}/review?order=${encodeURIComponent(o.orderNumber)}`,
   ].join("\n");
 }
+
+// From the courier to the customer, once the order is on its way (sent from the courier's own WhatsApp).
+export function courierComingMessage(o: OrderInfo, courierName: string): string {
+  return [
+    `مرحباً ${o.name} 🧡`,
+    `أنا ${courierName}، مندوب توصيل ÉLUE. طلبكم ${o.orderNumber} بالطريق إليكم الآن 🚗`,
+    "",
+    ...summary(o),
+    `❄️ ${site.coldNote.title}`,
+    "• عند الاستلام، نرجو تسليم بوكس الفلين لي ووضع المنتج في البراد مباشرة",
+    "",
+    "📞 إذا احتجتم أي شيء، تواصلوا معي على هذا الرقم.",
+  ].join("\n");
+}
