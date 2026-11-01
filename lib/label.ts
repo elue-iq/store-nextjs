@@ -43,6 +43,9 @@ function dateText(iso?: string | null): string {
 
 function drawLabel(ctx: CanvasRenderingContext2D, o: LabelOrder, courierName: string) {
   const R = W - M;
+  // Three sizes only (like the Modon label): captions, values, and the two key numbers.
+  const CAP = 30;
+  const VAL = 44;
   const text = (s: string, x: number, y: number, t: TextOpts) => {
     ctx.font = `${t.weight ?? REGULAR} ${t.size}px ${AR}`;
     ctx.fillStyle = BLACK;
@@ -56,19 +59,19 @@ function drawLabel(ctx: CanvasRenderingContext2D, o: LabelOrder, courierName: st
     ctx.direction = t.dir ?? "rtl";
     const out: string[] = [];
     for (const para of s.split(/\n+/)) {
-      let line = "";
+      let ln = "";
       for (const word of para.split(/\s+/).filter(Boolean)) {
-        const test = line ? `${line} ${word}` : word;
-        if (line && ctx.measureText(test).width > maxWidth) {
-          out.push(line);
-          line = word;
-        } else line = test;
+        const test = ln ? `${ln} ${word}` : word;
+        if (ln && ctx.measureText(test).width > maxWidth) {
+          out.push(ln);
+          ln = word;
+        } else ln = test;
       }
-      if (line) out.push(line);
+      if (ln) out.push(ln);
     }
     return out;
   };
-  const line = (x: number, y: number, w: number, h: number) => {
+  const rect = (x: number, y: number, w: number, h: number) => {
     ctx.fillStyle = BLACK;
     ctx.fillRect(x, y, w, h);
   };
@@ -76,117 +79,132 @@ function drawLabel(ctx: CanvasRenderingContext2D, o: LabelOrder, courierName: st
   ctx.fillStyle = "#fff";
   ctx.fillRect(0, 0, W, H);
 
-  // Header: the wordmark on the right, who delivers on the left.
-  const logoW = 250;
+  // ---- Header: the wordmark on the right, the kind of delivery on the left.
+  const logoW = 270;
   const scale = logoW / LOGO_VIEWBOX.width;
   ctx.save();
-  ctx.translate(R - logoW - LOGO_VIEWBOX.x * scale, 62 - LOGO_VIEWBOX.y * scale);
+  ctx.translate(R - logoW - LOGO_VIEWBOX.x * scale, 70 - LOGO_VIEWBOX.y * scale);
   ctx.scale(scale, scale);
   ctx.fillStyle = BLACK;
   ctx.fill(new Path2D(LOGO_PATH), "evenodd");
   ctx.restore();
-  text("توصيل محلي", M, 92, { size: 30, align: "left" });
-  text(courierName, M, 142, { size: 42, weight: BOLD, align: "left" });
-  line(M, 186, W - 2 * M, 3);
+  text("توصيل محلي", M, 92, { size: CAP, align: "left" });
+  text(courierName, M, 150, { size: 52, weight: BOLD, align: "left" });
+  rect(M, 214, W - 2 * M, 3);
 
-  // The two columns, split by a thin vertical line.
-  const top = 189;
-  const split = 436;
-  const bottom = 1330;
-  line(split, top, 2, bottom - top);
+  // ---- The two columns, split by a thin vertical line.
+  const top = 217;
+  const split = 450;
+  const bottom = 1310;
+  rect(split, top, 2, bottom - top);
 
-  // ---- Left column: QR, order number, notes.
-  const cx = (M + split - 40) / 2 + 20; // centre of the left column
-  const colW = split - M - 40;
+  // Left column: QR, order number, delivery company, notes.
+  const lx = M; // left edge
+  const lr = split - 44; // right edge
+  const lw = lr - lx;
+  const cx = lx + lw / 2;
   const qr = qrcode(0, "M");
   qr.addData(o.orderNumber);
   qr.make();
   const n = qr.getModuleCount();
-  const cell = Math.floor(300 / (n + 2));
+  const cell = Math.floor(lw / (n + 2));
   const qrPx = cell * (n + 2);
   const qx = Math.round(cx - qrPx / 2);
-  const qy = 250;
+  const qy = 290;
   ctx.fillStyle = BLACK;
   for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (qr.isDark(r, c)) ctx.fillRect(qx + (c + 1) * cell, qy + (r + 1) * cell, cell, cell);
   // Corner brackets around the code, like the Modon label.
-  const b = 14;
-  const L = 46;
-  const T = 5;
-  for (const [bx, by, dx, dy] of [
-    [qx - b, qy - b, 1, 1],
-    [qx + qrPx + b, qy - b, -1, 1],
-    [qx - b, qy + qrPx + b, 1, -1],
-    [qx + qrPx + b, qy + qrPx + b, -1, -1],
+  const gap = 16;
+  const arm = 52;
+  const th = 5;
+  const x0 = qx - gap;
+  const x1 = qx + qrPx + gap;
+  const y0 = qy - gap;
+  const y1 = qy + qrPx + gap;
+  for (const [x, y, dx, dy] of [
+    [x0, y0, 1, 1],
+    [x1, y0, -1, 1],
+    [x0, y1, 1, -1],
+    [x1, y1, -1, -1],
   ] as const) {
-    line(dx === 1 ? bx : bx - L, dy === 1 ? by : by - T, L, T);
-    line(dx === 1 ? bx : bx - T, dy === 1 ? by : by - L, T, L);
-  }
-  let ly = qy + qrPx + 84;
-  text("رقم الطلب", cx, ly, { size: 28, align: "center" });
-  ly += 62;
-  text(o.orderNumber, cx, ly, { size: 58, weight: BOLD, align: "center", dir: "ltr" });
-  ly += 50;
-  text(dateText(o.createdAt), cx, ly, { size: 30, align: "center", dir: "ltr" });
-  ly += 96;
-  text("ملاحظات الشركة", cx + colW / 2, ly, { size: 28, align: "right" });
-  const leftNotes: [string, number, number][] = [[site.returnBoxNote, 32, BOLD]];
-  if (o.province === site.baghdadWindow.province) leftNotes.push([`موعد التوصيل في بغداد ${site.baghdadWindow.short}`, 28, REGULAR]);
-  leftNotes.push([`للاستفسار ${site.whatsappDisplay.replace(/ /g, "")}`, 28, REGULAR]);
-  for (const [s, size, weight] of leftNotes) {
-    ly += 24;
-    for (const l of wrap(s, colW, { size, weight })) {
-      ly += size + 14;
-      text(l, cx + colW / 2, ly, { size, weight, align: "right" });
-    }
+    rect(dx === 1 ? x : x - arm, dy === 1 ? y : y - th, arm, th);
+    rect(dx === 1 ? x : x - th, dy === 1 ? y : y - arm, th, arm);
   }
 
-  // ---- Right column: a small caption over a bold value, one field after another.
-  let y = 252;
-  const field = (caption: string, value: string, size: number, opts: { dir?: CanvasDirection; maxLines?: number } = {}) => {
-    text(caption, R, y, { size: 30 });
-    const lines = wrap(value, R - split - 50, { size, weight: BOLD, dir: opts.dir }).slice(0, opts.maxLines ?? 1);
-    for (const l of lines) {
-      y += size + 18;
-      text(l, R, y, { size, weight: BOLD, dir: opts.dir });
+  let ly = y1 + 100;
+  text("رقم الطلب", lr, ly, { size: CAP });
+  text(o.orderNumber, lr, ly + 62, { size: VAL + 6, weight: BOLD, dir: "ltr" });
+  text(dateText(o.createdAt), lr, ly + 62 + 50, { size: CAP, dir: "ltr" });
+  ly += 62 + 50 + 84;
+
+  // Notes, numbered like the Modon label.
+  text("ملاحظات الشركة :", lr, ly, { size: CAP });
+  const notes = [site.returnBoxNote];
+  if (o.province === site.baghdadWindow.province) notes.push(`التوصيل في بغداد ${site.baghdadWindow.short}`);
+  notes.push(`للاستفسار ${site.whatsappDisplay.replace(/ /g, "")}`);
+  notes.forEach((note, i) => {
+    ly += 26;
+    for (const l of wrap(`0${i + 1}  ${note}`, lw, { size: CAP })) {
+      ly += 40;
+      text(l, lr, ly, { size: CAP });
     }
-    y += 62;
+  });
+
+  // Right column: a small caption over a bold value, one field after another.
+  const rr = R;
+  const rw = R - split - 48;
+  let y = 290;
+  // Longer values step down in size so nothing is ever cut off.
+  const field = (caption: string, value: string, opts: { dir?: CanvasDirection; sizes?: number[]; weight?: number } = {}) => {
+    text(caption, rr, y, { size: CAP });
+    const sizes = opts.sizes ?? [VAL, 40, 36, 32];
+    let size = sizes[0];
+    let lines = wrap(value, rw, { size, weight: opts.weight ?? BOLD, dir: opts.dir });
+    for (const sz of sizes) {
+      size = sz;
+      lines = wrap(value, rw, { size, weight: opts.weight ?? BOLD, dir: opts.dir });
+      if (lines.length <= (sz === sizes[sizes.length - 1] ? 99 : 3)) break;
+    }
+    lines.forEach((l, i) => text(l, rr, y + 62 + i * (size + 14), { size, weight: opts.weight ?? BOLD, dir: opts.dir }));
+    y += 62 + (lines.length - 1) * (size + 14) + 62;
   };
-  field("اسم الزبون", o.name, 48, { maxLines: 2 });
-  field("هاتف الزبون", formatIraqiMobile(o.phone).replace(/ /g, ""), 58, { dir: "ltr" });
-  field("المحافظة والمنطقة", [o.province, o.area].filter(Boolean).join("، ") || "—", 46, { maxLines: 2 });
-  field("العنوان", o.address, 44, { maxLines: 4 });
-  if (o.note) field("ملاحظة الزبون", o.note, 34, { maxLines: 3 });
+  field("اسم التاجر", "ÉLUE", { dir: "ltr", weight: REGULAR });
+  rect(split + 48, y - 32, R - split - 48, 3);
+  y += 38;
+  field("اسم الزبون", o.name);
+  field("هاتف الزبون", formatIraqiMobile(o.phone).replace(/ /g, ""), { dir: "ltr" });
+  field("المحافظة والمنطقة", [o.province, o.area].filter(Boolean).join("، ") || "—");
+  field("العنوان", o.address, { sizes: [VAL, 40, 36] });
+  if (o.note) field("ملاحظة الزبون", o.note, { sizes: [38, 34, 30], weight: 500 });
 
-  // ---- Bottom: the goods and the amount the courier collects.
-  line(M, bottom, W - 2 * M, 3);
+  // ---- Bottom: the goods, and the amount the courier collects.
+  rect(M, bottom, W - 2 * M, 3);
   const jars = o.jars ?? (o.items ?? []).reduce((s, i) => s + (i?.qty ?? 0), 0);
-  const flavors = (o.items ?? [])
-    .filter((i): i is NonNullable<typeof i> => Boolean(i))
-    .map((i) => `${i.nameAr} × ${i.qty}`)
-    .join("  ·  ");
-  text("نوع البضاعة", R, bottom + 54, { size: 28 });
-  text(`ترافل شوكولاتة · ${jarsWord(jars)} · مبرّد`, R, bottom + 104, { size: 38, weight: BOLD });
-  const fl = wrap(flavors, W - 2 * M, { size: 30 }).slice(0, 1);
-  fl.forEach((l) => text(l, R, bottom + 150, { size: 30 }));
+  text("نوع البضاعة", R, bottom + 62, { size: CAP });
+  text("ترافل شوكولاتة ÉLUE", R, bottom + 62 + 58, { size: VAL, weight: BOLD });
+  text("عدد العلب", M + 260, bottom + 62, { size: CAP });
+  text(String(jars), M + 260, bottom + 62 + 58, { size: VAL, weight: BOLD, dir: "ltr" });
 
   const collect = collectAmount(o);
   const delivery = deliveryPayOf(o);
-  const boxY = bottom + 184;
-  const boxH = H - boxY - 46;
+  const boxY = bottom + 168;
+  const boxH = H - boxY - 52;
   ctx.strokeStyle = BLACK;
-  ctx.lineWidth = 6;
-  ctx.strokeRect(M, boxY, W - 2 * M, boxH);
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.roundRect(M, boxY, W - 2 * M, boxH, 28);
+  ctx.stroke();
   if (collect > 0) {
-    text("المطلوب من الزبون", R - 30, boxY + 58, { size: 32, weight: BOLD });
-    text(formatIQD(collect), R - 30, boxY + boxH - 34, { size: 90, weight: BOLD });
+    text("المطلوب من الزبون", R - 36, boxY + 70, { size: CAP });
+    text(formatIQD(collect), R - 36, boxY + boxH - 50, { size: 84, weight: BOLD });
     const parts = [
       o.paid ? "الطلب مدفوع" : `الطلب ${formatIQD(o.total)}`,
       delivery === "driver" ? `التوصيل ${formatIQD(site.deliveryFee)}` : delivery === "prepaid" ? "التوصيل مدفوع" : "التوصيل مجاني",
     ].join(" + ");
-    text(parts, M + 30, boxY + 58, { size: 28, align: "left" });
+    text(parts, M + 36, boxY + 70, { size: CAP, align: "left" });
   } else {
-    text("مدفوع بالكامل", R - 30, boxY + 58, { size: 32, weight: BOLD });
-    text("لا يُطلب أي مبلغ", R - 30, boxY + boxH - 34, { size: 76, weight: BOLD });
+    text("المطلوب من الزبون", R - 36, boxY + 70, { size: CAP });
+    text("لا شيء، مدفوع بالكامل", R - 36, boxY + boxH - 50, { size: 64, weight: BOLD });
   }
 }
 
