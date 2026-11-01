@@ -5,6 +5,7 @@ import { useAuth } from "./AuthProvider";
 import { CourierScanner } from "./CourierScanner";
 import { LoginPanel } from "./LoginPanel";
 import { useToast } from "./Toast";
+import { usePullToRefresh } from "./usePullToRefresh";
 import { callCourier, ERROR_TEXT, orderNumberFrom, type CourierOrder } from "@/lib/courier";
 import { collectAmount } from "@/lib/dispatch";
 import { fullAddress } from "@/lib/iraq";
@@ -84,8 +85,21 @@ export function CourierView() {
   }, []);
 
   useEffect(() => {
-    if (auth.status === "signedIn") void load();
+    if (auth.status !== "signedIn") return;
+    void load();
+    // New orders arrive while the page is open: re-read every 30 s and whenever the page is shown again.
+    const timer = window.setInterval(() => document.visibilityState === "visible" && void load(), 30_000);
+    const onShow = () => document.visibilityState === "visible" && void load();
+    document.addEventListener("visibilitychange", onShow);
+    window.addEventListener("focus", onShow);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onShow);
+      window.removeEventListener("focus", onShow);
+    };
   }, [auth.status, load]);
+
+  const ptr = usePullToRefresh(auth.status === "signedIn", load);
 
   async function lookup(text: string) {
     const number = orderNumberFrom(text);
@@ -130,7 +144,12 @@ export function CourierView() {
     <div className="courier">
       <header className="courier__head">
         <h1>{name}</h1>
-        <p>{open.length ? `${open.length} طلب بانتظار التوصيل` : "لا طلبات بانتظار التوصيل"}</p>
+        <p>
+          {open.length ? `${open.length} طلب بانتظار التوصيل` : "لا طلبات بانتظار التوصيل"}{" "}
+          <button type="button" className="link-button" onClick={() => void load()}>
+            {ptr.refreshing ? "…" : "تحديث"}
+          </button>
+        </p>
       </header>
 
       <div className="courier__scan">
