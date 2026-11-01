@@ -140,7 +140,7 @@ export function AdminDelivery({ order: o, onOpenCouriers }: { order: Order; onOp
   const message = kind ? issuePlain(reportOrder, kind, text, recipient) : "";
 
   async function recordIssue(entry: Issue) {
-    const { errors } = await dataClient.models.Order.update({ id: o.id, issues: [...issuesOf(o), entry].slice(-30) });
+    const { errors } = await dataClient.models.Order.update({ id: o.id, issues: JSON.stringify([...issuesOf(o), entry].slice(-30)) });
     if (errors?.length) console.error("saving the report failed", errors);
   }
 

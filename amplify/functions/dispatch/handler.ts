@@ -149,7 +149,7 @@ export const handler: Schema["dispatch"]["functionHandler"] = async (event) => {
     const courier = await loadCourier(o.courierId);
     const res = await telegramSend(token, courier.telegramChatId, issueHtml(asDispatch(o), kind, text ?? "", courier.name));
     const entry = { at: new Date().toISOString(), by, kind, text: (text ?? "").trim().slice(0, 500), to: courier.name, via: "telegram", ok: res.ok };
-    await client.models.Order.update({ id: o.id, issues: [...issueList(o), entry].slice(-30) });
+    await client.models.Order.update({ id: o.id, issues: JSON.stringify([...issueList(o), entry].slice(-30)) });
     return res.ok ? { ok: true } : { ok: false, error: res.error };
   }
 
