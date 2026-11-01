@@ -115,20 +115,39 @@ export function SendOrderToCustomer({ order: o }: { order: Order }) {
   );
 }
 
-// After delivery: asks the customer for their review (a link to /review, with the transparency promise).
+// Asks the customer for their review (a link to /review, with the transparency promise).
+// Always shown, so the team knows where it is: the review itself opens once the order is delivered.
 export function SendReviewRequest({ order: o }: { order: Order }) {
-  if (o.status !== "DELIVERED" || o.reviewed) return null;
+  if (o.status === "CANCELLED") return null;
+  if (o.reviewed) {
+    return (
+      <div className="send-order">
+        <p className="delivery__ok">✓ العميل قيّم هذا الطلب</p>
+      </div>
+    );
+  }
+  const delivered = o.status === "DELIVERED";
   return (
     <div className="send-order">
-      <a
-        className="btn btn--quiet btn--full"
-        href={chatUrl(o.phone, reviewRequestMessage(o, window.location.origin))}
-        target="_blank"
-        rel="noopener noreferrer"
-      >
-        اطلب من العميل تقييم الطلب (واتساب)
-      </a>
-      <small>تُفتح محادثة العميل ومعها رابط التقييم. بعد التقييم يقدر يطلب مرة ثانية.</small>
+      {delivered ? (
+        <a
+          className="btn btn--quiet btn--full"
+          href={chatUrl(o.phone, reviewRequestMessage(o, window.location.origin))}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          اطلب من العميل تقييم الطلب (واتساب)
+        </a>
+      ) : (
+        <button type="button" className="btn btn--quiet btn--full" disabled>
+          اطلب من العميل تقييم الطلب (واتساب)
+        </button>
+      )}
+      <small>
+        {delivered
+          ? "تُفتح محادثة العميل ومعها رابط التقييم. التقييم اختياري، وننشره كما هو."
+          : "يُفعَّل الزر بعد تسليم الطلب، لأن التقييم يفتح عند التسليم."}
+      </small>
     </div>
   );
 }
