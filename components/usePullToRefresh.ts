@@ -8,7 +8,9 @@ import { useEffect, useState } from "react";
 // Not active on forms, so a half-filled order is never lost.
 const THRESHOLD = 80;
 
-export function usePullToRefresh(enabled: boolean): { pull: number; refreshing: boolean } {
+// With `onRefresh` the screen re-reads its data in place (used on order/customer detail screens,
+// so the person stays where they are); without it the whole app reloads.
+export function usePullToRefresh(enabled: boolean, onRefresh?: () => Promise<unknown>): { pull: number; refreshing: boolean } {
   const [pull, setPull] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -43,7 +45,15 @@ export function usePullToRefresh(enabled: boolean): { pull: number; refreshing: 
       if (dist >= THRESHOLD / 2) {
         setRefreshing(true);
         setPull(THRESHOLD / 2);
-        window.setTimeout(() => window.location.reload(), 250);
+        if (onRefresh) {
+          const done = () => {
+            setRefreshing(false);
+            setPull(0);
+          };
+          void Promise.allSettled([onRefresh(), new Promise((r) => window.setTimeout(r, 600))]).then(done);
+        } else {
+          window.setTimeout(() => window.location.reload(), 250);
+        }
       } else {
         setPull(0);
       }
@@ -59,7 +69,7 @@ export function usePullToRefresh(enabled: boolean): { pull: number; refreshing: 
       window.removeEventListener("touchend", onEnd);
       window.removeEventListener("touchcancel", onEnd);
     };
-  }, [enabled]);
+  }, [enabled, onRefresh]);
 
   return { pull, refreshing };
 }

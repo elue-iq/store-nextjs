@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AdminModon } from "./AdminModon";
+import { requestOrdersRefresh } from "@/lib/ordersRefresh";
 import { useToast } from "./Toast";
 import { baghdadTime, dataClient, type Courier, type Order } from "@/lib/data";
 import { ISSUE_KINDS, issueLabel, issuePlain, modonSupportUrl, type DispatchOrder, type IssueKind } from "@/lib/dispatch";
@@ -31,6 +32,7 @@ export async function callDispatch(args: {
 }): Promise<{ data: Record<string, unknown> | null; error: string }> {
   try {
     const { data, errors } = await dataClient.mutations.dispatch(args);
+    requestOrdersRefresh();
     if (errors?.length) return { data: null, error: dispatchError(errors) };
     const parsed = typeof data === "string" ? JSON.parse(data) : data;
     return { data: (parsed ?? {}) as Record<string, unknown>, error: "" };
@@ -137,6 +139,7 @@ export function AdminDelivery({ order: o, onOpenCouriers }: { order: Order; onOp
   async function pickModon() {
     setBusy(true);
     const { errors } = await dataClient.models.Order.update({ id: o.id, courierKind: "MODON" });
+    requestOrdersRefresh();
     setBusy(false);
     if (errors?.length) toast({ id: "dispatch", tone: "attention", message: "تعذّر الحفظ. حاول مجددًا." });
   }
@@ -144,6 +147,7 @@ export function AdminDelivery({ order: o, onOpenCouriers }: { order: Order; onOp
   async function clearModon() {
     setBusy(true);
     await dataClient.models.Order.update({ id: o.id, courierKind: null });
+    requestOrdersRefresh();
     setBusy(false);
   }
 
