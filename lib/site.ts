@@ -14,6 +14,12 @@ export const site = {
   courierNote: "يرجى تسليم بوكس الفلين الى مندوب التوصيل، والتأكد من الطلب",
   // The note written on the order sent to Modon (merchant_notes) and on local courier labels.
   returnBoxNote: "راجع الفلين، يلزم ارجاعها",
+  // Meta Pixel (dataset) ID: the number from Events Manager. Leave empty to keep the pixel off.
+  metaPixelId: "",
+  // The meta tag content from Business Settings > Brand safety > Domains (domain verification). Empty = no tag.
+  metaDomainVerification: "",
+  // Meta does not take Iraqi dinar for the pixel, so values go as US dollars at this fixed rate.
+  pixelIqdPerUsd: 1310,
   // Orders placed before this hour are delivered the next day (shown to customers).
   deliveryCutoff: "8 مساءً",
   // Delivery inside Baghdad happens in this window; the customer must accept it

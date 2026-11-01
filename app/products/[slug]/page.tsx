@@ -6,6 +6,7 @@ import { getProduct, products, sharedPoints } from "@/lib/products";
 import { formatIQD, siteUrl } from "@/lib/site";
 import { JarLabel } from "@/components/JarLabel";
 import { ProductBuyBox } from "@/components/AddToCart";
+import { PixelViewContent } from "@/components/MetaPixel";
 
 type Props = { params: Promise<{ slug: string }> };
 
@@ -91,6 +92,7 @@ export default async function ProductPage({ params }: Props) {
             <span>متوسط سعرات القطعة</span>
           </p>
           <p className="product__price">{formatIQD(product.price)} للعلبة</p>
+          <PixelViewContent slug={product.slug} />
           <ProductBuyBox slug={product.slug} />
 
           <h2 className="product__subhead">ما الذي يميّزها؟</h2>

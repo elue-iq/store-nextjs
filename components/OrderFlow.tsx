@@ -1,5 +1,6 @@
 "use client";
 
+import { pixelInitiateCheckout, pixelPurchase } from "@/lib/pixel";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useCart } from "./CartProvider";
@@ -55,6 +56,14 @@ export function OrderFlow() {
   const inBaghdad = delivery.province === site.baghdadWindow.province;
 
   // An order still being handled blocks a new one (the server checks this too).
+  // «InitiateCheckout»: once, when the customer reaches the checkout with items.
+  const checkoutTracked = useRef(false);
+  useEffect(() => {
+    if (checkoutTracked.current || !cart.ready || step !== "checkout" || lines.length === 0) return;
+    checkoutTracked.current = true;
+    pixelInitiateCheckout(cart.items, total);
+  }, [cart.ready, cart.items, step, lines.length, total]);
+
   const [openOrder, setOpenOrder] = useState<string | null>(null);
   const [placed, setPlaced] = useState<Placed | null>(null);
   const [pdfSaved, setPdfSaved] = useState(false);
@@ -192,6 +201,7 @@ export function OrderFlow() {
       });
       if (data?.orderNumber) {
         setPlaced({ ...snapshot, orderNumber: data.orderNumber, createdAt: data.createdAt });
+        pixelPurchase(cart.items, total, data.orderNumber);
         setStep("sent");
         cart.clear();
         toast({ id: "checkout", message: `استلمنا طلبك رقم ${ltr(data.orderNumber)}.` });
