@@ -5,9 +5,11 @@ import { useToast } from "./Toast";
 import { callDispatch } from "./AdminDelivery";
 import { dataClient, type Courier } from "@/lib/data";
 import { chatIdError } from "@/lib/dispatch";
+import { formatIraqiMobile, normalizeIraqiMobile } from "@/lib/phone";
+import { chatUrl } from "@/lib/share";
 
-type Draft = { id: string; name: string; chatId: string; note: string };
-const EMPTY: Draft = { id: "", name: "", chatId: "", note: "" };
+type Draft = { id: string; name: string; chatId: string; phone: string; note: string };
+const EMPTY: Draft = { id: "", name: "", chatId: "", phone: "", note: "" };
 
 // «شركات التوصيل» in /admin: the local couriers / delivery companies. Each has its own
 // Telegram chat (a channel or group the ÉLUE bot is a member of). An order given to a
@@ -16,7 +18,7 @@ export function AdminCouriers() {
   const toast = useToast();
   const [list, setList] = useState<Courier[] | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
-  const [errors, setErrors] = useState<{ name?: string; chatId?: string }>({});
+  const [errors, setErrors] = useState<{ name?: string; chatId?: string; phone?: string }>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [bot, setBot] = useState<string | null | undefined>(undefined);
@@ -42,10 +44,14 @@ export function AdminCouriers() {
     if (draft.name.trim().length < 2) found.name = "اكتب اسم شركة التوصيل.";
     const idErr = chatIdError(draft.chatId);
     if (idErr) found.chatId = idErr;
+    // The courier's own WhatsApp number (for logging in to /courier); optional, never shared by two.
+    const phone = draft.phone.trim() ? normalizeIraqiMobile(draft.phone) : null;
+    if (draft.phone.trim() && !phone) found.phone = "رقم الواتساب غير صحيح (مثل 0771 234 5678).";
+    else if (phone && (list ?? []).some((c) => c.id !== draft.id && c.phone === phone)) found.phone = "هذا الرقم مسجّل لمندوب آخر.";
     setErrors(found);
     if (Object.keys(found).length) return;
     setBusy("save");
-    const values = { name: draft.name.trim(), telegramChatId: draft.chatId.trim(), note: draft.note.trim() || null };
+    const values = { name: draft.name.trim(), telegramChatId: draft.chatId.trim(), phone, note: draft.note.trim() || null };
     const { errors: gql } = draft.id
       ? await dataClient.models.Courier.update({ id: draft.id, ...values })
       : await dataClient.models.Courier.create({ ...values, active: true });
@@ -116,6 +122,19 @@ export function AdminCouriers() {
         />
         {errors.chatId && <span className="field-error">{errors.chatId}</span>}
       </label>
+      <label className={errors.phone ? "has-error" : undefined}>
+        رقم واتساب المندوب (لدخوله إلى تطبيق المندوب)
+        <input
+          value={draft.phone}
+          onChange={(e) => setDraft({ ...draft, phone: e.target.value })}
+          dir="ltr"
+          inputMode="tel"
+          maxLength={20}
+          placeholder="0771 234 5678"
+        />
+        {errors.phone && <span className="field-error">{errors.phone}</span>}
+        <small className="hint">بهذا الرقم يسجّل دخوله على /courier برمز واتساب، ويشوف طلباته فقط. اتركه فارغاً إذا ما تريد.</small>
+      </label>
       <label>
         ملاحظة (اختياري)
         <input value={draft.note} onChange={(e) => setDraft({ ...draft, note: e.target.value })} maxLength={120} />
@@ -173,6 +192,7 @@ export function AdminCouriers() {
               <strong>{c.name}</strong>
               {c.active === false && <small> · موقوفة</small>}
               <span dir="ltr">{c.telegramChatId}</span>
+              {c.phone && <small dir="ltr">{formatIraqiMobile(c.phone)} · يدخل تطبيق المندوب</small>}
               {c.note && <small>{c.note}</small>}
             </div>
             <div className="couriers__actions">
@@ -180,13 +200,26 @@ export function AdminCouriers() {
                 type="button"
                 className="btn btn--quiet btn--small"
                 disabled={busy !== null}
-                onClick={() => (setErrors({}), setDraft({ id: c.id, name: c.name, chatId: c.telegramChatId, note: c.note ?? "" }))}
+                onClick={() => (setErrors({}), setDraft({ id: c.id, name: c.name, chatId: c.telegramChatId, phone: c.phone ?? "", note: c.note ?? "" }))}
               >
                 تعديل
               </button>
               <button type="button" className="btn btn--quiet btn--small" disabled={busy !== null} onClick={() => void test(c)}>
                 تجربة
               </button>
+              {c.phone && (
+                <a
+                  className="btn btn--quiet btn--small"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  href={chatUrl(
+                    c.phone,
+                    `مرحباً ${c.name}، هذا تطبيق مندوب ÉLUE لاستلام الطلبات ومسح الملصق وتحديث الحالة:\n${window.location.origin}/courier\nسجّل الدخول بهذا الرقم، يصلك رمز على واتساب.`,
+                  )}
+                >
+                  إرسال الرابط
+                </a>
+              )}
               <button type="button" className="btn btn--quiet btn--small" disabled={busy !== null} onClick={() => void toggle(c)}>
                 {c.active === false ? "تفعيل" : "إيقاف"}
               </button>

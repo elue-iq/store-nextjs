@@ -4754,3 +4754,142 @@ button.dash-bars__row:focus-visible {
   background: var(--cocoa);
   border-color: var(--cocoa);
 }
+
+/* ---- Local courier app (/courier) ---- */
+.courier {
+  display: grid;
+  gap: 1.25rem;
+  max-width: 34rem;
+  margin-inline: auto;
+}
+.courier__head h1 {
+  margin: 0;
+  color: var(--cocoa);
+}
+.courier__head p {
+  margin: 0.2rem 0 0;
+  color: var(--muted);
+}
+.courier h2 {
+  margin: 0 0 0.6rem;
+  font-size: 1.1rem;
+  color: var(--cocoa);
+}
+.courier__scan {
+  display: grid;
+  gap: 0.6rem;
+}
+.courier__scan form {
+  display: flex;
+  gap: 0.5rem;
+}
+.courier__scan input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.7rem 0.9rem;
+  font: inherit;
+  background: #fff;
+  border: 1px solid var(--sand-deep);
+  border-radius: var(--radius-panel);
+}
+.courier-card {
+  display: grid;
+  gap: 0.45rem;
+  margin-bottom: 0.9rem;
+  padding: 1rem;
+  background: var(--paper);
+  border: 1px solid var(--sand-deep);
+  border-radius: var(--radius-panel);
+}
+.courier-card.is-done {
+  opacity: 0.7;
+}
+.courier-card p {
+  margin: 0;
+}
+.courier-card header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.courier-card header strong {
+  font-size: 1.25rem;
+  color: var(--cocoa);
+}
+.courier-card__status {
+  padding: 0.15rem 0.7rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  border: 1px solid var(--sand-deep);
+  border-radius: 999px;
+}
+.courier-card__status.is-out_for_delivery {
+  color: var(--cream);
+  background: var(--terracotta);
+  border-color: var(--terracotta);
+}
+.courier-card__status.is-delivered {
+  color: var(--sage-deep);
+  background: var(--sage);
+}
+.courier-card__name {
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+.courier-card__note {
+  padding: 0.4rem 0.6rem;
+  background: var(--sand);
+  border-radius: var(--radius-panel);
+}
+.courier-card__items {
+  color: var(--muted);
+}
+.courier-card__collect {
+  font-size: 1.05rem;
+}
+.courier-card__collect strong {
+  font-size: 1.35rem;
+  color: var(--terracotta);
+}
+.courier-card__contact,
+.courier-card__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+.courier-card__actions {
+  grid-template-columns: 1fr;
+}
+.scanner {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  grid-template-rows: 1fr auto auto;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: #000;
+}
+.scanner video {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  object-fit: cover;
+  border-radius: var(--radius-panel);
+}
+.scanner__frame {
+  position: absolute;
+  top: 28%;
+  left: 50%;
+  width: min(70vw, 18rem);
+  aspect-ratio: 1;
+  border: 3px solid #fff;
+  border-radius: 1rem;
+  transform: translateX(-50%);
+  box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.35);
+}
+.scanner__hint {
+  margin: 0;
+  color: #fff;
+  text-align: center;
+}

@@ -4,6 +4,7 @@ import { modon } from "../functions/modon/resource";
 import { eatix } from "../functions/eatix/resource";
 import { dispatch } from "../functions/dispatch/resource";
 import { submitReview } from "../functions/submit-review/resource";
+import { courierApp } from "../functions/courier-app/resource";
 
 // Orders live in DynamoDB (one table, managed by Amplify).
 //
@@ -138,6 +139,9 @@ const schema = a
       .model({
         name: a.string().required(),
         telegramChatId: a.string().required(), // -100… or @channelname
+        // The courier's own WhatsApp number (9647XXXXXXXXX): they log in on /courier with it,
+        // see only the orders given to them, and mark them in delivery / delivered.
+        phone: a.string(),
         active: a.boolean(),
         note: a.string(),
       })
@@ -215,6 +219,19 @@ const schema = a
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(submitReview)),
 
+    // The local courier's app (/courier): their orders, and in delivery / delivered. Checked on the
+    // server: the caller's WhatsApp number must belong to an active courier, and the order to them.
+    courierApp: a
+      .mutation()
+      .arguments({
+        action: a.string().required(), // mine | get | status
+        orderNumber: a.string(),
+        status: a.string(),
+      })
+      .returns(a.json())
+      .authorization((allow) => [allow.authenticated()])
+      .handler(a.handler.function(courierApp)),
+
     // Modon actions from the admin: regions, send, update, delete, refresh.
     modon: a
       .mutation()
@@ -253,7 +270,7 @@ const schema = a
       .authorization((allow) => [allow.group("ADMINS")])
       .handler(a.handler.function(eatix)),
   })
-  .authorization((allow) => [allow.resource(placeOrder), allow.resource(modon), allow.resource(eatix), allow.resource(dispatch), allow.resource(submitReview)]);
+  .authorization((allow) => [allow.resource(placeOrder), allow.resource(modon), allow.resource(eatix), allow.resource(dispatch), allow.resource(submitReview), allow.resource(courierApp)]);
 
 export type Schema = ClientSchema<typeof schema>;
 
