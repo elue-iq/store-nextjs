@@ -186,7 +186,8 @@ export function AdminView() {
     return {
       todayOrders: todays.length,
       todayJars: todays.reduce((n, o) => n + o.jars, 0),
-      todayTotal: todays.reduce((n, o) => n + o.total, 0),
+      // Gifts are not sales.
+      todayTotal: todays.reduce((n, o) => n + (payKeyOf(o) === "GIFT" ? 0 : o.total), 0),
       counts,
     };
   }, [orders, today]);
@@ -202,7 +203,7 @@ export function AdminView() {
       if (pay === "freeDelivery" ? !o.freeDelivery || o.deliveryPaid : pay && payKeyOf(o) !== pay) return false;
       if (courier) {
         const mine = o.modonQr || o.courierKind === "MODON" ? "MODON" : o.courierKind === "LOCAL" && o.courierId ? o.courierId : "none";
-        if (mine !== courier) return false;
+        if (courier === "LOCAL" ? !(o.courierKind === "LOCAL" && o.courierId) : mine !== courier) return false;
       }
       if (!q) return true;
       return (
@@ -221,6 +222,28 @@ export function AdminView() {
     });
     return sort === "newest" ? list : [...list].reverse();
   }, [orders, filter, query, sort, flavor, pay, courier]);
+
+  // Orders for the label PDF: the local-courier orders shown, minus cancelled ones.
+  const labelOrders = useMemo(
+    () => shown.filter((o) => o.courierKind === "LOCAL" && o.courierId && o.status !== "CANCELLED"),
+    [shown],
+  );
+  const [labelBusy, setLabelBusy] = useState(false);
+  async function downloadLabels() {
+    setLabelBusy(true);
+    try {
+      const { buildLabelsPdf, labelsFilename } = await import("@/lib/label");
+      const { downloadBlob } = await import("@/lib/receipt");
+      // Oldest first, so the sheet follows the order they came in.
+      const list = [...labelOrders].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+      downloadBlob(await buildLabelsPdf(list), labelsFilename(list));
+    } catch (err) {
+      console.error("labels failed", err);
+      toast({ id: "admin", tone: "attention", message: "تعذّر تجهيز الملصقات. حاول مرة ثانية." });
+    } finally {
+      setLabelBusy(false);
+    }
+  }
 
   // Local couriers that have orders, for the delivery filter.
   const courierOptions = useMemo(() => {
@@ -522,6 +545,7 @@ export function AdminView() {
             <select className="admin-sort" value={courier} onChange={(e) => setCourier(e.target.value)} aria-label="شركة التوصيل">
               <option value="">كل شركات التوصيل</option>
               <option value="MODON">مدن Express</option>
+              {courierOptions.length > 0 && <option value="LOCAL">كل التوصيل المحلي</option>}
               {courierOptions.map(([id, name]) => (
                 <option key={id} value={id}>
                   {name}
@@ -534,6 +558,11 @@ export function AdminView() {
               <option value="oldest">الأقدم أولًا</option>
             </select>
           </div>
+          {labelOrders.length > 0 && (
+            <button type="button" className="btn btn--ghost admin-labels" disabled={labelBusy} onClick={() => void downloadLabels()}>
+              {labelBusy ? "جارٍ تجهيز الملصقات…" : `تحميل ملصقات التوصيل المحلي (${labelOrders.length}) PDF`}
+            </button>
+          )}
         </div>
       </div>
 

@@ -7,7 +7,7 @@ import { baghdadTime, type Order } from "@/lib/data";
 import { fullAddress } from "@/lib/iraq";
 import { getProduct } from "@/lib/products";
 import { formatIraqiMobile, toLatinDigits } from "@/lib/phone";
-import { formatIQD } from "@/lib/site";
+import { formatIQD, payKeyOf } from "@/lib/site";
 import { shareAccountUrl } from "@/lib/share";
 
 // A customer is every order with the same WhatsApp number. Built from the
@@ -39,7 +39,7 @@ export function buildCustomers(orders: Order[]): Customer[] {
       name: sorted[0].name,
       orders: sorted,
       counted,
-      spent: counted.reduce((n, o) => n + o.total, 0),
+      spent: counted.reduce((n, o) => n + (payKeyOf(o) === "GIFT" ? 0 : o.total), 0),
       delivered: sorted.filter((o) => o.status === "DELIVERED").length,
       cancelled: sorted.length - counted.length,
       lastAt: sorted[0].createdAt,

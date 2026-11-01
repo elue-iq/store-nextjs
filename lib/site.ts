@@ -12,6 +12,8 @@ export const site = {
   paymentNote: "الدفع نقداً عند الاستلام",
   // Printed on every courier label (note), sent to Telegram, and shown to the customer.
   courierNote: "يرجى تسليم بوكس الفلين الى مندوب التوصيل، والتأكد من الطلب",
+  // The note written on the order sent to Modon (merchant_notes) and on local courier labels.
+  returnBoxNote: "راجع الفلين، يلزم ارجاعها",
   // Orders placed before this hour are delivered the next day (shown to customers).
   deliveryCutoff: "8 مساءً",
   // Delivery inside Baghdad happens in this window; the customer must accept it

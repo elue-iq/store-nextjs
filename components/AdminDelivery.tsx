@@ -99,6 +99,20 @@ export function AdminDelivery({ order: o, onOpenCouriers }: { order: Order; onOp
     );
   }
 
+  async function printLabel() {
+    setBusy(true);
+    try {
+      const { buildLabelsPdf, labelsFilename } = await import("@/lib/label");
+      const { downloadBlob } = await import("@/lib/receipt");
+      downloadBlob(await buildLabelsPdf([o]), labelsFilename([o]));
+    } catch (err) {
+      console.error("label failed", err);
+      toast({ id: "delivery", tone: "attention", message: "تعذّر تجهيز الملصق. حاول مرة ثانية." });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function resend() {
     setBusy(true);
     const { data, error } = await callDispatch({ action: "resend", orderId: o.id });
@@ -201,6 +215,9 @@ export function AdminDelivery({ order: o, onOpenCouriers }: { order: Order; onOp
             </p>
             {!cancelled && (
               <div className="modon__actions">
+                <button type="button" className="btn btn--ghost" disabled={busy} onClick={() => void printLabel()}>
+                  طباعة الملصق (PDF)
+                </button>
                 <button type="button" className="btn btn--ghost" disabled={busy} onClick={() => void resend()}>
                   {o.courierStatus === "SENT" ? "إعادة الإرسال" : "حاول الإرسال مجددًا"}
                 </button>

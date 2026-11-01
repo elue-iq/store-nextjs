@@ -4299,3 +4299,9 @@ button.dash-bars__row:focus-visible {
   display: grid;
   gap: 0.8rem;
 }
+
+/* «تحميل ملصقات التوصيل المحلي» above the orders list. */
+.admin-labels {
+  margin-top: 0.6rem;
+  width: 100%;
+}

@@ -526,6 +526,9 @@ export function AdminDashboard({
           value={n0(k.freeDelivery)}
           sub={k.freeDeliveryCost ? `تكلفة علينا ${formatIQD(k.freeDeliveryCost)}` : k.freeDelivery ? "التكلفة تظهر بعد الإرسال إلى مدن" : undefined}
         />
+        {k.gifts > 0 && (
+          <StatTile label="هدايا" value={n0(k.gifts)} sub={`قيمتها ${formatIQD(k.giftValue)} · غير محسوبة في الإيراد`} />
+        )}
         <StatTile
           label="مدفوع مسبقاً"
           value={n0(k.prepaid)}

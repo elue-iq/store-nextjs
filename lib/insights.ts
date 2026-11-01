@@ -171,14 +171,20 @@ export function sourceLabel(o: Order): string {
 const lines = (o: Order) => (o.items ?? []).filter((i): i is NonNullable<typeof i> => Boolean(i));
 
 // The part of an order that counts under the flavor filter.
+// Orders given away (payMethod GIFT) carry jars but no revenue.
+export function isGift(o: Order): boolean {
+  return payKeyOf(o) === "GIFT";
+}
+
 export function partOf(o: Order, flavors: string[]): { jars: number; revenue: number } {
-  if (!flavors.length) return { jars: o.jars, revenue: o.total };
+  const gift = isGift(o);
+  if (!flavors.length) return { jars: o.jars, revenue: gift ? 0 : o.total };
   let jars = 0;
   let revenue = 0;
   for (const l of lines(o)) {
     if (!flavors.includes(l.slug)) continue;
     jars += l.qty;
-    revenue += l.qty * l.price;
+    revenue += gift ? 0 : l.qty * l.price;
   }
   return { jars, revenue };
 }
@@ -221,6 +227,8 @@ export type Kpis = {
   deliveryPrepaid: number; // delivery fee paid in advance by the customer
   freeDelivery: number; // delivery as a gift from ÉLUE
   freeDeliveryCost: number; // courier fees we covered (known once sent to Modon)
+  gifts: number; // orders given away (not revenue)
+  giftValue: number; // what they would have cost
 };
 
 export type Bucket = { key: string; label: string; from: string; to: string; revenue: number; orders: number; jars: number };
@@ -259,6 +267,8 @@ function kpisOf(list: Order[], flavors: string[], types: Map<string, "new" | "re
   let deliveryPrepaid = 0;
   let freeDelivery = 0;
   let freeDeliveryCost = 0;
+  let gifts = 0;
+  let giftValue = 0;
   const phones = new Set<string>();
   const newPhones = new Set<string>();
   for (const o of list) {
@@ -268,7 +278,11 @@ function kpisOf(list: Order[], flavors: string[], types: Map<string, "new" | "re
     phones.add(o.phone);
     if (types.get(o.id) === "new" && o.status !== "CANCELLED") newPhones.add(o.phone);
     if (o.status === "DELIVERED") delivered += 1;
-    if (o.paid) prepaid += 1;
+    if (isGift(o) && o.status !== "CANCELLED") {
+      gifts += 1;
+      giftValue += o.total;
+    }
+    if (o.paid && !isGift(o)) prepaid += 1;
     if (o.deliveryPaid) deliveryPrepaid += 1;
     if (o.freeDelivery && !o.deliveryPaid && o.status !== "CANCELLED") {
       freeDelivery += 1;
@@ -279,7 +293,8 @@ function kpisOf(list: Order[], flavors: string[], types: Map<string, "new" | "re
     orders: list.length,
     revenue,
     jars,
-    aov: list.length ? Math.round(revenue / list.length) : 0,
+    // Average over the orders that were sold (gifts are not sales).
+    aov: list.length - list.filter(isGift).length ? Math.round(revenue / (list.length - list.filter(isGift).length)) : 0,
     jarsPerOrder: list.length ? jars / list.length : 0,
     customers: phones.size,
     newCustomers: newPhones.size,
@@ -289,6 +304,8 @@ function kpisOf(list: Order[], flavors: string[], types: Map<string, "new" | "re
     deliveryPrepaid,
     freeDelivery,
     freeDeliveryCost,
+    gifts,
+    giftValue,
   };
 }
 
@@ -378,7 +395,7 @@ export function computeInsights(all: Order[], f: Filters, today: string): Insigh
       const r = flavorMap.get(l.slug) ?? { key: l.slug, label: l.nameAr, orders: 0, jars: 0, revenue: 0 };
       r.orders += 1;
       r.jars += l.qty;
-      r.revenue += l.qty * l.price;
+      r.revenue += isGift(o) ? 0 : l.qty * l.price;
       flavorMap.set(l.slug, r);
     }
   }

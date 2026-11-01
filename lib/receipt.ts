@@ -178,7 +178,7 @@ function draw(ctx: CanvasRenderingContext2D, d: ReceiptData): number {
   return y + 84;
 }
 
-async function loadFonts() {
+export async function loadFonts() {
   if (typeof document === "undefined" || !document.fonts) return;
   try {
     await Promise.all([

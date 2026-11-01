@@ -348,8 +348,9 @@ export function OrderFlow() {
         <p className="order-pay">{site.paymentNote}</p>
         <p className="order-pay">{site.courierNote}</p>
         <p className="order-pay">التوصيل لكل محافظات العراق.</p>
-        <p className="order-pay">بغداد: التوصيل {site.baghdadWindow.short}.</p>
-        <p className="order-pay">اطلبوا قبل الساعة {site.deliveryCutoff} ويصلكم غداً.</p>
+        <p className="order-pay">
+          اطلبوا قبل الساعة {site.deliveryCutoff} ويصلكم غداً. التوصيل داخل بغداد {site.baghdadWindow.short}.
+        </p>
         <p className="order-pay order-pay--cold">{site.coldNote.text}</p>
       </div>
 
