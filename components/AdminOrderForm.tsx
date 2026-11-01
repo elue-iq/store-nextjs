@@ -10,7 +10,7 @@ import { products } from "@/lib/products";
 import { MAX_QTY_PER_LINE } from "@/lib/order-text";
 import { collectBreakdown, modonCollect } from "@/lib/modon";
 import { formatIraqiMobile, normalizeIraqiMobile } from "@/lib/phone";
-import { deliveryPayOf, formatIQD, site, type DeliveryPay } from "@/lib/site";
+import { deliveryPayOf, formatIQD, needsPayRef, PAID_METHODS, PAY_METHOD_LABELS, site, type DeliveryPay, type PayMethod } from "@/lib/site";
 import { checkDelivery, cleanDelivery, phoneError, type DeliveryInfo, type FieldErrors } from "@/lib/validate";
 
 // Team form for one order:
@@ -18,6 +18,8 @@ import { checkDelivery, cleanDelivery, phoneError, type DeliveryInfo, type Field
 //   placeOrder, so it gets the next EL- number and is sent to Telegram.
 // - "edit": change any detail of an existing order. Only the team can do this;
 //   customers ask on WhatsApp.
+type JarsPay = "cash" | "prepaid" | "gift";
+
 export function AdminOrderForm({
   order,
   prefill,
@@ -48,11 +50,26 @@ export function AdminOrderForm({
   const [errors, setErrors] = useState<FieldErrors>({});
   const [note, setNote] = useState(order?.note ?? "");
   const [cashier, setCashier] = useState(order?.cashierOrderId ?? "");
-  const [paid, setPaid] = useState(Boolean(order?.paid));
-  const [paidNote, setPaidNote] = useState(order?.paidNote ?? "");
+  // The jars: cash to the driver, paid in advance (Qi Card, ZainCash…), or a free gift from ÉLUE.
+  const [jarsPay, setJarsPay] = useState<JarsPay>(
+    order?.paid ? (order.payMethod === "GIFT" || order.paidNote === "هدية" ? "gift" : "prepaid") : "cash",
+  );
+  const paid = jarsPay !== "cash";
+  // How it was paid in advance (shared by the jars and the delivery fee) and its transaction number.
+  const [method, setMethod] = useState<PayMethod | "">(
+    order?.payMethod === "QI" || order?.payMethod === "ZAINCASH" || order?.payMethod === "OTHER" ? order.payMethod : "",
+  );
+  const [payRef, setPayRef] = useState(order?.payRef ?? "");
+  const [other, setOther] = useState(order?.paidNote && order.paidNote !== "هدية" ? order.paidNote : "");
+  const [payErrors, setPayErrors] = useState<{ method?: string; payRef?: string; other?: string }>({});
   // The delivery fee: paid to the driver, already paid by the customer, or a gift from ÉLUE.
   const [deliveryPay, setDeliveryPay] = useState<DeliveryPay>(order ? deliveryPayOf(order) : "driver");
-  const prepaidSomething = paid || deliveryPay === "prepaid";
+  const prepaidSomething = jarsPay === "prepaid" || deliveryPay === "prepaid";
+  // Inside Baghdad the customer must have accepted the 6–10 pm delivery window.
+  const [slotOk, setSlotOk] = useState(false);
+  const [slotErr, setSlotErr] = useState(false);
+  const inBaghdad = delivery.province === site.baghdadWindow.province;
+  const needsSlot = inBaghdad && (!editing || order?.province !== site.baghdadWindow.province);
   const [qty, setQty] = useState<Record<string, number>>(() =>
     Object.fromEntries((order?.items ?? []).filter(Boolean).map((i) => [i!.slug, i!.qty])),
   );
@@ -86,8 +103,30 @@ export function AdminOrderForm({
       toast({ id: "admin", tone: "attention", message: "أضف نكهة واحدة على الأقل." });
       return;
     }
+    // Paid in advance: the method and the transaction number are required.
+    const pe: typeof payErrors = {};
+    if (prepaidSomething) {
+      if (!method) pe.method = "اختر طريقة الدفع.";
+      else {
+        if (needsPayRef(method) && !payRef.trim()) pe.payRef = "اكتب رقم العملية أو الحوالة.";
+        if (method === "OTHER" && !other.trim()) pe.other = "اكتب ما هي طريقة الدفع.";
+      }
+    }
+    setPayErrors(pe);
+    if (Object.keys(pe).length) {
+      document.getElementById("order-pay")?.scrollIntoView({ block: "center", behavior: "smooth" });
+      return;
+    }
+    if (needsSlot && !slotOk) {
+      setSlotErr(true);
+      document.getElementById("order-slot")?.scrollIntoView({ block: "center", behavior: "smooth" });
+      return;
+    }
     const info = cleanDelivery(delivery);
     const customerPhone = normalizeIraqiMobile(phone)!;
+    const savedMethod: PayMethod | null = jarsPay === "gift" ? "GIFT" : prepaidSomething && method ? method : null;
+    const savedRef = savedMethod && needsPayRef(savedMethod) ? payRef.trim() : null;
+    const savedNote = savedMethod === "OTHER" ? other.trim() || null : null;
     setBusy(true);
 
     if (order) {
@@ -110,6 +149,8 @@ export function AdminOrderForm({
         cashierOrderId: order.cashierOrderId ?? null,
         paid: Boolean(order.paid),
         paidNote: order.paidNote ?? null,
+        payMethod: order.payMethod ?? null,
+        payRef: order.payRef ?? null,
         freeDelivery: Boolean(order.freeDelivery),
         deliveryPaid: Boolean(order.deliveryPaid),
       };
@@ -119,7 +160,9 @@ export function AdminOrderForm({
         note: note.trim() || null,
         cashierOrderId: cashier.trim() || null,
         paid,
-        paidNote: prepaidSomething ? paidNote.trim() || null : null,
+        paidNote: savedNote,
+        payMethod: savedMethod,
+        payRef: savedRef,
         freeDelivery: deliveryPay === "gift",
         deliveryPaid: deliveryPay === "prepaid",
       };
@@ -131,6 +174,7 @@ export function AdminOrderForm({
         JSON.stringify(items.map((i) => [i.slug, i.qty])) ===
         JSON.stringify(products.filter((p) => oldQty[p.slug]).map((p) => [p.slug, oldQty[p.slug]]));
       if (!sameItems) Object.assign(changes, { items, jars, total });
+      if (needsSlot) changes.slotAccepted = true;
       if (!Object.keys(changes).length) {
         setBusy(false);
         onDone(order.orderNumber);
@@ -172,7 +216,10 @@ export function AdminOrderForm({
       customerPhone,
       cashierOrderId: cashier.trim() || undefined,
       paid,
-      paidNote: prepaidSomething ? paidNote.trim() || undefined : undefined,
+      paidNote: savedNote ?? undefined,
+      payMethod: savedMethod ?? undefined,
+      payRef: savedRef ?? undefined,
+      slotAccepted: inBaghdad ? slotOk : undefined,
       freeDelivery: deliveryPay === "gift",
       deliveryPaid: deliveryPay === "prepaid",
     });
@@ -187,6 +234,7 @@ export function AdminOrderForm({
     if (code === "invalid_fields") {
       const fields = errorFields(gqlErrors);
       if (fields.phone) setPhoneErr(fields.phone);
+      if (fields.payMethod || fields.payRef) setPayErrors({ method: fields.payMethod, payRef: fields.payRef });
       setErrors(fields);
     }
     toast({ id: "admin", tone: "attention", message: "تعذّر إنشاء الطلب. راجع الحقول وحاول مجددًا." });
@@ -263,12 +311,32 @@ export function AdminOrderForm({
         </p>
       </section>
 
-      <section className="order-detail__block">
+      <section className="order-detail__block" id="order-pay">
         <h2>الدفع والتوصيل</h2>
-        <label className="admin-order-form__check">
-          <input type="checkbox" checked={paid} onChange={(e) => setPaid(e.target.checked)} />
-          <span>العميل دفع ثمن العلب مسبقاً</span>
-        </label>
+        <fieldset className="admin-order-form__group">
+          <legend>ثمن العلب ({formatIQD(total)})</legend>
+          {(
+            [
+              ["cash", "يدفعه العميل نقداً للمندوب عند الاستلام"],
+              ["prepaid", "دفعه العميل مسبقاً (Qi Card أو زين كاش أو غيره)"],
+              ["gift", "هدية من ÉLUE: العلب مجاناً"],
+            ] as [JarsPay, string][]
+          ).map(([value, label]) => (
+            <label key={value} className="admin-order-form__check">
+              <input
+                type="radio"
+                name="jars-pay"
+                value={value}
+                checked={jarsPay === value}
+                onChange={() => {
+                  setJarsPay(value);
+                  if (value === "gift" && deliveryPay === "prepaid") setDeliveryPay("driver");
+                }}
+              />
+              <span>{label}</span>
+            </label>
+          ))}
+        </fieldset>
         <fieldset className="admin-order-form__group">
           <legend>أجور التوصيل ({formatIQD(site.deliveryFee)})</legend>
           {(
@@ -277,35 +345,96 @@ export function AdminOrderForm({
               ["prepaid", "دفعها العميل مسبقاً (بطاقة أو تحويل)"],
               ["gift", "هدية من ÉLUE: توصيل مجاني ونتحمّل الأجور"],
             ] as [DeliveryPay, string][]
-          ).map(([value, label]) => (
-            <label key={value} className="admin-order-form__check">
-              <input
-                type="radio"
-                name="delivery-pay"
-                value={value}
-                checked={deliveryPay === value}
-                onChange={() => setDeliveryPay(value)}
-              />
-              <span>{label}</span>
-            </label>
-          ))}
+          )
+            .filter(([value]) => !(value === "prepaid" && jarsPay === "gift"))
+            .map(([value, label]) => (
+              <label key={value} className="admin-order-form__check">
+                <input
+                  type="radio"
+                  name="delivery-pay"
+                  value={value}
+                  checked={deliveryPay === value}
+                  onChange={() => setDeliveryPay(value)}
+                />
+                <span>{label}</span>
+              </label>
+            ))}
         </fieldset>
         {prepaidSomething && (
-          <label>
-            <span className="visually-hidden">طريقة الدفع</span>
-            <input
-              value={paidNote}
-              onChange={(e) => setPaidNote(e.target.value)}
-              maxLength={120}
-              placeholder="طريقة الدفع، مثل: بطاقة أو تحويل Qi"
-            />
-          </label>
+          <fieldset className={payErrors.method ? "admin-order-form__group has-error" : "admin-order-form__group"}>
+            <legend>طريقة الدفع المسبق</legend>
+            {PAID_METHODS.map((m) => (
+              <label key={m} className="admin-order-form__check">
+                <input
+                  type="radio"
+                  name="pay-method"
+                  value={m}
+                  checked={method === m}
+                  onChange={() => {
+                    setMethod(m);
+                    setPayErrors({});
+                  }}
+                />
+                <span>{PAY_METHOD_LABELS[m]}</span>
+              </label>
+            ))}
+            {payErrors.method && <span className="field-error">{payErrors.method}</span>}
+            {method === "OTHER" && (
+              <label className={payErrors.other ? "has-error" : undefined}>
+                ما هي طريقة الدفع؟
+                <input
+                  value={other}
+                  onChange={(e) => setOther(e.target.value)}
+                  maxLength={120}
+                  placeholder="مثل: حوالة بنكية، ماستر كارد"
+                />
+                {payErrors.other && <span className="field-error">{payErrors.other}</span>}
+              </label>
+            )}
+            {method && (
+              <label className={payErrors.payRef ? "has-error" : undefined}>
+                رقم العملية أو الحوالة (مطلوب)
+                <input
+                  value={payRef}
+                  onChange={(e) => setPayRef(e.target.value)}
+                  dir="ltr"
+                  maxLength={80}
+                  placeholder="رقم التتبع الذي يظهر للعميل بعد الدفع"
+                  aria-invalid={payErrors.payRef ? true : undefined}
+                />
+                {payErrors.payRef && <span className="field-error">{payErrors.payRef}</span>}
+              </label>
+            )}
+          </fieldset>
         )}
         <p className="admin-order-form__collect">
           يستلم المندوب من العميل <strong>{formatIQD(driverCollects)}</strong>
           <small>{collectBreakdown(total, paid, deliveryPay)}</small>
         </p>
       </section>
+
+      {inBaghdad && (
+        <section className="order-detail__block" id="order-slot">
+          <h2>موعد التوصيل في بغداد</h2>
+          <p className="field-note">{site.baghdadWindow.note}</p>
+          {needsSlot ? (
+            <label className={slotErr && !slotOk ? "admin-order-form__check has-error" : "admin-order-form__check"}>
+              <input
+                type="checkbox"
+                checked={slotOk}
+                onChange={(e) => {
+                  setSlotOk(e.target.checked);
+                  if (e.target.checked) setSlotErr(false);
+                }}
+              />
+              <span>العميل اطّلع على موعد التوصيل ووافق عليه</span>
+            </label>
+          ) : (
+            <p className="hint">وافق العميل على الموعد عند إنشاء الطلب.</p>
+          )}
+          {slotErr && !slotOk && <span className="field-error">يلزم موافقة العميل على موعد التوصيل.</span>}
+        </section>
+      )}
 
       <section className="order-detail__block">
         <h2>رقم طلب الكاشير</h2>

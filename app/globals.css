@@ -4126,3 +4126,176 @@ button.dash-bars__row:focus-visible {
   padding-inline: 0.4rem;
   white-space: nowrap;
 }
+
+/* ---------- Payment method, delivery companies, problem reports, Baghdad window ---------- */
+.order-row__warn {
+  background: #fff4ee;
+  color: var(--terracotta-deep);
+  box-shadow: inset 0 0 0 1.5px var(--terracotta);
+}
+.order-detail__pay {
+  display: grid;
+  gap: 0.15rem;
+  margin-top: 0.4rem;
+}
+.order-detail__pay p {
+  margin: 0;
+}
+.admin-order-form__group.has-error legend,
+.admin-order-form__check.has-error {
+  color: var(--terracotta-deep);
+}
+.admin-order-form__group label:not(.admin-order-form__check) {
+  display: grid;
+  gap: 0.3rem;
+  margin-top: 0.4rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+/* The Baghdad delivery window the customer accepts before ordering. */
+.slot-accept {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.8rem 0.9rem;
+  border-radius: 12px;
+  background: #fff4ee;
+  border: 1.5px solid transparent;
+  color: var(--terracotta-deep);
+  line-height: 1.7;
+}
+.slot-accept p {
+  margin: 0;
+  font-size: 0.92rem;
+}
+.slot-accept strong {
+  display: block;
+}
+.slot-accept.has-error {
+  border-color: var(--terracotta-deep);
+}
+
+/* Delivery company on the admin order screen. */
+.delivery__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.7rem;
+}
+.delivery__chips button {
+  min-height: 2.7rem;
+  padding: 0.35rem 1rem;
+  border: 1.5px solid var(--sand-deep);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.delivery__chips button[aria-pressed="true"] {
+  border-color: var(--terracotta);
+  background: var(--terracotta);
+  color: var(--cream);
+}
+.delivery__chips button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+.delivery__status p {
+  margin: 0 0 0.3rem;
+}
+.delivery__ok {
+  color: var(--sage-deep, #4d6b4a);
+  font-weight: 600;
+}
+.delivery__report {
+  display: grid;
+  gap: 0.7rem;
+}
+.delivery__report label {
+  display: grid;
+  gap: 0.3rem;
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+.delivery__report .hint {
+  margin: 0;
+}
+.btn.is-disabled,
+.btn[aria-disabled="true"] {
+  opacity: 0.5;
+  pointer-events: none;
+}
+.btn.is-confirm {
+  background: var(--terracotta-deep);
+  border-color: var(--terracotta-deep);
+  color: var(--cream);
+}
+.delivery__issues {
+  display: grid;
+  gap: 0.5rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.delivery__issues li {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 10px;
+  background: var(--cream-deep, #efe5d6);
+  font-size: 0.92rem;
+}
+.delivery__issues small {
+  color: var(--muted);
+}
+
+/* «شركات التوصيل» screen */
+.couriers {
+  display: grid;
+  gap: 1rem;
+}
+.couriers__steps {
+  margin: 0;
+  padding-inline-start: 1.2rem;
+  display: grid;
+  gap: 0.4rem;
+  font-size: 0.92rem;
+  line-height: 1.7;
+}
+.couriers__list {
+  display: grid;
+  gap: 0.7rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.couriers__list li {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.9rem 1rem;
+  border-radius: var(--radius-panel);
+  background: #fff;
+  border: 1.5px solid var(--sand-deep);
+}
+.couriers__list li.is-off {
+  opacity: 0.65;
+}
+.couriers__list li > div:first-child {
+  display: grid;
+  gap: 0.15rem;
+}
+.couriers__list li small {
+  color: var(--muted);
+}
+.couriers__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.courier-form {
+  display: grid;
+  gap: 0.8rem;
+}

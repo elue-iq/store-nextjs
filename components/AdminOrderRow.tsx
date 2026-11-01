@@ -3,7 +3,7 @@
 import { StatusChip } from "./OrderBits";
 import { baghdadTime, type Order } from "@/lib/data";
 import { fullAddress } from "@/lib/iraq";
-import { formatIQD } from "@/lib/site";
+import { formatIQD, PAY_KEY_LABELS, payKeyOf } from "@/lib/site";
 
 export const baghdadDay = (iso: string) =>
   new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Baghdad", year: "numeric", month: "2-digit", day: "2-digit" }).format(
@@ -18,17 +18,26 @@ export function shortTime(iso: string, today: string): string {
 
 // One order in a list (the orders screen and the dashboard). Tapping opens it.
 export function OrderRow({ order: o, today, onOpen }: { order: Order; today: string; onOpen: (orderNumber: string) => void }) {
+  const pay = payKeyOf(o);
   return (
     <button type="button" className={`order-row order-row--${o.status.toLowerCase()}`} onClick={() => onOpen(o.orderNumber)}>
       <span className="order-row__main">
         <span className="order-row__top">
           <strong dir="ltr">{o.orderNumber}</strong>
           <StatusChip status={o.status} />
-          {o.paid && <span className="order-row__paid">مدفوع</span>}
+          {pay === "GIFT" ? (
+            <span className="order-row__paid order-row__free">هدية</span>
+          ) : (
+            o.paid && <span className="order-row__paid">مدفوع{pay !== "unknown" ? ` · ${PAY_KEY_LABELS[pay]}` : ""}</span>
+          )}
           {o.deliveryPaid ? (
-            <span className="order-row__paid">التوصيل مدفوع</span>
+            <span className="order-row__paid">التوصيل مدفوع{!o.paid && pay !== "unknown" ? ` · ${PAY_KEY_LABELS[pay]}` : ""}</span>
           ) : (
             o.freeDelivery && <span className="order-row__paid order-row__free">توصيل مجاني</span>
+          )}
+          {pay === "unknown" && <span className="order-row__paid order-row__warn">بلا طريقة دفع</span>}
+          {o.courierKind === "LOCAL" && o.courierName && (
+            <span className="order-row__paid order-row__free">{o.courierName}</span>
           )}
         </span>
         <span className="order-row__name">{o.name}</span>

@@ -2,6 +2,7 @@ import { a, defineData, type ClientSchema } from "@aws-amplify/backend";
 import { placeOrder } from "../functions/place-order/resource";
 import { modon } from "../functions/modon/resource";
 import { eatix } from "../functions/eatix/resource";
+import { dispatch } from "../functions/dispatch/resource";
 
 // Orders live in DynamoDB (one table, managed by Amplify).
 //
@@ -54,6 +55,11 @@ const schema = a
         // (so their order shows it); the note is team only.
         paid: a.boolean(), // inherits model auth: owner read, team read/write
         paidNote: a.string().authorization((allow) => [allow.group("ADMINS")]), // how it was paid (e.g. Qi)
+        // How the customer paid in advance (jars and/or delivery fee): QI | ZAINCASH | OTHER,
+        // or GIFT when ÉLUE gave the jars free. payRef = the transaction / transfer
+        // number (required for QI, ZAINCASH and OTHER). Team only; no method = cash to the driver.
+        payMethod: a.string().authorization((allow) => [allow.group("ADMINS")]),
+        payRef: a.string().authorization((allow) => [allow.group("ADMINS")]),
         // ÉLUE covers the delivery fee (free delivery as a gift / offer); the driver
         // then collects only the jars. Readable by the customer so their order shows it.
         freeDelivery: a.boolean(),
@@ -79,6 +85,18 @@ const schema = a
         modonRegionName: a.string().authorization((allow) => [allow.group("ADMINS")]),
         modonSentAt: a.datetime().authorization((allow) => [allow.group("ADMINS")]),
         modonUpdatedAt: a.datetime().authorization((allow) => [allow.group("ADMINS")]),
+        // Who delivers: MODON, or LOCAL = one of our own couriers (the Courier model), who gets
+        // the order on Telegram. Team only.
+        courierKind: a.string().authorization((allow) => [allow.group("ADMINS")]),
+        courierId: a.string().authorization((allow) => [allow.group("ADMINS")]),
+        courierName: a.string().authorization((allow) => [allow.group("ADMINS")]), // name when assigned
+        courierSentAt: a.datetime().authorization((allow) => [allow.group("ADMINS")]),
+        courierStatus: a.string().authorization((allow) => [allow.group("ADMINS")]), // SENT | FAILED
+        courierError: a.string().authorization((allow) => [allow.group("ADMINS")]),
+        // Delivery problems reported to the courier / Modon support: [{at, by, kind, text, to, via, ok}]
+        issues: a.json().authorization((allow) => [allow.group("ADMINS")]),
+        // The customer accepted the Baghdad delivery window (6–10 pm, else next day).
+        slotAccepted: a.boolean().authorization((allow) => [allow.group("ADMINS")]),
         // Eatix (cashier device copy of the order). Team only.
         eatixId: a.string().authorization((allow) => [allow.group("ADMINS")]),
         eatixStatus: a.string().authorization((allow) => [allow.group("ADMINS")]), // SENT | SIMULATED | FAILED | OFF | CANCELLED
@@ -89,6 +107,17 @@ const schema = a
       // Fast lookups: a customer's orders, and orders by phone number (admin search).
       .secondaryIndexes((index) => [index("owner"), index("phone"), index("modonId")])
       .authorization((allow) => [allow.ownerDefinedIn("owner").to(["read"]), allow.group("ADMINS")]),
+
+    // A local delivery company / courier. The bot sends the orders assigned to it, and
+    // delivery-problem reports, to its Telegram chat (a channel or group the bot is in).
+    Courier: a
+      .model({
+        name: a.string().required(),
+        telegramChatId: a.string().required(), // -100… or @channelname
+        active: a.boolean(),
+        note: a.string(),
+      })
+      .authorization((allow) => [allow.group("ADMINS")]),
 
     // The customer's saved delivery details ("معلوماتي" on /account).
     // One per customer; only they can read or change it, the team can read it.
@@ -139,6 +168,11 @@ const schema = a
         freeDelivery: a.boolean(),
         // Team only: customer already paid the delivery fee (driver collects jars only).
         deliveryPaid: a.boolean(),
+        // Team only: how it was paid in advance (QI | ZAINCASH | OTHER | GIFT) and its number.
+        payMethod: a.string(),
+        payRef: a.string(),
+        // The customer accepted the Baghdad delivery window.
+        slotAccepted: a.boolean(),
       })
       .returns(a.ref("PlaceOrderResult"))
       .authorization((allow) => [allow.authenticated()])
@@ -158,6 +192,22 @@ const schema = a
       .authorization((allow) => [allow.group("ADMINS")])
       .handler(a.handler.function(modon)),
 
+    // Local couriers (Telegram) from the admin: assign / resend / unassign an order,
+    // report a delivery problem, test a chat, cancel notice.
+    dispatch: a
+      .mutation()
+      .arguments({
+        action: a.string().required(),
+        orderId: a.string(),
+        courierId: a.string(),
+        chatId: a.string(),
+        kind: a.string(),
+        text: a.string(),
+      })
+      .returns(a.json())
+      .authorization((allow) => [allow.group("ADMINS")])
+      .handler(a.handler.function(dispatch)),
+
     // Eatix actions from the admin: send (again), cancel.
     eatix: a
       .mutation()
@@ -166,7 +216,7 @@ const schema = a
       .authorization((allow) => [allow.group("ADMINS")])
       .handler(a.handler.function(eatix)),
   })
-  .authorization((allow) => [allow.resource(placeOrder), allow.resource(modon), allow.resource(eatix)]);
+  .authorization((allow) => [allow.resource(placeOrder), allow.resource(modon), allow.resource(eatix), allow.resource(dispatch)]);
 
 export type Schema = ClientSchema<typeof schema>;
 

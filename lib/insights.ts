@@ -14,6 +14,7 @@
 import type { Order, OrderStatus } from "./data";
 import { products } from "./products";
 import { formatIraqiMobile } from "./phone";
+import { PAY_KEY_LABELS, payKeyOf, type PayKey } from "./site";
 
 // ---- Days ----------------------------------------------------------------------
 
@@ -63,6 +64,7 @@ export type Filters = {
   channel: "" | "web" | "team";
   source: string; // "" = all, otherwise a sourceLabel()
   payment: "" | "paid" | "cod" | "deliveryPaid" | "free";
+  method: "" | PayKey; // how it was paid: cash, Qi Card, ZainCash…
   customer: "" | "new" | "returning";
   showTests: boolean;
 };
@@ -79,6 +81,7 @@ export const DEFAULT_FILTERS: Filters = {
   channel: "",
   source: "",
   payment: "",
+  method: "",
   customer: "",
   showTests: false,
 };
@@ -93,6 +96,7 @@ export function activeFilterCount(f: Filters): number {
     (f.channel ? 1 : 0) +
     (f.source ? 1 : 0) +
     (f.payment ? 1 : 0) +
+    (f.method ? 1 : 0) +
     (f.customer ? 1 : 0) +
     (f.showTests ? 1 : 0)
   );
@@ -237,6 +241,7 @@ export type Insights = {
   areas: Row[];
   sources: Row[];
   channels: Row[];
+  payMethods: Row[]; // orders by how they were paid
   sizes: Row[]; // orders by number of jars
   hours: number[]; // orders per Baghdad hour 0–23
   weekdays: number[]; // orders per weekday, Sunday first
@@ -320,6 +325,7 @@ export function computeInsights(all: Order[], f: Filters, today: string): Insigh
     if (f.payment === "cod" && o.paid) return false;
     if (f.payment === "deliveryPaid" && !o.deliveryPaid) return false;
     if (f.payment === "free" && (!o.freeDelivery || o.deliveryPaid)) return false;
+    if (f.method && payKeyOf(o) !== f.method) return false;
     if (f.customer && types.get(o.id) !== f.customer) return false;
     return true;
   });
@@ -385,6 +391,7 @@ export function computeInsights(all: Order[], f: Filters, today: string): Insigh
   const areas = new Map<string, Row>();
   const sources = new Map<string, Row>();
   const channels = new Map<string, Row>();
+  const payMethods = new Map<string, Row>();
   const sizes = new Map<string, Row>();
   const hours = Array<number>(24).fill(0);
   const weekdays = Array<number>(7).fill(0);
@@ -397,6 +404,7 @@ export function computeInsights(all: Order[], f: Filters, today: string): Insigh
     const src = sourceLabel(o);
     add(sources, src, src, p.jars, p.revenue);
     add(channels, o.createdBy ? "team" : "web", o.createdBy ? "أنشأه الفريق" : "من الموقع", p.jars, p.revenue);
+    add(payMethods, payKeyOf(o), PAY_KEY_LABELS[payKeyOf(o)], p.jars, p.revenue);
     const size = p.jars >= 5 ? "5+" : String(p.jars);
     add(sizes, size, p.jars >= 5 ? "5 علب أو أكثر" : p.jars === 1 ? "علبة واحدة" : p.jars === 2 ? "علبتان" : `${p.jars} علب`, p.jars, p.revenue);
     hours[hourOf(o.createdAt)] += 1;
@@ -427,6 +435,7 @@ export function computeInsights(all: Order[], f: Filters, today: string): Insigh
     areas: [...areas.values()].sort((a, b) => b.orders - a.orders || b.revenue - a.revenue),
     sources: rank(sources),
     channels: rank(channels),
+    payMethods: rank(payMethods),
     sizes: [...sizes.values()].sort((a, b) => a.key.localeCompare(b.key)),
     hours,
     weekdays,
@@ -477,6 +486,8 @@ export function ordersCsv(orders: Order[], types: Map<string, "new" | "returning
     "العلب",
     "المجموع (د.ع)",
     "العلب مدفوعة مسبقاً",
+    "طريقة الدفع",
+    "رقم العملية",
     "أجور التوصيل",
     "أجور مدن",
     "رقم مدن",
@@ -503,6 +514,8 @@ export function ordersCsv(orders: Order[], types: Map<string, "new" | "returning
       o.jars,
       o.total,
       o.paid ? "نعم" : "",
+      PAY_KEY_LABELS[payKeyOf(o)],
+      o.payRef,
       o.deliveryPaid ? "مدفوعة مسبقاً" : o.freeDelivery ? "هدية (توصيل مجاني)" : "عند الاستلام",
       o.modonFee ?? "",
       o.modonQr,

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { OrderRow } from "./AdminOrderRow";
 import { STATUS_LABELS, type Order, type OrderStatus } from "@/lib/data";
 import { products } from "@/lib/products";
-import { formatIQD } from "@/lib/site";
+import { formatIQD, PAY_KEY_LABELS, type PayKey } from "@/lib/site";
 import { formatIraqiMobile } from "@/lib/phone";
 import {
   ALL_STATUSES,
@@ -292,6 +292,7 @@ export function AdminDashboard({
               : "توصيل مجاني (هدية)",
       clear: () => set({ payment: "" }),
     });
+  if (f.method) chips.push({ key: "me", text: `طريقة الدفع: ${PAY_KEY_LABELS[f.method]}`, clear: () => set({ method: "" }) });
   if (f.customer) chips.push({ key: "cu", text: f.customer === "new" ? "عملاء جدد" : "عملاء عائدون", clear: () => set({ customer: "" }) });
   if (f.showTests) chips.push({ key: "te", text: "مع الطلبات التجريبية", clear: () => set({ showTests: false }) });
 
@@ -435,6 +436,17 @@ export function AdminDashboard({
                 <option value="paid">العلب مدفوعة مسبقاً</option>
                 <option value="deliveryPaid">التوصيل مدفوع مسبقاً</option>
                 <option value="free">توصيل مجاني (هدية)</option>
+              </select>
+            </label>
+            <label>
+              طريقة الدفع
+              <select className="admin-sort" value={f.method} onChange={(e) => set({ method: e.target.value as Filters["method"] })}>
+                <option value="">الكل</option>
+                {(["cod", "QI", "ZAINCASH", "OTHER", "GIFT", "unknown"] as PayKey[]).map((k) => (
+                  <option key={k} value={k}>
+                    {PAY_KEY_LABELS[k]}
+                  </option>
+                ))}
               </select>
             </label>
             <label>
@@ -636,6 +648,10 @@ export function AdminDashboard({
           <BarList rows={rowsOf(ins.channels, f.channel)} onPick={(key) => set({ channel: f.channel === key ? "" : (key as Filters["channel"]) })} />
           <h3 className="dash-sub">المصدر</h3>
           <BarList rows={rowsOf(ins.sources, f.source)} onPick={(key) => set({ source: f.source === key ? "" : key })} />
+        </Card>
+
+        <Card title="طريقة الدفع" sub="كيف دفع العملاء: نقداً للمندوب، أو مسبقاً بـ Qi Card وزين كاش، أو هدية.">
+          <BarList rows={rowsOf(ins.payMethods, f.method)} onPick={(key) => set({ method: f.method === key ? "" : (key as Filters["method"]) })} />
         </Card>
 
         <Card

@@ -7,6 +7,7 @@ import type { Schema } from "@/amplify/data/resource";
 export const dataClient = generateClient<Schema>({ authMode: "userPool" });
 
 export type Order = Schema["Order"]["type"];
+export type Courier = Schema["Courier"]["type"];
 export type OrderStatus = NonNullable<Order["status"]>;
 
 export const STATUS_LABELS: Record<OrderStatus, string> = {
