@@ -8,9 +8,7 @@ import type { Schema } from "../../data/resource";
 
 // courierApp: what a local courier can do, and nothing more.
 //   mine    – their orders (open ones, and those delivered in the last 2 days)
-//   claim   – the label's QR code was scanned: the order is added to their list if it is not there yet
-//             (taken over from another courier if needed), and returned either way
-//   get     – one order by number, only if it is theirs
+//   get     – one order by number (the QR code on the label), only if it is theirs
 //   status  – OUT_FOR_DELIVERY or DELIVERED for an order that is theirs
 // The caller is a courier only if their login's WhatsApp number is on an active Courier.
 // Only the fields a courier needs are returned (no payment details).
@@ -99,32 +97,6 @@ export const handler: Schema["courierApp"]["functionHandler"] = async (event) =>
   if (!orderNumber) throw new Error("missing_order");
   const o = await findOrder(orderNumber);
   if (!o) throw new Error("not_found");
-
-  if (action === "claim") {
-    if (o.courierKind === "LOCAL" && o.courierId === courier.id) return { order: view(o), added: false };
-    if (o.status === "CANCELLED") throw new Error("cancelled");
-    if (o.status === "DELIVERED") throw new Error("already_delivered");
-    if (o.modonQr || o.courierKind === "MODON") throw new Error("at_modon");
-    const { data, errors } = await client.models.Order.update({
-      id: o.id,
-      courierKind: "LOCAL",
-      courierId: courier.id,
-      courierName: courier.name,
-      courierSentAt: new Date().toISOString(),
-      courierStatus: "SELF", // added by the courier scanning the label (no Telegram message)
-      courierError: null,
-      editedBy: `courier:${courier.name}`,
-      editedAt: new Date().toISOString(),
-    });
-    if (errors?.length || !data) {
-      console.error("courier claim failed", JSON.stringify(errors));
-      throw new Error("save_failed");
-    }
-    console.log(`courierApp claim: ${orderNumber} -> ${courier.name} (was ${o.courierName ?? "unassigned"})`);
-    return { order: view(data), added: true, from: o.courierKind === "LOCAL" ? (o.courierName ?? null) : null };
-  }
-
-  if (o.courierKind !== "LOCAL" || o.courierId !== courier.id) throw new Error("not_yours");
 
   if (action === "get") return { order: view(o) };
 

@@ -224,7 +224,7 @@ const schema = a
     courierApp: a
       .mutation()
       .arguments({
-        action: a.string().required(), // mine | get | claim | status
+        action: a.string().required(), // mine | get | status
         orderNumber: a.string(),
         status: a.string(),
       })

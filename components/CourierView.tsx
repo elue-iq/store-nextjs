@@ -16,14 +16,14 @@ import { courierComingMessage } from "@/lib/share";
 
 const STATUS_AR: Record<string, string> = { NEW: "جديد", CONFIRMED: "جديد", OUT_FOR_DELIVERY: "في الطريق", DELIVERED: "تم التسليم" };
 
-function OrderCard({ o, busy, onStatus, courierName, highlight }: { o: CourierOrder; busy: boolean; onStatus: (o: CourierOrder, s: "OUT_FOR_DELIVERY" | "DELIVERED") => void; courierName: string; highlight?: boolean }) {
+function OrderCard({ o, busy, onStatus, courierName }: { o: CourierOrder; busy: boolean; onStatus: (o: CourierOrder, s: "OUT_FOR_DELIVERY" | "DELIVERED") => void; courierName: string }) {
   const [confirm, setConfirm] = useState(false);
   const collect = collectAmount(o);
   const done = o.status === "DELIVERED";
   const items = (o.items ?? []).filter((i): i is NonNullable<typeof i> => Boolean(i)).map((i) => `${i.nameAr} × ${i.qty}`).join("، ");
   const phone = formatIraqiMobile(o.phone);
   return (
-    <article id={`o-${o.orderNumber}`} className={`courier-card${done ? " is-done" : ""}${highlight ? " is-new" : ""}`}>
+    <article className={`courier-card${done ? " is-done" : ""}`}>
       <header>
         <strong dir="ltr">{o.orderNumber}</strong>
         <span className={`courier-card__status is-${o.status.toLowerCase()}`}>{STATUS_AR[o.status] ?? o.status}</span>
@@ -88,7 +88,7 @@ export function CourierView() {
   const [busy, setBusy] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [typed, setTyped] = useState("");
-  const [focus, setFocus] = useState<string | null>(null); // the order just scanned: scrolled to and highlighted
+  const [found, setFound] = useState<CourierOrder | null>(null); // the scanned order, shown full screen
 
   const load = useCallback(async () => {
     const res = await callCourier({ action: "mine" });
@@ -116,24 +116,16 @@ export function CourierView() {
 
   const ptr = usePullToRefresh(auth.status === "signedIn", load);
 
-  useEffect(() => {
-    if (!focus || !orders) return;
-    document.getElementById(`o-${focus}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
-    const t = window.setTimeout(() => setFocus(null), 4000);
-    return () => window.clearTimeout(t);
-  }, [focus, orders]);
 
   async function lookup(text: string) {
     const number = orderNumberFrom(text);
     setScanning(false);
     if (!number) return toast({ id: "courier", tone: "attention", message: "هذا الرمز ليس طلب ÉLUE." });
-    // Scanning adds the order to this courier's list if it is not there yet, and shows it either way.
-    const res = await callCourier({ action: "claim", orderNumber: number });
+    // The admin assigns orders. Scanning only opens an order that is already his, full screen.
+    const res = await callCourier({ action: "get", orderNumber: number });
     if (!res.ok || !res.order) return toast({ id: "courier", tone: "attention", message: ERROR_TEXT[res.ok ? "not_found" : res.code] ?? "تعذّر فتح الطلب." });
     setTyped("");
-    toast({ id: "courier", message: res.added ? `أُضيف ${number} إلى طلباتك` : `${number} موجود في طلباتك` });
-    await load();
-    setFocus(number);
+    setFound(res.order);
   }
 
   async function setStatus(o: CourierOrder, status: "OUT_FOR_DELIVERY" | "DELIVERED") {
@@ -142,6 +134,9 @@ export function CourierView() {
     setBusy(false);
     if (!res.ok) return toast({ id: "courier", tone: "attention", message: ERROR_TEXT[res.code] ?? "تعذّر تحديث الحالة. حاول مجدداً." });
     toast({ id: "courier", message: status === "DELIVERED" ? `✓ ${o.orderNumber}: تم التسليم` : `${o.orderNumber}: في الطريق` });
+    // Delivered: back to the list. In delivery: stay on the order, now showing its new state.
+    if (status === "DELIVERED") setFound(null);
+    else if (res.order) setFound(res.order);
     await load();
   }
 
@@ -196,11 +191,23 @@ export function CourierView() {
 
       {scanning && <CourierScanner onCode={(t) => void lookup(t)} onClose={() => setScanning(false)} />}
 
+      {found && (
+        <div className="courier-sheet" role="dialog" aria-modal="true" aria-label={`الطلب ${found.orderNumber}`}>
+          <div className="courier-sheet__bar">
+            <strong dir="ltr">{found.orderNumber}</strong>
+            <button type="button" className="link-button" onClick={() => setFound(null)}>
+              إغلاق
+            </button>
+          </div>
+          <OrderCard key={found.orderNumber} o={found} busy={busy} onStatus={(o, s) => void setStatus(o, s)} courierName={name} />
+        </div>
+      )}
+
       <section>
         <h2>طلباتي</h2>
         {open.length === 0 && <p className="hint">ما عندك طلبات حالياً. الطلبات الجديدة تصلك على تيليغرام وتظهر هنا.</p>}
         {open.map((o) => (
-          <OrderCard key={o.orderNumber} o={o} busy={busy} onStatus={(x, s) => void setStatus(x, s)} courierName={name} highlight={o.orderNumber === focus} />
+          <OrderCard key={o.orderNumber} o={o} busy={busy} onStatus={(x, s) => void setStatus(x, s)} courierName={name} />
         ))}
       </section>
 
@@ -208,7 +215,7 @@ export function CourierView() {
         <section>
           <h2>سُلّمت مؤخراً</h2>
           {delivered.map((o) => (
-            <OrderCard key={o.orderNumber} o={o} busy={busy} onStatus={() => {}} courierName={name} highlight={o.orderNumber === focus} />
+            <OrderCard key={o.orderNumber} o={o} busy={busy} onStatus={() => {}} courierName={name} />
           ))}
         </section>
       )}
