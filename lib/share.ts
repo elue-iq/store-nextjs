@@ -98,9 +98,11 @@ export function reviewRequestMessage(o: { name: string; orderNumber: string }, o
     "",
     `مرحباً ${o.name.trim().split(/\s+/)[0]} 🧡`,
     "",
+    "رأيك يهمنا فعلاً، لأن كل ملاحظة منك تساعدنا نتطور ونقدم تجربة أحلى",
+    "",
     `${origin}/review?order=${encodeURIComponent(o.orderNumber)}`,
     "",
-    "شكراً لاختيارك ÉLUE",
+    "شكراً لاختياركم ÉLUE",
   ].join("\n");
 }
 
