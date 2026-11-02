@@ -38,6 +38,8 @@ export type EatixConfig = {
   saleTypeName?: string;
   // Extra fields Eatix turns out to require (seatCode ...), merged into the order's top level and info block.
   extra?: Record<string, unknown>;
+  // Same, for each item line (skuName ... ).
+  itemExtra?: Record<string, unknown>;
 };
 
 // The ÉLUE products in Eatix's menu (category ترافلز). These ids are not secret, so they live in the code;
@@ -184,7 +186,7 @@ export function buildSubmit(cfg: EatixConfig, o: EatixOrder) {
         itemId: m.itemId,
         itemName: i.nameEn,
         skuId: m.skuId ?? "",
-        skuName: m.skuName ?? "",
+        skuName: m.skuName || i.nameEn, // Eatix refuses an empty sku name
         categoryId: m.categoryId ?? "",
         num: i.qty,
         orderNum: i.qty,
@@ -194,6 +196,7 @@ export function buildSubmit(cfg: EatixConfig, o: EatixOrder) {
         resultAmount: i.price * i.qty * f,
         discountAmount: 0,
         memo: "",
+        ...(cfg.itemExtra ?? {}),
       };
     }),
     watingOrderPayParamList: [{ fee: paid ? resultAmount : 0, payName: paid ? "Prepaid" : "Cash on delivery" }],
