@@ -277,3 +277,13 @@ export async function probe(cfg: EatixConfig, shopCode: string, channel: string)
     return { error: err instanceof Error ? err.message : "failed" };
   }
 }
+
+// Diagnostic: a read-only call (item / menu / category lookups only) with the store and channel.
+export async function browse(cfg: EatixConfig, path: string): Promise<unknown> {
+  if (!/^\/open\/(item|menu|goods|category|shop)\/v1\/[a-z/]*(list|get|query|menu)$/.test(path)) return { error: "path_not_allowed" };
+  try {
+    return await authed(cfg, path, { shopCode: cfg.shopCode, channel: cfg.channel });
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "failed" };
+  }
+}

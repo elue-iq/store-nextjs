@@ -4,7 +4,7 @@ import { generateClient } from "aws-amplify/data";
 import { getAmplifyDataClientConfig } from "@aws-amplify/backend/function/runtime";
 import { env } from "$amplify/env/eatix";
 import type { Schema } from "../../data/resource";
-import { cancelOrder, eatixConfig, eatixFields, probe, sendOrder, toEatixOrder } from "../../../lib/eatix";
+import { cancelOrder, eatixConfig, eatixFields, browse, probe, sendOrder, toEatixOrder } from "../../../lib/eatix";
 
 // Admin actions for Eatix (ADMINS only):
 //   send   – push (or push again) an order to Eatix
@@ -33,6 +33,17 @@ export const handler: Schema["eatix"]["functionHandler"] = async (event) => {
         results[`shop=${shop} channel=${ch}`] = await probe(cfg, shop, ch);
         await new Promise((r) => setTimeout(r, 1200)); // Eatix answers "open_018: do not operate frequently" to bursts
       }
+    }
+    return results;
+  }
+
+  // Diagnostic (ADMINS only, read-only paths): where does Eatix keep the menu / item ids?
+  if (action === "browse") {
+    const paths = ["/open/item/v1/list", "/open/item/v1/get", "/open/menu/v1/get", "/open/menu/v1/list", "/open/shop/v1/item/list", "/open/shop/v1/menu", "/open/goods/v1/list", "/open/category/v1/list", "/open/shop/v1/category/list", "/open/item/v1/query"];
+    const results: Record<string, unknown> = {};
+    for (const path of paths) {
+      results[path] = await browse(cfg, path);
+      await new Promise((r) => setTimeout(r, 1200));
     }
     return results;
   }
