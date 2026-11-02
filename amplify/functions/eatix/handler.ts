@@ -86,15 +86,22 @@ export const handler: Schema["eatix"]["functionHandler"] = async (event) => {
       deliveryFee: 0,
     };
     // orderId may carry a JSON list of saleTypeId values to try, one after another, until Eatix accepts one.
-    let tries: string[] = [""];
+    // Entries may also be objects: {saleTypeId, saleTypeName, ...any other field Eatix asks for}.
+    let tries: (string | Record<string, unknown>)[] = [""];
     try {
       const t = orderId ? (JSON.parse(orderId) as unknown) : null;
-      if (Array.isArray(t)) tries = t.map(String);
+      if (Array.isArray(t)) tries = t as (string | Record<string, unknown>)[];
     } catch {}
     const log: unknown[] = [];
     for (const combo of tries.slice(0, 6)) {
-      const [saleTypeId, saleTypeName] = combo.split("|");
-      const live = { ...cfg, enabled: true, saleTypeId: saleTypeId || cfg.saleTypeId, saleTypeName: saleTypeName ?? cfg.saleTypeName };
+      let live = { ...cfg, enabled: true };
+      if (typeof combo === "string") {
+        const [saleTypeId, saleTypeName] = combo.split("|");
+        live = { ...live, saleTypeId: saleTypeId || cfg.saleTypeId, saleTypeName: saleTypeName ?? cfg.saleTypeName };
+      } else {
+        const { saleTypeId, saleTypeName, ...extra } = combo;
+        live = { ...live, saleTypeId: saleTypeId as string, saleTypeName: saleTypeName as string, extra };
+      }
       const sent = await sendOrder(live, { ...test, orderNumber: `${test.orderNumber}-${log.length}` });
       let cancelled = null;
       if (sent.ok) {

@@ -36,6 +36,8 @@ export type EatixConfig = {
   // Eatix 'sale type' (their order requires it; value to be confirmed).
   saleTypeId?: string;
   saleTypeName?: string;
+  // Extra fields Eatix turns out to require (seatCode ...), merged into the order's top level and info block.
+  extra?: Record<string, unknown>;
 };
 
 // The ÉLUE products in Eatix's menu (category ترافلز). These ids are not secret, so they live in the code;
@@ -144,10 +146,12 @@ export function buildSubmit(cfg: EatixConfig, o: EatixOrder) {
     shopCode: cfg.shopCode,
     channel: cfg.channel,
     ...(cfg.saleTypeId ? { saleTypeId: cfg.saleTypeId, saleTypeName: cfg.saleTypeName ?? "" } : {}),
+    ...(cfg.extra ?? {}),
     outOrderId: o.orderNumber, // unique; our number is the reference
     isPrePay: paid ? 1 : 0,
     watingOrderInfoParam: {
       ...(cfg.saleTypeId ? { saleTypeId: cfg.saleTypeId, saleTypeName: cfg.saleTypeName ?? "" } : {}),
+      ...(cfg.extra ?? {}),
       businessDate: ymd(at),
       orderFrom: EATIX_DEFAULTS.orderFrom,
       bizType: EATIX_DEFAULTS.bizType,
