@@ -92,15 +92,16 @@ export const handler: Schema["eatix"]["functionHandler"] = async (event) => {
       if (Array.isArray(t)) tries = t.map(String);
     } catch {}
     const log: unknown[] = [];
-    for (const saleTypeId of tries.slice(0, 6)) {
-      const live = { ...cfg, enabled: true, saleTypeId: saleTypeId || cfg.saleTypeId };
+    for (const combo of tries.slice(0, 6)) {
+      const [saleTypeId, saleTypeName] = combo.split("|");
+      const live = { ...cfg, enabled: true, saleTypeId: saleTypeId || cfg.saleTypeId, saleTypeName: saleTypeName ?? cfg.saleTypeName };
       const sent = await sendOrder(live, { ...test, orderNumber: `${test.orderNumber}-${log.length}` });
       let cancelled = null;
       if (sent.ok) {
         await new Promise((r) => setTimeout(r, 1000));
         cancelled = await cancelOrder(live, sent.eatixId);
       }
-      log.push({ saleTypeId, sent, cancelled });
+      log.push({ combo, sent, cancelled });
       if (sent.ok) break;
       await new Promise((r) => setTimeout(r, 1000));
     }

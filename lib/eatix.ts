@@ -35,6 +35,7 @@ export type EatixConfig = {
   enabled: boolean;
   // Eatix 'sale type' (their order requires it; value to be confirmed).
   saleTypeId?: string;
+  saleTypeName?: string;
 };
 
 // The ÉLUE products in Eatix's menu (category ترافلز). These ids are not secret, so they live in the code;
@@ -142,11 +143,11 @@ export function buildSubmit(cfg: EatixConfig, o: EatixOrder) {
   return {
     shopCode: cfg.shopCode,
     channel: cfg.channel,
-    ...(cfg.saleTypeId ? { saleTypeId: cfg.saleTypeId } : {}),
+    ...(cfg.saleTypeId ? { saleTypeId: cfg.saleTypeId, saleTypeName: cfg.saleTypeName ?? "" } : {}),
     outOrderId: o.orderNumber, // unique; our number is the reference
     isPrePay: paid ? 1 : 0,
     watingOrderInfoParam: {
-      ...(cfg.saleTypeId ? { saleTypeId: cfg.saleTypeId } : {}),
+      ...(cfg.saleTypeId ? { saleTypeId: cfg.saleTypeId, saleTypeName: cfg.saleTypeName ?? "" } : {}),
       businessDate: ymd(at),
       orderFrom: EATIX_DEFAULTS.orderFrom,
       bizType: EATIX_DEFAULTS.bizType,
