@@ -4364,10 +4364,12 @@ button.dash-bars__row:focus-visible {
   gap: 0.15rem;
 }
 .rating__btn {
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
   width: 3.4rem;
-  height: 3.4rem;
+  height: auto;
   padding: 0;
   background: none;
   border: 0;
@@ -4385,8 +4387,26 @@ button.dash-bars__row:focus-visible {
 }
 .rating__icon {
   width: 100%;
-  height: 100%;
+  aspect-ratio: 1;
   overflow: visible;
+}
+.rating__num {
+  font-size: 0.95rem;
+  line-height: 1;
+  color: var(--muted);
+  font-variant-numeric: lining-nums;
+}
+.rating__btn.is-on .rating__num {
+  color: var(--cocoa);
+  font-weight: 700;
+}
+.rating__ends {
+  display: flex;
+  justify-content: space-between;
+  max-width: 17.6rem;
+  margin: 0.2rem auto 0;
+  font-size: 0.85rem;
+  color: var(--muted);
 }
 .rating__icon circle:first-child,
 .rating__icon path:first-child {
@@ -4692,6 +4712,10 @@ button.dash-bars__row:focus-visible {
 }
 .rv-stars small {
   color: var(--muted);
+  letter-spacing: 0;
+}
+.rv-stars b {
+  font-weight: 700;
   letter-spacing: 0;
 }
 .rv-stars i {

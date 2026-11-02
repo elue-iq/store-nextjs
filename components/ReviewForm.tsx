@@ -42,9 +42,9 @@ function Rating({
   const [hover, setHover] = useState(0);
   const shown = hover || value;
   function onKey(e: React.KeyboardEvent) {
-    // In RTL the "next" arrow points left.
-    if (e.key === "ArrowLeft" || e.key === "ArrowUp") onChange(Math.min(5, (value || 0) + 1));
-    else if (e.key === "ArrowRight" || e.key === "ArrowDown") onChange(Math.max(1, (value || 2) - 1));
+    // The row reads left to right (1 → 5), so the right arrow goes up.
+    if (e.key === "ArrowRight" || e.key === "ArrowUp") onChange(Math.min(5, (value || 0) + 1));
+    else if (e.key === "ArrowLeft" || e.key === "ArrowDown") onChange(Math.max(1, (value || 2) - 1));
     else return;
     e.preventDefault();
   }
@@ -54,7 +54,7 @@ function Rating({
         <strong>{label}</strong>
         <small>{hint}</small>
       </legend>
-      <div className="rating__row" role="radiogroup" aria-label={label} onKeyDown={onKey} onMouseLeave={() => setHover(0)}>
+      <div className="rating__row" dir="ltr" role="radiogroup" aria-label={label} onKeyDown={onKey} onMouseLeave={() => setHover(0)}>
         {[1, 2, 3, 4, 5].map((n) => (
           <button
             key={n}
@@ -68,8 +68,16 @@ function Rating({
             onClick={() => onChange(n)}
           >
             <Icon kind={kind} filled={n <= shown} />
+            <span className="rating__num" aria-hidden="true">
+              {n}
+            </span>
           </button>
         ))}
+      </div>
+      {/* Which end is which: the numbers run left to right, 1 the worst and 5 the best. */}
+      <div className="rating__ends" dir="ltr" aria-hidden="true">
+        <span>الأسوأ</span>
+        <span>الأفضل</span>
       </div>
       <p className="rating__word" aria-live="polite" data-set={shown ? "1" : "0"}>
         {shown ? (

@@ -69,9 +69,9 @@ export function Stars({ n, label }: { n: number; label: string }) {
   return (
     <span className="rv-stars" role="img" aria-label={`${label}: ${n} من 5`}>
       <small>{label}</small>
-      <span aria-hidden="true">
+      <span dir="ltr" aria-hidden="true">
         {"●".repeat(n)}
-        <i>{"●".repeat(5 - n)}</i>
+        <i>{"●".repeat(5 - n)}</i> <b>{n}/5</b>
       </span>
     </span>
   );
