@@ -67,6 +67,8 @@ export function eatixConfig(env: Record<string, string | undefined>): EatixConfi
     clientSecret: env.EATIX_CLIENT_SECRET ?? "",
     shopCode: env.EATIX_SHOP_CODE ?? "",
     channel: env.EATIX_CHANNEL ?? "",
+    saleTypeId: "1", // accepted by Eatix in the 2 Nov 2026 trials (sale type: delivery)
+    saleTypeName: "Delivery",
     items,
     // On by default now that the store, channel and items are confirmed; EATIX_ENABLED="off" is the kill switch.
     enabled: env.EATIX_ENABLED !== "off",
@@ -151,9 +153,11 @@ export function buildSubmit(cfg: EatixConfig, o: EatixOrder) {
     channel: cfg.channel,
     ...(cfg.saleTypeId ? { saleTypeId: cfg.saleTypeId, saleTypeName: cfg.saleTypeName ?? "" } : {}),
     outOrderId: o.orderNumber, // unique; our number is the reference
-    isPrePay: paid ? 1 : 0,
+    isPrePay: paid ? 1 : 2, // Eatix refuses 0; 1 / 2 are accepted (assumed: 1 = paid up front, 2 = pay later)
+    seatCode: "1",
     watingOrderInfoParam: {
       ...(cfg.saleTypeId ? { saleTypeId: cfg.saleTypeId, saleTypeName: cfg.saleTypeName ?? "" } : {}),
+      seatCode: "1",
       businessDate: ymd(at),
       orderFrom: EATIX_DEFAULTS.orderFrom,
       bizType: EATIX_DEFAULTS.bizType,
@@ -201,7 +205,7 @@ export function buildSubmit(cfg: EatixConfig, o: EatixOrder) {
         ...(cfg.itemExtra ?? {}),
       };
     }),
-    watingOrderPayParamList: [{ fee: paid ? resultAmount : 0, payName: paid ? "Prepaid" : "Cash on delivery", ...(cfg.payExtra ?? {}) }],
+    watingOrderPayParamList: [{ fee: paid ? resultAmount : 0, payName: paid ? "Prepaid" : "Cash on delivery", payType: 1, payTypeId: "1", shopPayTypeId: "1", ...(cfg.payExtra ?? {}) }],
     watingOrderInfoDeliveryParam: {
       deliveryType: EATIX_DEFAULTS.deliveryType,
       deliveryStatus: EATIX_DEFAULTS.deliveryStatus,
