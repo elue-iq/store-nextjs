@@ -99,8 +99,8 @@ export const handler: Schema["eatix"]["functionHandler"] = async (event) => {
         const [saleTypeId, saleTypeName] = combo.split("|");
         live = { ...live, saleTypeId: saleTypeId || cfg.saleTypeId, saleTypeName: saleTypeName ?? cfg.saleTypeName };
       } else {
-        const { saleTypeId, saleTypeName, itemExtra, ...extra } = combo;
-        live = { ...live, saleTypeId: saleTypeId as string, saleTypeName: saleTypeName as string, extra, itemExtra: itemExtra as Record<string, unknown> | undefined };
+        const { saleTypeId, saleTypeName, itemExtra, payExtra, ...extra } = combo;
+        live = { ...live, saleTypeId: saleTypeId as string, saleTypeName: saleTypeName as string, extra, itemExtra: itemExtra as Record<string, unknown> | undefined, payExtra: payExtra as Record<string, unknown> | undefined };
       }
       const sent = await sendOrder(live, { ...test, orderNumber: `${test.orderNumber}-${log.length}` });
       let cancelled = null;

@@ -40,6 +40,8 @@ export type EatixConfig = {
   extra?: Record<string, unknown>;
   // Same, for each item line (skuName ... ).
   itemExtra?: Record<string, unknown>;
+  // Same, for each payment line (payType ...).
+  payExtra?: Record<string, unknown>;
 };
 
 // The ÉLUE products in Eatix's menu (category ترافلز). These ids are not secret, so they live in the code;
@@ -199,7 +201,7 @@ export function buildSubmit(cfg: EatixConfig, o: EatixOrder) {
         ...(cfg.itemExtra ?? {}),
       };
     }),
-    watingOrderPayParamList: [{ fee: paid ? resultAmount : 0, payName: paid ? "Prepaid" : "Cash on delivery" }],
+    watingOrderPayParamList: [{ fee: paid ? resultAmount : 0, payName: paid ? "Prepaid" : "Cash on delivery", ...(cfg.payExtra ?? {}) }],
     watingOrderInfoDeliveryParam: {
       deliveryType: EATIX_DEFAULTS.deliveryType,
       deliveryStatus: EATIX_DEFAULTS.deliveryStatus,
