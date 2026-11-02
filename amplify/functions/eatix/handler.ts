@@ -41,6 +41,20 @@ export const handler: Schema["eatix"]["functionHandler"] = async (event) => {
   if (action === "browse") {
     const paths = ["/open/item/v1/list", "/open/item/v1/get", "/open/menu/v1/get", "/open/menu/v1/list", "/open/shop/v1/item/list", "/open/shop/v1/menu", "/open/goods/v1/list", "/open/category/v1/list", "/open/shop/v1/category/list", "/open/item/v1/query"];
     const results: Record<string, unknown> = {};
+    // orderId may carry a JSON list of extra request bodies for /open/item/v1/get (paging etc.).
+    let bodies: Record<string, unknown>[] | null = null;
+    try {
+      bodies = orderId ? (JSON.parse(orderId) as Record<string, unknown>[]) : null;
+    } catch {
+      bodies = null;
+    }
+    if (bodies) {
+      for (const [i, b] of bodies.entries()) {
+        results[`get#${i} ${JSON.stringify(b)}`] = await browse(cfg, "/open/item/v1/get", b);
+        await new Promise((r) => setTimeout(r, 1200));
+      }
+      return results;
+    }
     for (const path of paths) {
       results[path] = await browse(cfg, path);
       await new Promise((r) => setTimeout(r, 1200));
