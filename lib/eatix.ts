@@ -35,12 +35,23 @@ export type EatixConfig = {
   enabled: boolean;
 };
 
+// The ÉLUE products in Eatix's menu (category ترافلز). These ids are not secret, so they live in the code;
+// the EATIX_ITEMS secret, when it holds something, overrides them.
+const EATIX_CATEGORY = "6c462b09e06b49dcb6bd401ed292fc1a";
+export const EATIX_ITEMS: EatixConfig["items"] = {
+  "dark-chocolate": { itemId: "e25edc1cd4fd4a7bb005e2a4c2a06cc6", skuId: "dcca15b25fd44014baa45d94ef1d335b", categoryId: EATIX_CATEGORY },
+  hazelnut: { itemId: "b4e45bc79ad043a3a413e095fa95d52b", skuId: "cea821854d8544e4b3bdbb5ecde5ae92", categoryId: EATIX_CATEGORY },
+  carrot: { itemId: "2fe8e56a13ea4e3ba260ced0251a3f20", skuId: "4ed7d0c8b4dc4f15ae7a00e667f55c85", categoryId: EATIX_CATEGORY },
+  "peanut-butter": { itemId: "8f0e926f29f744d3923b3f00187171fa", skuId: "32c3ddc2b95a468998369ce2cc494d9f", categoryId: EATIX_CATEGORY },
+};
+
 export function eatixConfig(env: Record<string, string | undefined>): EatixConfig {
-  let items: EatixConfig["items"] = {};
+  let items: EatixConfig["items"] = EATIX_ITEMS;
   try {
-    items = JSON.parse(env.EATIX_ITEMS || "{}");
+    const extra = JSON.parse(env.EATIX_ITEMS || "{}") as EatixConfig["items"];
+    if (Object.keys(extra).length) items = extra;
   } catch {
-    items = {};
+    items = EATIX_ITEMS;
   }
   return {
     clientId: env.EATIX_CLIENT_ID ?? "",
@@ -280,7 +291,7 @@ export async function probe(cfg: EatixConfig, shopCode: string, channel: string)
 
 // Diagnostic: a read-only call (item / menu / category lookups only) with the store and channel.
 export async function browse(cfg: EatixConfig, path: string, extra: Record<string, unknown> = {}): Promise<unknown> {
-  if (!/^\/open\/(item|menu|goods|category|shop)\/v1\/[a-z/]*(list|get|query|menu)$/.test(path)) return { error: "path_not_allowed" };
+  if (!/^\/open\/(item|menu|goods|category|shop|member|customer|user|pay|payment|trade|order)\/v1\/[a-z/]*(list|get|query|menu|detail|info|methods|config)$/.test(path)) return { error: "path_not_allowed" };
   try {
     return await authed(cfg, path, { shopCode: cfg.shopCode, channel: cfg.channel, ...extra });
   } catch (err) {

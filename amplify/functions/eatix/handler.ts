@@ -39,7 +39,7 @@ export const handler: Schema["eatix"]["functionHandler"] = async (event) => {
 
   // Diagnostic (ADMINS only, read-only paths): where does Eatix keep the menu / item ids?
   if (action === "browse") {
-    const paths = ["/open/item/v1/list", "/open/item/v1/get", "/open/menu/v1/get", "/open/menu/v1/list", "/open/shop/v1/item/list", "/open/shop/v1/menu", "/open/goods/v1/list", "/open/category/v1/list", "/open/shop/v1/category/list", "/open/item/v1/query"];
+    const paths = ["/open/member/v1/get", "/open/member/v1/list", "/open/member/v1/query", "/open/member/v1/info", "/open/customer/v1/get", "/open/customer/v1/list", "/open/customer/v1/query", "/open/user/v1/get", "/open/pay/v1/get", "/open/pay/v1/list", "/open/pay/v1/methods", "/open/pay/v1/config", "/open/payment/v1/get", "/open/payment/v1/list", "/open/payment/v1/methods", "/open/shop/v1/pay/list", "/open/shop/v1/payment/list", "/open/trade/v1/get", "/open/order/v1/get", "/open/order/v1/list", "/open/order/v1/detail", "/open/order/v1/query"];
     const results: Record<string, unknown> = {};
     // orderId may carry a JSON list of extra request bodies for /open/item/v1/get (paging etc.).
     let bodies: Record<string, unknown>[] | null = null;
