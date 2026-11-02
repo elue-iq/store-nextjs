@@ -71,7 +71,7 @@ export function Stars({ n, label }: { n: number; label: string }) {
       <small>{label}</small>
       <span aria-hidden="true">
         {"●".repeat(n)}
-        <i>{"●".repeat(5 - n)}</i>
+        <i>{"●".repeat(5 - n)}</i> <b dir="ltr">{n}/5</b>
       </span>
     </span>
   );

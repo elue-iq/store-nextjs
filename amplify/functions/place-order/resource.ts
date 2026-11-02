@@ -13,5 +13,6 @@ export const placeOrder = defineFunction({
     EATIX_CHANNEL: secret("EATIX_CHANNEL"),
     EATIX_ITEMS: secret("EATIX_ITEMS"),
     EATIX_ENABLED: secret("EATIX_ENABLED"),
+    OTPIQ_API_KEY: secret("OTPIQ_API_KEY"),
   },
 });

@@ -17,6 +17,8 @@ export const site = {
   // A customer must review their latest delivered order before ordering again
   // (a short, playful form). false = reviews are optional (current choice).
   reviewRequiredToReorder: false,
+  // WhatsApp "we received your order" (OTPIQ template). Empty = off. See lib/orderConfirmation.ts.
+  orderConfirmation: { templateName: "", whatsappAccountId: "", whatsappPhoneId: "" },
   // Meta Pixel (dataset) ID: the number from Events Manager. Leave empty to keep the pixel off.
   metaPixelId: "",
   // The meta tag content from Business Settings > Brand safety > Domains (domain verification). Empty = no tag.

@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 
-export type AdminView = "orders" | "dashboard" | "customers" | "products" | "delivery" | "reviews";
+export type AdminView = "orders" | "dashboard" | "customers" | "products" | "delivery" | "reviews" | "prep";
 
 // The admin's side menu (opens from the ☰ button). One tap to any section, so the
 // order list stays about orders only.
@@ -18,7 +18,7 @@ export function AdminDrawer({
 }: {
   open: boolean;
   view: AdminView;
-  counts: { orders: number; customers: number; attention: number };
+  counts: { orders: number; customers: number; attention: number; prep: number };
   phone: string;
   onClose: () => void;
   onView: (v: AdminView) => void;
@@ -60,6 +60,7 @@ export function AdminDrawer({
           </button>
         </div>
         {item("orders", "الطلبات", counts.orders, counts.attention > 0)}
+        {item("prep", "التجهيز", counts.prep)}
         {item("dashboard", "لوحة المعلومات")}
         {item("customers", "العملاء", counts.customers)}
         {item("products", "المنتجات")}

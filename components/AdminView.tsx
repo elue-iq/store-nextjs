@@ -13,6 +13,7 @@ import { AdminEatix } from "./AdminEatix";
 import { SendOrderToCustomer, SendReviewRequest } from "./SendOrderToCustomer";
 import { AdminDelivery, callDispatch } from "./AdminDelivery";
 import { AdminCouriers } from "./AdminCouriers";
+import { AdminPrep } from "./AdminPrep";
 import { AdminReviews } from "./AdminReviews";
 import { AdminDashboard } from "./AdminDashboard";
 import { OrderRow, baghdadDay, shortTime } from "./AdminOrderRow";
@@ -43,7 +44,7 @@ function orderFromUrl(): string | null {
 // Which section the list screen shows (?view=dashboard etc.), so a refresh stays there.
 function viewFromUrl(): View {
   const v = new URLSearchParams(window.location.search).get("view");
-  return v === "dashboard" || v === "customers" || v === "products" || v === "delivery" || v === "reviews" ? v : "orders";
+  return v === "dashboard" || v === "customers" || v === "products" || v === "delivery" || v === "reviews" || v === "prep" ? v : "orders";
 }
 
 function screenUrl(id: string): string {
@@ -203,6 +204,25 @@ export function AdminView() {
       window.removeEventListener("focus", run);
     };
   }, [auth.status, auth.isAdmin, reloadOrders]);
+
+  // The team always uses WhatsApp Business. On Android a wa.me link asks "WhatsApp or WhatsApp Business?",
+  // so inside /admin those links open WhatsApp Business directly (falling back to the normal link if it is missing).
+  useEffect(() => {
+    if (auth.status !== "signedIn" || !auth.isAdmin || !/Android/i.test(navigator.userAgent)) return;
+    const onClick = (e: MouseEvent) => {
+      const a = (e.target as Element | null)?.closest?.('a[href^="https://wa.me/"]') as HTMLAnchorElement | null;
+      if (!a) return;
+      const url = new URL(a.href);
+      const phone = url.pathname.replace(/\D/g, "");
+      const text = url.searchParams.get("text") ?? "";
+      e.preventDefault();
+      window.location.href =
+        `intent://send?phone=${phone}&text=${encodeURIComponent(text)}` +
+        `#Intent;scheme=whatsapp;package=com.whatsapp.w4b;S.browser_fallback_url=${encodeURIComponent(a.href)};end`;
+    };
+    document.addEventListener("click", onClick);
+    return () => document.removeEventListener("click", onClick);
+  }, [auth.status, auth.isAdmin]);
 
   // Pull-to-refresh: lists reload the app; order and customer screens refresh their data in place;
   // the new-order form is left alone so a half-filled order is never lost.
@@ -440,7 +460,7 @@ export function AdminView() {
     <AdminDrawer
       open={menuOpen}
       view={view}
-      counts={{ orders: orders?.length ?? 0, customers: customers.length, attention: newCount }}
+      counts={{ orders: orders?.length ?? 0, customers: customers.length, attention: newCount, prep: orders?.filter((o) => o.status === "CONFIRMED").length ?? 0 }}
       phone={formatIraqiMobile(auth.phone)}
       onClose={() => setMenuOpen(false)}
       onView={(v) => {
@@ -474,6 +494,17 @@ export function AdminView() {
         {pullEl}
         {listHead("شركات التوصيل", "الشركات المحلية وقناة تيليغرام لكل واحدة")}
         <AdminCouriers orders={orders} onOpenOrder={(n) => openOrder(n)} />
+        {drawer}
+      </div>
+    );
+  }
+
+  if (view === "prep") {
+    return (
+      <div className="admin-screen">
+        {pullEl}
+        {listHead("التجهيز", "كم علبة من كل نكهة تحتاج تجهز")}
+        <AdminPrep orders={orders} onOpenOrder={openOrder} />
         {drawer}
       </div>
     );

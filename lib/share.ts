@@ -30,48 +30,32 @@ function jarsWord(n: number): string {
   return `${n} علبة`;
 }
 
-// The order in a few lines, the same facts as the team's Telegram message.
+// The order in a few lines: what, what to pay on delivery, when, and the number.
 function summary(o: OrderInfo): string[] {
   const items = (o.items ?? []).filter((i): i is NonNullable<typeof i> => Boolean(i));
   if (!items.length || o.total == null) return [];
-  const jars = o.jars ?? items.reduce((n, i) => n + i.qty, 0);
   const delivery = deliveryPayOf(o);
   const collect = (o.paid ? 0 : o.total) + (delivery === "driver" ? site.deliveryFee : 0);
   return [
-    "🧾 ملخص الطلب:",
-    ...items.map((i) => `• ${i.nameAr}: ${jarsWord(i.qty)}`),
-    `• المجموع (${jarsWord(jars)}): ${formatIQD(o.total)}${o.paid ? " ✅ مدفوع" : ""}`,
-    delivery === "gift"
-      ? "• التوصيل: مجاني 🎁"
-      : delivery === "prepaid"
-        ? "• أجور التوصيل: مدفوعة ✅"
-        : `• أجور التوصيل: ${formatIQD(site.deliveryFee)}`,
-    o.province === site.baghdadWindow.province ? `• موعد التوصيل: ${site.baghdadWindow.short} (وإذا تعذّر بنفس اليوم يتأجل لليوم التالي)` : null,
-    collect > 0 ? `💵 المبلغ عند الاستلام: ${formatIQD(collect)}` : "✅ لا يُطلب أي مبلغ عند الاستلام",
-    `• رقم الطلب: ${o.orderNumber}`,
-    "",
+    `• ${items.map((i) => `${i.nameAr} × ${i.qty}`).join("، ")}`,
+    collect > 0 ? `💵 عند الاستلام: ${formatIQD(collect)}${delivery === "driver" ? " (شامل التوصيل)" : ""}` : "✅ مدفوع، ولا يُطلب شي عند الاستلام",
+    o.province === site.baghdadWindow.province ? `🕐 التوصيل: ${site.baghdadWindow.short}` : null,
+    `🔖 ${o.orderNumber}`,
   ].filter((l): l is string => l !== null);
 }
 
-// The message for the customer. With the order's items it starts with the summary.
+// The message for the customer (short: it is read on a phone, in one screen).
 export function orderMessage(o: OrderInfo, link = `${origin()}/account?order=${encodeURIComponent(o.orderNumber)}`): string {
   const lines = [
     `مرحباً ${o.name} 🧡`,
-    "شكراً لطلبكم من ÉLUE، استلمنا طلبكم وراح نجهزه بكل حب وحرص.",
+    "استلمنا طلبكم من ÉLUE وراح نجهزه بكل حب وحرص.",
     "",
     ...summary(o),
-    "📦 لمتابعة الطلب:",
-    link,
-    // Digits without spaces (and a left-to-right mark) so the number never flips in Arabic text.
-    `🔑 قد تحتاجون لتسجيل الدخول برقم الواتساب: ‎${formatIraqiMobile(o.phone).replace(/ /g, "")}`,
     "",
-    `❄️ ${site.coldNote.title}`,
-    "• منتجاتنا بلا مواد حافظة أو سكر مضاف أو دهون مضافة، لذلك يلزم أن تبقى مبرّدة",
-    "• عند الاستلام، نرجو تسليم بوكس الفلين للمندوب ووضع المنتج في البراد مباشرة",
-    `• في حال وصول طلبكم غير مبرّد، يرجى التواصل معنا فوراً 📞 ${site.whatsappDisplay.replace(/ /g, "")}`,
+    `📦 تابعوا طلبكم: ${link}`,
     "",
-    "💬 يسعدنا سماع اقتراحاتكم واستفساراتكم",
-    `${site.coldNote.thanks} 🧡`,
+    "❄️ يُحفظ دائماً بالبراد",
+    "• يرجى تسليم الفلين للمندوب.",
   ];
   return lines.join("\n");
 }
@@ -94,9 +78,15 @@ export function shareAccountUrl(o: Who): string {
 // Asks a customer for their review after delivery (the team sends it on WhatsApp).
 export function reviewRequestMessage(o: { name: string; orderNumber: string }, origin: string): string {
   return [
-    `مرحباً ${o.name.trim().split(/\s+/)[0]}، وصلك طلبك ${o.orderNumber} من ÉLUE؟ 🤎`,
-    "قيّم التوصيل والطعم بدقيقة وحدة. ننشر كل التقييمات كما هي، 100% شفافية:",
+    "*بأقل من 20 ثانية قيّم تجربتك*",
+    "",
+    `مرحباً ${o.name.trim().split(/\s+/)[0]} 🧡`,
+    "",
+    "رأيك يهمنا فعلاً، لأن كل ملاحظة منك تساعدنا نتطور ونقدم تجربة أحلى",
+    "",
     `${origin}/review?order=${encodeURIComponent(o.orderNumber)}`,
+    "",
+    "شكراً لاختياركم ÉLUE",
   ].join("\n");
 }
 
@@ -107,9 +97,9 @@ export function courierComingMessage(o: OrderInfo, courierName: string): string 
     `أنا ${courierName}، مندوب توصيل ÉLUE. طلبكم ${o.orderNumber} بالطريق إليكم الآن 🚗`,
     "",
     ...summary(o),
-    `❄️ ${site.coldNote.title}`,
-    "• عند الاستلام، نرجو تسليم بوكس الفلين لي ووضع المنتج في البراد مباشرة",
     "",
-    "📞 إذا احتجتم أي شيء، تواصلوا معي على هذا الرقم.",
+    "❄️ يُحفظ دائماً بالبراد",
+    "• يرجى تسليم الفلين لي.",
+    "📞 إذا احتجتم أي شي، تواصلوا معي على هذا الرقم.",
   ].join("\n");
 }

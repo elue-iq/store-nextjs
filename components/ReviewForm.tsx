@@ -42,7 +42,7 @@ function Rating({
   const [hover, setHover] = useState(0);
   const shown = hover || value;
   function onKey(e: React.KeyboardEvent) {
-    // In RTL the "next" arrow points left.
+    // The row reads right to left (1 on the right), so the left arrow goes up.
     if (e.key === "ArrowLeft" || e.key === "ArrowUp") onChange(Math.min(5, (value || 0) + 1));
     else if (e.key === "ArrowRight" || e.key === "ArrowDown") onChange(Math.max(1, (value || 2) - 1));
     else return;
@@ -68,8 +68,16 @@ function Rating({
             onClick={() => onChange(n)}
           >
             <Icon kind={kind} filled={n <= shown} />
+            <span className="rating__num" aria-hidden="true">
+              {n}
+            </span>
           </button>
         ))}
+      </div>
+      {/* Which end is which: 1 (right) is the worst, 5 (left) is the best. */}
+      <div className="rating__ends" aria-hidden="true">
+        <span>الأسوأ</span>
+        <span>الأفضل</span>
       </div>
       <p className="rating__word" aria-live="polite" data-set={shown ? "1" : "0"}>
         {shown ? (

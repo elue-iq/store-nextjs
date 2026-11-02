@@ -26,6 +26,7 @@ export function SendOnWhatsApp({
   primary = true,
   chatHint,
   shareHint,
+  business = false,
 }: {
   order: Parameters<typeof receiptFromOrder>[0];
   phone: string; // "" = WhatsApp asks which chat or group
@@ -34,6 +35,8 @@ export function SendOnWhatsApp({
   primary?: boolean;
   chatHint: string;
   shareHint: string;
+  // The team's WhatsApp Business: skip the share sheet (it asks which WhatsApp) and open the chat directly.
+  business?: boolean;
 }) {
   const toast = useToast();
   const [mode, setMode] = useState<Mode>("chat");
@@ -52,7 +55,7 @@ export function SendOnWhatsApp({
   useEffect(() => {
     void import("@/lib/receipt").then(({ isIOS }) => {
       const probe = new File([new Blob(["x"], { type: "image/png" })], "x.png", { type: "image/png" });
-      setMode(!isIOS() && navigator.canShare?.({ files: [probe] }) ? "share" : "chat");
+      setMode(!business && !isIOS() && navigator.canShare?.({ files: [probe] }) ? "share" : "chat");
     });
   }, []);
 
@@ -108,6 +111,7 @@ export function SendOrderToCustomer({ order: o }: { order: Order }) {
       order={o}
       phone={o.phone}
       text={orderMessage(o)}
+      business
       label="إرسال الطلب للعميل على واتساب"
       shareHint="اختر واتساب ثم محادثة العميل: تُرسل صورة الملخص ومعها النص."
       chatHint="تُفتح محادثة العميل والنص جاهز، وتُنسخ صورة الملخص: الصقها في المحادثة."
