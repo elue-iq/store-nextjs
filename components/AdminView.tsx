@@ -204,6 +204,25 @@ export function AdminView() {
     };
   }, [auth.status, auth.isAdmin, reloadOrders]);
 
+  // The team always uses WhatsApp Business. On Android a wa.me link asks "WhatsApp or WhatsApp Business?",
+  // so inside /admin those links open WhatsApp Business directly (falling back to the normal link if it is missing).
+  useEffect(() => {
+    if (auth.status !== "signedIn" || !auth.isAdmin || !/Android/i.test(navigator.userAgent)) return;
+    const onClick = (e: MouseEvent) => {
+      const a = (e.target as Element | null)?.closest?.('a[href^="https://wa.me/"]') as HTMLAnchorElement | null;
+      if (!a) return;
+      const url = new URL(a.href);
+      const phone = url.pathname.replace(/\D/g, "");
+      const text = url.searchParams.get("text") ?? "";
+      e.preventDefault();
+      window.location.href =
+        `intent://send?phone=${phone}&text=${encodeURIComponent(text)}` +
+        `#Intent;scheme=whatsapp;package=com.whatsapp.w4b;S.browser_fallback_url=${encodeURIComponent(a.href)};end`;
+    };
+    document.addEventListener("click", onClick);
+    return () => document.removeEventListener("click", onClick);
+  }, [auth.status, auth.isAdmin]);
+
   // Pull-to-refresh: lists reload the app; order and customer screens refresh their data in place;
   // the new-order form is left alone so a half-filled order is never lost.
   const isForm = selected === "new" || Boolean(selected?.startsWith("new:"));
