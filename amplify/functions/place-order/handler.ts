@@ -28,6 +28,7 @@ import { buildOrderMessage, sendToTelegram } from "../../../lib/telegram";
 import { eatixConfig, eatixFields, sendOrder, toEatixOrder } from "../../../lib/eatix";
 import { OPEN_STATUSES, ORDER_RULES } from "../../../lib/order-rules";
 import { needsPayRef, site } from "../../../lib/site";
+import { sendOrderConfirmation } from "../../../lib/orderConfirmation";
 import { pendingReview } from "../../../lib/reviews";
 
 // placeOrder: the only way an order is created.
@@ -353,6 +354,15 @@ export const handler: Schema["placeOrder"]["functionHandler"] = async (event) =>
       if (!r.ok && r.error !== "disabled") console.error("Eatix push failed", r.error);
     } catch (err) {
       console.error("Eatix push crashed", err);
+    }
+
+    // A customer who placed their own order gets a WhatsApp confirmation (orders the team enters are not).
+    // Live only, best effort: it never blocks or fails the order.
+    if (!isTeam && PRODUCTION) {
+      const r = await sendOrderConfirmation({ apiKey: env.OTPIQ_API_KEY, phone, name, orderNumber: number, origin: "https://elue-iq.com" });
+      if (!r.sent && r.reason !== "not_configured") console.error("order confirmation not sent:", r.reason);
+    } else if (!isTeam) {
+      console.log("DEV order, WhatsApp confirmation skipped");
     }
 
     return { id: order.id, orderNumber: number, createdAt: order.createdAt, telegramSent };
