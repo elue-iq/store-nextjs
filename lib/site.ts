@@ -20,7 +20,7 @@ export const site = {
   // WhatsApp "we received your order" (OTPIQ template). Empty = off. See lib/orderConfirmation.ts.
   orderConfirmation: { templateName: "", whatsappAccountId: "", whatsappPhoneId: "" },
   // Meta Pixel (dataset) ID: the number from Events Manager. Leave empty to keep the pixel off.
-  metaPixelId: "",
+  metaPixelId: "1885278566155685",
   // The meta tag content from Business Settings > Brand safety > Domains (domain verification). Empty = no tag.
   metaDomainVerification: "",
   // Meta does not take Iraqi dinar for the pixel, so values go as US dollars at this fixed rate.

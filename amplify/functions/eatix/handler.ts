@@ -4,7 +4,7 @@ import { generateClient } from "aws-amplify/data";
 import { getAmplifyDataClientConfig } from "@aws-amplify/backend/function/runtime";
 import { env } from "$amplify/env/eatix";
 import type { Schema } from "../../data/resource";
-import { cancelOrder, eatixConfig, eatixFields, probe, sendOrder, toEatixOrder } from "../../../lib/eatix";
+import { cancelOrder, eatixConfig, eatixFields, browse, probe, sendOrder, toEatixOrder } from "../../../lib/eatix";
 
 // Admin actions for Eatix (ADMINS only):
 //   send   – push (or push again) an order to Eatix
@@ -35,6 +35,84 @@ export const handler: Schema["eatix"]["functionHandler"] = async (event) => {
       }
     }
     return results;
+  }
+
+  // Diagnostic (ADMINS only, read-only paths): where does Eatix keep the menu / item ids?
+  if (action === "browse") {
+    const paths = ["/open/member/v1/get", "/open/member/v1/list", "/open/member/v1/query", "/open/member/v1/info", "/open/customer/v1/get", "/open/customer/v1/list", "/open/customer/v1/query", "/open/user/v1/get", "/open/pay/v1/get", "/open/pay/v1/list", "/open/pay/v1/methods", "/open/pay/v1/config", "/open/payment/v1/get", "/open/payment/v1/list", "/open/payment/v1/methods", "/open/shop/v1/pay/list", "/open/shop/v1/payment/list", "/open/trade/v1/get", "/open/order/v1/get", "/open/order/v1/list", "/open/order/v1/detail", "/open/order/v1/query"];
+    const results: Record<string, unknown> = {};
+    // orderId may carry a JSON list of extra request bodies for /open/item/v1/get (paging etc.).
+    let bodies: Record<string, unknown>[] | null = null;
+    try {
+      const parsed = orderId ? (JSON.parse(orderId) as unknown[]) : null;
+      if (parsed && parsed.every((x) => typeof x === "string")) {
+        // a list of paths to try (same read-only filter as below)
+        for (const path of parsed as string[]) {
+          results[path] = await browse(cfg, path);
+          await new Promise((r) => setTimeout(r, 600));
+        }
+        return results;
+      }
+      bodies = parsed as Record<string, unknown>[] | null;
+    } catch {
+      bodies = null;
+    }
+    if (bodies) {
+      for (const [i, b] of bodies.entries()) {
+        results[`get#${i} ${JSON.stringify(b)}`] = await browse(cfg, "/open/item/v1/get", b);
+        await new Promise((r) => setTimeout(r, 1200));
+      }
+      return results;
+    }
+    for (const path of paths) {
+      results[path] = await browse(cfg, path);
+      await new Promise((r) => setTimeout(r, 1200));
+    }
+    return results;
+  }
+
+  // Self-test (ADMINS only): sends one small TEST order to Eatix for real, shows the reply, and cancels it at once.
+  if (action === "selftest") {
+    const test = {
+      orderNumber: `TEST-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      name: "ELUE Test",
+      phone: "9647700000000",
+      address: "Test order - ignore",
+      items: [{ slug: "dark-chocolate", nameAr: "شوكولاتة داكنة", nameEn: "Dark Chocolate", qty: 1, price: 9000 }],
+      total: 9000,
+      paid: false,
+      freeDelivery: true,
+      deliveryFee: 0,
+    };
+    // orderId may carry a JSON list of saleTypeId values to try, one after another, until Eatix accepts one.
+    // Entries may also be objects: {saleTypeId, saleTypeName, ...any other field Eatix asks for}.
+    let tries: (string | Record<string, unknown>)[] = [""];
+    try {
+      const t = orderId ? (JSON.parse(orderId) as unknown) : null;
+      if (Array.isArray(t)) tries = t as (string | Record<string, unknown>)[];
+    } catch {}
+    const log: unknown[] = [];
+    for (const combo of tries.slice(0, 6)) {
+      let live = { ...cfg, enabled: true };
+      if (typeof combo === "string") {
+        const [saleTypeId, saleTypeName] = combo.split("|");
+        live = { ...live, saleTypeId: saleTypeId || cfg.saleTypeId, saleTypeName: saleTypeName ?? cfg.saleTypeName };
+      } else {
+        const { saleTypeId, saleTypeName, itemExtra, payExtra, ...extra } = combo;
+        live = { ...live, saleTypeId: saleTypeId as string, saleTypeName: saleTypeName as string, extra, itemExtra: itemExtra as Record<string, unknown> | undefined, payExtra: payExtra as Record<string, unknown> | undefined };
+      }
+      const sent = await sendOrder(live, { ...test, orderNumber: `${test.orderNumber}-${log.length}` });
+      let cancelled = null;
+      if (sent.ok) {
+        await new Promise((r) => setTimeout(r, 1000));
+        cancelled = await cancelOrder(live, sent.eatixId);
+      }
+      log.push({ combo, sent, cancelled });
+      if (sent.ok) break;
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+    return { test: test.orderNumber, log };
   }
 
   if (!orderId) throw new Error("missing_order");

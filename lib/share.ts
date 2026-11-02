@@ -78,11 +78,11 @@ export function shareAccountUrl(o: Who): string {
 // Asks a customer for their review after delivery (the team sends it on WhatsApp).
 export function reviewRequestMessage(o: { name: string; orderNumber: string }, origin: string): string {
   return [
-    "*بأقل من 20 ثانية قيّم تجربتك*",
+    "*بأقل من 20 ثانية قيّموا تجربتكم*",
     "",
     `مرحباً ${o.name.trim().split(/\s+/)[0]} 🧡`,
     "",
-    "رأيك يهمنا فعلاً، لأن كل ملاحظة منك تساعدنا نتطور ونقدم تجربة أحلى",
+    "تقييمكم كلش يهمنا، لأن كل ملاحظة تساعدنا نتطور ونقدم تجربة أحلى وأفضل 😍",
     "",
     `${origin}/review?order=${encodeURIComponent(o.orderNumber)}`,
     "",

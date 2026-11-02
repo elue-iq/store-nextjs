@@ -33,22 +33,45 @@ export type EatixConfig = {
   // ÉLUE product slug -> the item in Eatix's menu.
   items: Record<string, { itemId: string; skuId?: string; categoryId?: string; skuName?: string }>;
   enabled: boolean;
+  // Eatix 'sale type' (their order requires it; value to be confirmed).
+  saleTypeId?: string;
+  saleTypeName?: string;
+  // Extra fields Eatix turns out to require (seatCode ...), merged into the order's top level and info block.
+  extra?: Record<string, unknown>;
+  // Same, for each item line (skuName ... ).
+  itemExtra?: Record<string, unknown>;
+  // Same, for each payment line (payType ...).
+  payExtra?: Record<string, unknown>;
+};
+
+// The ÉLUE products in Eatix's menu (category ترافلز). These ids are not secret, so they live in the code;
+// the EATIX_ITEMS secret, when it holds something, overrides them.
+const EATIX_CATEGORY = "6c462b09e06b49dcb6bd401ed292fc1a";
+export const EATIX_ITEMS: EatixConfig["items"] = {
+  "dark-chocolate": { itemId: "e25edc1cd4fd4a7bb005e2a4c2a06cc6", skuId: "dcca15b25fd44014baa45d94ef1d335b", categoryId: EATIX_CATEGORY },
+  hazelnut: { itemId: "b4e45bc79ad043a3a413e095fa95d52b", skuId: "cea821854d8544e4b3bdbb5ecde5ae92", categoryId: EATIX_CATEGORY },
+  carrot: { itemId: "2fe8e56a13ea4e3ba260ced0251a3f20", skuId: "4ed7d0c8b4dc4f15ae7a00e667f55c85", categoryId: EATIX_CATEGORY },
+  "peanut-butter": { itemId: "8f0e926f29f744d3923b3f00187171fa", skuId: "32c3ddc2b95a468998369ce2cc494d9f", categoryId: EATIX_CATEGORY },
 };
 
 export function eatixConfig(env: Record<string, string | undefined>): EatixConfig {
-  let items: EatixConfig["items"] = {};
+  let items: EatixConfig["items"] = EATIX_ITEMS;
   try {
-    items = JSON.parse(env.EATIX_ITEMS || "{}");
+    const extra = JSON.parse(env.EATIX_ITEMS || "{}") as EatixConfig["items"];
+    if (Object.keys(extra).length) items = extra;
   } catch {
-    items = {};
+    items = EATIX_ITEMS;
   }
   return {
     clientId: env.EATIX_CLIENT_ID ?? "",
     clientSecret: env.EATIX_CLIENT_SECRET ?? "",
     shopCode: env.EATIX_SHOP_CODE ?? "",
     channel: env.EATIX_CHANNEL ?? "",
+    saleTypeId: "1", // accepted by Eatix in the 2 Nov 2026 trials (sale type: delivery)
+    saleTypeName: "Delivery",
     items,
-    enabled: env.EATIX_ENABLED === "true",
+    // On by default now that the store, channel and items are confirmed; EATIX_ENABLED="off" is the kill switch.
+    enabled: env.EATIX_ENABLED !== "off",
   };
 }
 
@@ -125,12 +148,16 @@ export function buildSubmit(cfg: EatixConfig, o: EatixOrder) {
   const delivery = o.freeDelivery ? 0 : o.deliveryFee;
   const resultAmount = (o.total + delivery) * f;
   const paid = Boolean(o.paid);
-  return {
+  const submit = {
     shopCode: cfg.shopCode,
     channel: cfg.channel,
+    ...(cfg.saleTypeId ? { saleTypeId: cfg.saleTypeId, saleTypeName: cfg.saleTypeName ?? "" } : {}),
     outOrderId: o.orderNumber, // unique; our number is the reference
-    isPrePay: paid ? 1 : 0,
+    isPrePay: paid ? 1 : 2, // Eatix refuses 0; 1 / 2 are accepted (assumed: 1 = paid up front, 2 = pay later)
+    seatCode: "1",
     watingOrderInfoParam: {
+      ...(cfg.saleTypeId ? { saleTypeId: cfg.saleTypeId, saleTypeName: cfg.saleTypeName ?? "" } : {}),
+      seatCode: "1",
       businessDate: ymd(at),
       orderFrom: EATIX_DEFAULTS.orderFrom,
       bizType: EATIX_DEFAULTS.bizType,
@@ -150,6 +177,7 @@ export function buildSubmit(cfg: EatixConfig, o: EatixOrder) {
       taxFee: 0,
       tipFee: 0,
       extraCharge: 0,
+      ...(cfg.extra ?? {}),
     },
     watingOrderInfoExtParam: {
       outOrderId: o.orderNumber,
@@ -164,7 +192,7 @@ export function buildSubmit(cfg: EatixConfig, o: EatixOrder) {
         itemId: m.itemId,
         itemName: i.nameEn,
         skuId: m.skuId ?? "",
-        skuName: m.skuName ?? "",
+        skuName: m.skuName || i.nameEn, // Eatix refuses an empty sku name
         categoryId: m.categoryId ?? "",
         num: i.qty,
         orderNum: i.qty,
@@ -174,9 +202,10 @@ export function buildSubmit(cfg: EatixConfig, o: EatixOrder) {
         resultAmount: i.price * i.qty * f,
         discountAmount: 0,
         memo: "",
+        ...(cfg.itemExtra ?? {}),
       };
     }),
-    watingOrderPayParamList: [{ fee: paid ? resultAmount : 0, payName: paid ? "Prepaid" : "Cash on delivery" }],
+    watingOrderPayParamList: [{ fee: paid ? resultAmount : 0, payName: paid ? "Prepaid" : "Cash on delivery", payType: 1, payTypeId: "1", shopPayTypeId: "1", ...(cfg.payExtra ?? {}) }],
     watingOrderInfoDeliveryParam: {
       deliveryType: EATIX_DEFAULTS.deliveryType,
       deliveryStatus: EATIX_DEFAULTS.deliveryStatus,
@@ -187,6 +216,8 @@ export function buildSubmit(cfg: EatixConfig, o: EatixOrder) {
     watingOrderCampaignsParamList: [],
     watingOrderSpecialParamList: [],
   };
+  // Trial fields (cfg.extra) win over the defaults above.
+  return { ...submit, ...(cfg.extra ?? {}) };
 }
 
 export type SendResult = { ok: true; eatixId: string } | { ok: false; error: string };
@@ -273,6 +304,16 @@ export function eatixFields(r: SendResult, simulated: boolean) {
 export async function probe(cfg: EatixConfig, shopCode: string, channel: string): Promise<unknown> {
   try {
     return await authed(cfg, "/open/order/v1/cancel", { shopCode, channel, orderId: "PROBE-0", outOrderId: "PROBE-0" });
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "failed" };
+  }
+}
+
+// Diagnostic: a read-only call (item / menu / category lookups only) with the store and channel.
+export async function browse(cfg: EatixConfig, path: string, extra: Record<string, unknown> = {}): Promise<unknown> {
+  if (!/^\/open\/(item|menu|goods|category|shop|member|customer|user|pay|payment|trade|order|sale|saleType|saletype|sales)\/v1\/[A-Za-z/]*(list|get|query|menu|detail|info|methods|config)$/.test(path)) return { error: "path_not_allowed" };
+  try {
+    return await authed(cfg, path, { shopCode: cfg.shopCode, channel: cfg.channel, ...extra });
   } catch (err) {
     return { error: err instanceof Error ? err.message : "failed" };
   }
