@@ -292,7 +292,7 @@ export async function probe(cfg: EatixConfig, shopCode: string, channel: string)
 
 // Diagnostic: a read-only call (item / menu / category lookups only) with the store and channel.
 export async function browse(cfg: EatixConfig, path: string, extra: Record<string, unknown> = {}): Promise<unknown> {
-  if (!/^\/open\/(item|menu|goods|category|shop|member|customer|user|pay|payment|trade|order)\/v1\/[a-z/]*(list|get|query|menu|detail|info|methods|config)$/.test(path)) return { error: "path_not_allowed" };
+  if (!/^\/open\/(item|menu|goods|category|shop|member|customer|user|pay|payment|trade|order)\/v1\/[A-Za-z/]*(list|get|query|menu|detail|info|methods|config)$/.test(path)) return { error: "path_not_allowed" };
   try {
     return await authed(cfg, path, { shopCode: cfg.shopCode, channel: cfg.channel, ...extra });
   } catch (err) {

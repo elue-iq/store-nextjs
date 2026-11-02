@@ -44,7 +44,16 @@ export const handler: Schema["eatix"]["functionHandler"] = async (event) => {
     // orderId may carry a JSON list of extra request bodies for /open/item/v1/get (paging etc.).
     let bodies: Record<string, unknown>[] | null = null;
     try {
-      bodies = orderId ? (JSON.parse(orderId) as Record<string, unknown>[]) : null;
+      const parsed = orderId ? (JSON.parse(orderId) as unknown[]) : null;
+      if (parsed && parsed.every((x) => typeof x === "string")) {
+        // a list of paths to try (same read-only filter as below)
+        for (const path of parsed as string[]) {
+          results[path] = await browse(cfg, path);
+          await new Promise((r) => setTimeout(r, 600));
+        }
+        return results;
+      }
+      bodies = parsed as Record<string, unknown>[] | null;
     } catch {
       bodies = null;
     }
