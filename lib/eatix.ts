@@ -142,16 +142,14 @@ export function buildSubmit(cfg: EatixConfig, o: EatixOrder) {
   const delivery = o.freeDelivery ? 0 : o.deliveryFee;
   const resultAmount = (o.total + delivery) * f;
   const paid = Boolean(o.paid);
-  return {
+  const submit = {
     shopCode: cfg.shopCode,
     channel: cfg.channel,
     ...(cfg.saleTypeId ? { saleTypeId: cfg.saleTypeId, saleTypeName: cfg.saleTypeName ?? "" } : {}),
-    ...(cfg.extra ?? {}),
     outOrderId: o.orderNumber, // unique; our number is the reference
     isPrePay: paid ? 1 : 0,
     watingOrderInfoParam: {
       ...(cfg.saleTypeId ? { saleTypeId: cfg.saleTypeId, saleTypeName: cfg.saleTypeName ?? "" } : {}),
-      ...(cfg.extra ?? {}),
       businessDate: ymd(at),
       orderFrom: EATIX_DEFAULTS.orderFrom,
       bizType: EATIX_DEFAULTS.bizType,
@@ -171,6 +169,7 @@ export function buildSubmit(cfg: EatixConfig, o: EatixOrder) {
       taxFee: 0,
       tipFee: 0,
       extraCharge: 0,
+      ...(cfg.extra ?? {}),
     },
     watingOrderInfoExtParam: {
       outOrderId: o.orderNumber,
@@ -208,6 +207,8 @@ export function buildSubmit(cfg: EatixConfig, o: EatixOrder) {
     watingOrderCampaignsParamList: [],
     watingOrderSpecialParamList: [],
   };
+  // Trial fields (cfg.extra) win over the defaults above.
+  return { ...submit, ...(cfg.extra ?? {}) };
 }
 
 export type SendResult = { ok: true; eatixId: string } | { ok: false; error: string };
