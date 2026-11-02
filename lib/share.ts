@@ -54,7 +54,8 @@ export function orderMessage(o: OrderInfo, link = `${origin()}/account?order=${e
     "",
     `📦 تابعوا طلبكم: ${link}`,
     "",
-    "❄️ يُحفظ دائماً بالبراد، وسلّموا الفلين للمندوب.",
+    "❄️ يُحفظ دائماً بالبراد",
+    "• يرجى تسليم الفلين للمندوب.",
   ];
   return lines.join("\n");
 }
@@ -97,7 +98,8 @@ export function courierComingMessage(o: OrderInfo, courierName: string): string 
     "",
     ...summary(o),
     "",
-    "❄️ يُحفظ دائماً بالبراد، وسلّموني الفلين.",
+    "❄️ يُحفظ دائماً بالبراد",
+    "• يرجى تسليم الفلين لي.",
     "📞 إذا احتجتم أي شي، تواصلوا معي على هذا الرقم.",
   ].join("\n");
 }
