@@ -13,6 +13,7 @@ import { AdminEatix } from "./AdminEatix";
 import { SendOrderToCustomer, SendReviewRequest } from "./SendOrderToCustomer";
 import { AdminDelivery, callDispatch } from "./AdminDelivery";
 import { AdminCouriers } from "./AdminCouriers";
+import { AdminPrep } from "./AdminPrep";
 import { AdminReviews } from "./AdminReviews";
 import { AdminDashboard } from "./AdminDashboard";
 import { OrderRow, baghdadDay, shortTime } from "./AdminOrderRow";
@@ -43,7 +44,7 @@ function orderFromUrl(): string | null {
 // Which section the list screen shows (?view=dashboard etc.), so a refresh stays there.
 function viewFromUrl(): View {
   const v = new URLSearchParams(window.location.search).get("view");
-  return v === "dashboard" || v === "customers" || v === "products" || v === "delivery" || v === "reviews" ? v : "orders";
+  return v === "dashboard" || v === "customers" || v === "products" || v === "delivery" || v === "reviews" || v === "prep" ? v : "orders";
 }
 
 function screenUrl(id: string): string {
@@ -459,7 +460,7 @@ export function AdminView() {
     <AdminDrawer
       open={menuOpen}
       view={view}
-      counts={{ orders: orders?.length ?? 0, customers: customers.length, attention: newCount }}
+      counts={{ orders: orders?.length ?? 0, customers: customers.length, attention: newCount, prep: orders?.filter((o) => o.status === "CONFIRMED").length ?? 0 }}
       phone={formatIraqiMobile(auth.phone)}
       onClose={() => setMenuOpen(false)}
       onView={(v) => {
@@ -493,6 +494,17 @@ export function AdminView() {
         {pullEl}
         {listHead("شركات التوصيل", "الشركات المحلية وقناة تيليغرام لكل واحدة")}
         <AdminCouriers orders={orders} onOpenOrder={(n) => openOrder(n)} />
+        {drawer}
+      </div>
+    );
+  }
+
+  if (view === "prep") {
+    return (
+      <div className="admin-screen">
+        {pullEl}
+        {listHead("التجهيز", "كم علبة من كل نكهة تحتاج تجهز")}
+        <AdminPrep orders={orders} onOpenOrder={openOrder} />
         {drawer}
       </div>
     );

@@ -4962,3 +4962,128 @@ button.dash-bars__row:focus-visible {
   margin-bottom: 0.75rem;
   font-size: 1.25rem;
 }
+
+/* التجهيز: what to prepare, per flavor */
+.prep__filters {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.4rem;
+}
+.prep__filter {
+  padding: 0.7rem 0.4rem;
+  border: 1px solid var(--sand);
+  border-radius: 12px;
+  background: var(--paper);
+  color: var(--cocoa);
+  font: inherit;
+  font-weight: 600;
+}
+.prep__filter small {
+  margin-inline-start: 0.2rem;
+  color: var(--muted);
+}
+.prep__filter.is-on {
+  background: var(--terracotta);
+  border-color: var(--terracotta);
+  color: var(--cream, #f5efe6);
+}
+.prep__filter.is-on small {
+  color: inherit;
+}
+.prep__empty {
+  text-align: center;
+  padding: 2rem 0;
+  color: var(--muted);
+}
+.prep__total {
+  display: grid;
+  justify-items: center;
+  margin: 0.6rem 0 0.8rem;
+  font-size: 1.15rem;
+  color: var(--cocoa);
+}
+.prep__total strong {
+  font-size: 3rem;
+  line-height: 1.1;
+  color: var(--terracotta);
+}
+.prep__total small {
+  color: var(--muted);
+}
+.prep__flavors,
+.prep__orders {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.prep__flavor {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--sand);
+  border-radius: 12px;
+  background: var(--paper);
+}
+.prep__flavor > span {
+  display: grid;
+  font-weight: 600;
+  color: var(--cocoa);
+}
+.prep__flavor small {
+  font-weight: 400;
+  color: var(--muted);
+}
+.prep__flavor > strong {
+  font-size: 1.8rem;
+  color: var(--terracotta);
+}
+.prep__flavor.is-zero {
+  opacity: 0.5;
+}
+.prep__flavor.is-zero > strong {
+  color: var(--muted);
+}
+.prep__flavor.is-out {
+  border-color: var(--error, #b3261e);
+}
+.prep__flavor .prep__warn {
+  color: var(--error, #b3261e);
+  font-weight: 600;
+}
+.prep__h {
+  margin: 1.2rem 0 0.5rem;
+  font-size: 1.05rem;
+  color: var(--cocoa);
+}
+.prep__orders button {
+  width: 100%;
+  display: grid;
+  gap: 0.15rem;
+  text-align: start;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--sand);
+  border-radius: 12px;
+  background: var(--paper);
+  color: var(--cocoa);
+  font: inherit;
+}
+.prep__orders small {
+  color: var(--muted);
+}
+.prep__chip {
+  font-style: normal;
+  font-size: 0.8rem;
+  margin-inline-start: 0.4rem;
+  padding: 0.05rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--sand);
+  color: var(--muted);
+}
+.prep__chip.is-confirmed {
+  color: var(--cocoa);
+  background: var(--sand);
+}
