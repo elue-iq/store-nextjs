@@ -62,6 +62,27 @@ export const handler: Schema["eatix"]["functionHandler"] = async (event) => {
     return results;
   }
 
+  // Self-test (ADMINS only): sends one small TEST order to Eatix for real, shows the reply, and cancels it at once.
+  if (action === "selftest") {
+    const test = {
+      orderNumber: `TEST-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      name: "ELUE Test",
+      phone: "9647700000000",
+      address: "Test order - ignore",
+      items: [{ slug: "dark-chocolate", nameAr: "شوكولاتة داكنة", nameEn: "Dark Chocolate", qty: 1, price: 9000 }],
+      total: 9000,
+      paid: false,
+      freeDelivery: true,
+      deliveryFee: 0,
+    };
+    const live = { ...cfg, enabled: true };
+    const sent = await sendOrder(live, test);
+    await new Promise((r) => setTimeout(r, 1500));
+    const cancelled = sent.ok ? await cancelOrder(live, sent.eatixId) : null;
+    return { test: test.orderNumber, sent, cancelled };
+  }
+
   if (!orderId) throw new Error("missing_order");
   const { data: o } = await client.models.Order.get({ id: orderId });
   if (!o) throw new Error("not_found");

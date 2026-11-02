@@ -59,7 +59,8 @@ export function eatixConfig(env: Record<string, string | undefined>): EatixConfi
     shopCode: env.EATIX_SHOP_CODE ?? "",
     channel: env.EATIX_CHANNEL ?? "",
     items,
-    enabled: env.EATIX_ENABLED === "true",
+    // On by default now that the store, channel and items are confirmed; EATIX_ENABLED="off" is the kill switch.
+    enabled: env.EATIX_ENABLED !== "off",
   };
 }
 
