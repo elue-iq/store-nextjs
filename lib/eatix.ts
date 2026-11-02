@@ -33,6 +33,8 @@ export type EatixConfig = {
   // ÉLUE product slug -> the item in Eatix's menu.
   items: Record<string, { itemId: string; skuId?: string; categoryId?: string; skuName?: string }>;
   enabled: boolean;
+  // Eatix 'sale type' (their order requires it; value to be confirmed).
+  saleTypeId?: string;
 };
 
 // The ÉLUE products in Eatix's menu (category ترافلز). These ids are not secret, so they live in the code;
@@ -140,9 +142,11 @@ export function buildSubmit(cfg: EatixConfig, o: EatixOrder) {
   return {
     shopCode: cfg.shopCode,
     channel: cfg.channel,
+    ...(cfg.saleTypeId ? { saleTypeId: cfg.saleTypeId } : {}),
     outOrderId: o.orderNumber, // unique; our number is the reference
     isPrePay: paid ? 1 : 0,
     watingOrderInfoParam: {
+      ...(cfg.saleTypeId ? { saleTypeId: cfg.saleTypeId } : {}),
       businessDate: ymd(at),
       orderFrom: EATIX_DEFAULTS.orderFrom,
       bizType: EATIX_DEFAULTS.bizType,
@@ -292,7 +296,7 @@ export async function probe(cfg: EatixConfig, shopCode: string, channel: string)
 
 // Diagnostic: a read-only call (item / menu / category lookups only) with the store and channel.
 export async function browse(cfg: EatixConfig, path: string, extra: Record<string, unknown> = {}): Promise<unknown> {
-  if (!/^\/open\/(item|menu|goods|category|shop|member|customer|user|pay|payment|trade|order)\/v1\/[A-Za-z/]*(list|get|query|menu|detail|info|methods|config)$/.test(path)) return { error: "path_not_allowed" };
+  if (!/^\/open\/(item|menu|goods|category|shop|member|customer|user|pay|payment|trade|order|sale|saleType|saletype|sales)\/v1\/[A-Za-z/]*(list|get|query|menu|detail|info|methods|config)$/.test(path)) return { error: "path_not_allowed" };
   try {
     return await authed(cfg, path, { shopCode: cfg.shopCode, channel: cfg.channel, ...extra });
   } catch (err) {

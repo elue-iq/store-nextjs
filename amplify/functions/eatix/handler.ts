@@ -85,11 +85,26 @@ export const handler: Schema["eatix"]["functionHandler"] = async (event) => {
       freeDelivery: true,
       deliveryFee: 0,
     };
-    const live = { ...cfg, enabled: true };
-    const sent = await sendOrder(live, test);
-    await new Promise((r) => setTimeout(r, 1500));
-    const cancelled = sent.ok ? await cancelOrder(live, sent.eatixId) : null;
-    return { test: test.orderNumber, sent, cancelled };
+    // orderId may carry a JSON list of saleTypeId values to try, one after another, until Eatix accepts one.
+    let tries: string[] = [""];
+    try {
+      const t = orderId ? (JSON.parse(orderId) as unknown) : null;
+      if (Array.isArray(t)) tries = t.map(String);
+    } catch {}
+    const log: unknown[] = [];
+    for (const saleTypeId of tries.slice(0, 6)) {
+      const live = { ...cfg, enabled: true, saleTypeId: saleTypeId || cfg.saleTypeId };
+      const sent = await sendOrder(live, { ...test, orderNumber: `${test.orderNumber}-${log.length}` });
+      let cancelled = null;
+      if (sent.ok) {
+        await new Promise((r) => setTimeout(r, 1000));
+        cancelled = await cancelOrder(live, sent.eatixId);
+      }
+      log.push({ saleTypeId, sent, cancelled });
+      if (sent.ok) break;
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+    return { test: test.orderNumber, log };
   }
 
   if (!orderId) throw new Error("missing_order");
