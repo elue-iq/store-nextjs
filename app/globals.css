@@ -3376,6 +3376,14 @@ body:has(.admin-app) .site-footer {
 body:has(.admin-app) .cold-banner {
   display: none;
 }
+.order-pay--free {
+  font-weight: 600;
+  color: var(--sage-deep);
+}
+.cold-banner .cold-banner__inner {
+  padding-block: 0.45rem;
+  text-align: center;
+}
 .order-pay--cold {
   font-weight: 600;
   color: var(--terracotta);

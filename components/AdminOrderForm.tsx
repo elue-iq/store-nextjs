@@ -10,7 +10,7 @@ import { products } from "@/lib/products";
 import { MAX_QTY_PER_LINE } from "@/lib/order-text";
 import { collectBreakdown, modonCollect } from "@/lib/modon";
 import { formatIraqiMobile, normalizeIraqiMobile } from "@/lib/phone";
-import { deliveryPayOf, formatIQD, needsPayRef, PAID_METHODS, PAY_METHOD_LABELS, site, type DeliveryPay, type PayMethod } from "@/lib/site";
+import { deliveryPayOf, formatIQD, freeDeliveryFor, needsPayRef, PAID_METHODS, PAY_METHOD_LABELS, site, type DeliveryPay, type PayMethod } from "@/lib/site";
 import { checkDelivery, cleanDelivery, phoneError, type DeliveryInfo, type FieldErrors } from "@/lib/validate";
 
 // Team form for one order:
@@ -85,6 +85,8 @@ export function AdminOrderForm({
     .map((p) => ({ product: p, qty: qty[p.slug], price: oldPrice[p.slug] ?? p.price }));
   const total = lines.reduce((n, l) => n + l.qty * l.price, 0);
   const jars = lines.reduce((n, l) => n + l.qty, 0);
+  // Orders of site.freeDeliveryMinJars jars or more: delivery is free automatically.
+  const autoFreeDelivery = deliveryPay === "driver" && freeDeliveryFor(jars);
   const driverCollects = modonCollect(total, paid, deliveryPay);
 
   function step(slug: string, by: number) {
@@ -163,7 +165,7 @@ export function AdminOrderForm({
         paidNote: savedNote,
         payMethod: savedMethod,
         payRef: savedRef,
-        freeDelivery: deliveryPay === "gift",
+        freeDelivery: deliveryPay === "gift" || autoFreeDelivery,
         deliveryPaid: deliveryPay === "prepaid",
       };
       const changes: Record<string, unknown> = {};
@@ -359,6 +361,11 @@ export function AdminOrderForm({
                 <span>{label}</span>
               </label>
             ))}
+          {autoFreeDelivery && (
+            <p className="panel-note">
+              الطلب {site.freeDeliveryMinJars} علب أو أكثر، فالتوصيل مجاني تلقائياً ونتحمّل الأجور.
+            </p>
+          )}
         </fieldset>
         {prepaidSomething && (
           <fieldset className={payErrors.method ? "admin-order-form__group has-error" : "admin-order-form__group"}>

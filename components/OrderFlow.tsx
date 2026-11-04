@@ -14,7 +14,7 @@ import { LoginPanel } from "./LoginPanel";
 import { DeliveryFields, type DeliveryFieldsHandle } from "./DeliveryFields";
 import { buildWhatsAppText, priceCart, type CartItem } from "@/lib/order-text";
 import { formatIraqiMobile } from "@/lib/phone";
-import { collectStatement, formatIQD, site } from "@/lib/site";
+import { collectStatement, formatIQD, freeDeliveryFor, freeDeliveryHint, site } from "@/lib/site";
 import { fullAddress } from "@/lib/iraq";
 import { checkDelivery, cleanDelivery, ltr, type DeliveryInfo, type FieldErrors } from "@/lib/validate";
 import { dataClient, errorCode, errorDetail, errorFields } from "@/lib/data";
@@ -38,6 +38,8 @@ export function OrderFlow() {
   const auth = useAuth();
   const stock = useStock();
   const { lines, total } = priceCart(cart.items);
+  const jarCount = lines.reduce((n, l) => n + l.qty, 0);
+  const freeDelivery = freeDeliveryFor(jarCount);
   const signedIn = auth.status === "signedIn";
   const soldOutLines = lines.filter((l) => !stock.isAvailable(l.product.slug));
   // The shop's own (admin) login is for the orders page, not for ordering as a customer.
@@ -380,7 +382,8 @@ export function OrderFlow() {
           <span>المجموع</span>
           <strong>{formatIQD(total)}</strong>
         </p>
-        <p className="order-pay">{collectStatement(total)}</p>
+        <p className="order-pay">{collectStatement(total, false, freeDelivery ? "gift" : "driver")}</p>
+        {!freeDelivery && <p className="order-pay order-pay--free">{freeDeliveryHint(jarCount)}</p>}
         <p className="order-pay">{site.paymentNote}</p>
         <p className="order-pay">{site.courierNote}</p>
         <p className="order-pay">التوصيل لكل محافظات العراق.</p>

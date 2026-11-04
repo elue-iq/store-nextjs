@@ -165,7 +165,7 @@ export default function Home() {
         <div className="section__head">
           <h2 id="delivery-title">كيف يوصلك طلبك؟</h2>
           <p>
-            التوصيل لكل محافظات العراق. الدفع نقداً عند الاستلام، وأجور التوصيل {formatIQD(site.deliveryFee)}.
+            التوصيل لكل محافظات العراق. الدفع نقداً عند الاستلام، وأجور التوصيل {formatIQD(site.deliveryFee)}، ومجاني لطلبات {site.freeDeliveryMinJars} علب أو أكثر.
           </p>
         </div>
         <DeliverySteps />
