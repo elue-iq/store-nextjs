@@ -17,7 +17,18 @@ export function shortTime(iso: string, today: string): string {
 }
 
 // One order in a list (the orders screen and the dashboard). Tapping opens it.
-export function OrderRow({ order: o, today, onOpen }: { order: Order; today: string; onOpen: (orderNumber: string) => void }) {
+export function OrderRow({
+  order: o,
+  today,
+  onOpen,
+  flavors = [],
+}: {
+  order: Order;
+  today: string;
+  onOpen: (orderNumber: string) => void;
+  flavors?: string[]; // flavors being filtered: their lines are shown on the row
+}) {
+  const picked = flavors.length ? o.items.filter((i): i is NonNullable<typeof i> => Boolean(i) && flavors.includes(i!.slug)) : [];
   const pay = payKeyOf(o);
   return (
     <button type="button" className={`order-row order-row--${o.status.toLowerCase()}`} onClick={() => onOpen(o.orderNumber)}>
@@ -46,6 +57,15 @@ export function OrderRow({ order: o, today, onOpen }: { order: Order; today: str
           )}
         </span>
         <span className="order-row__name">{o.name}</span>
+        {picked.length > 0 && (
+          <span className="order-row__flavors">
+            {picked.map((i) => (
+              <span key={i.slug} className="order-row__paid">
+                {i.nameAr} × {i.qty}
+              </span>
+            ))}
+          </span>
+        )}
         <span className={o.cashierOrderId ? "order-row__cashier" : "order-row__cashier is-missing"}>
           {o.cashierOrderId ? (
             <>

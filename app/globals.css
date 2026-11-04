@@ -5095,3 +5095,28 @@ button.dash-bars__row:focus-visible {
   color: var(--cocoa);
   background: var(--sand);
 }
+
+.admin-flavors {
+  gap: 0.4rem;
+}
+
+.admin-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0 0 0.8rem;
+  color: var(--ink-soft, var(--ink));
+  font-size: 0.92rem;
+}
+
+.admin-summary .link-button {
+  margin-inline-start: 0.6rem;
+}
+
+.order-row__flavors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.15rem;
+}
