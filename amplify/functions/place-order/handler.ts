@@ -27,7 +27,7 @@ import { normalizeIraqiMobile } from "../../../lib/phone";
 import { buildOrderMessage, sendToTelegram } from "../../../lib/telegram";
 import { eatixConfig, eatixFields, sendOrder, toEatixOrder } from "../../../lib/eatix";
 import { OPEN_STATUSES, ORDER_RULES } from "../../../lib/order-rules";
-import { needsPayRef, site } from "../../../lib/site";
+import { freeDeliveryFor, needsPayRef, site } from "../../../lib/site";
 import { sendOrderConfirmation } from "../../../lib/orderConfirmation";
 import { pendingReview } from "../../../lib/reviews";
 
@@ -221,7 +221,7 @@ export const handler: Schema["placeOrder"]["functionHandler"] = async (event) =>
   const paid = isTeam ? Boolean(args.paid) : false;
   // Delivery fee: already paid by the customer, or a gift from ÉLUE (never both).
   const deliveryPaid = isTeam ? Boolean(args.deliveryPaid) : false;
-  const freeDelivery = isTeam && !deliveryPaid ? Boolean(args.freeDelivery) : false;
+  let freeDelivery = isTeam && !deliveryPaid ? Boolean(args.freeDelivery) : false;
   // How it was paid in advance (Qi Card, ZainCash, other…) and its transaction number.
   // Required whenever the customer prepaid the jars or the delivery fee (a free-jars gift needs no number).
   const rawMethod = String(args.payMethod ?? "").trim().toUpperCase();
@@ -260,6 +260,8 @@ export const handler: Schema["placeOrder"]["functionHandler"] = async (event) =>
   if (!lines.length) throw new Error("empty_cart");
   const jars = lines.reduce((n, l) => n + l.qty, 0);
   if (!isTeam && jars > ORDER_RULES.maxJarsPerOrder) throw new Error(`too_many_jars:${ORDER_RULES.maxJarsPerOrder}`);
+  // Free delivery for larger orders (site.freeDeliveryMinJars jars or more), unless the fee was prepaid.
+  if (!deliveryPaid && freeDeliveryFor(jars)) freeDelivery = true;
 
   // The team may still take an order for a flavor marked sold out (e.g. stock on the way).
   const soldOut = forCustomer ? new Set<string>() : await unavailableSlugs();

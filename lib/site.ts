@@ -40,6 +40,8 @@ export const site = {
   modonSupport: { whatsapp: "964535111991", display: "+964 535 111 991" },
   // The cold-chain message: a site-wide banner, and in every message sent to a customer.
   coldNote: {
+    // The short line in the site-wide banner at the top.
+    banner: "يُحفظ مبرّد",
     title: "مهم: يُحفظ دائماً في البراد",
     text:
       "لأن منتجاتنا لا تحتوي على مواد حافظة أو سكر مضاف أو دهون مضافة، فلازم دائماً تكون مبرّدة. " +
@@ -54,6 +56,8 @@ export const site = {
   currency: "د.ع",
   // Delivery fee the customer pays the driver on top of the jars (Modon keeps it).
   deliveryFee: 5000,
+  // Orders with at least this many jars get free delivery (ÉLUE pays the courier).
+  freeDeliveryMinJars: 4,
   // Public address used in links the server sends (Telegram).
   address: "https://elue-iq.com",
 };
@@ -115,6 +119,19 @@ export function collectStatement(total: number, paid = false, delivery: Delivery
   if (delivery === "gift") return `التوصيل مجاني. المطلوب عند الاستلام ${formatIQD(total)} (ثمن الطلب فقط)`;
   if (delivery === "prepaid") return `أجور التوصيل مدفوعة مسبقاً. المطلوب عند الاستلام ${formatIQD(total)} (ثمن الطلب فقط)`;
   return `المطلوب عند الاستلام ${formatIQD(total + fee)} (الطلب ${formatIQD(total)} + التوصيل ${formatIQD(fee)})`;
+}
+
+// Free delivery for orders of site.freeDeliveryMinJars jars or more.
+export function freeDeliveryFor(jars: number): boolean {
+  return jars >= site.freeDeliveryMinJars;
+}
+
+// Under the cart total: how many more jars until delivery is free (empty once it is).
+export function freeDeliveryHint(jars: number): string {
+  const left = site.freeDeliveryMinJars - jars;
+  if (left <= 0) return "";
+  const n = left === 1 ? "علبة وحدة" : left === 2 ? "علبتين" : `${left} علب`;
+  return `أضيفوا ${n} ويصير التوصيل مجاني 🚚`;
 }
 
 export function deliveryNote(): string {
