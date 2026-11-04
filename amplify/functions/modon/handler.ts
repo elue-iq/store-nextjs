@@ -25,6 +25,10 @@ import { deliveryPayOf, site } from "../../../lib/site";
 //    update   – send the order's current details to Modon (only before pickup)
 //    delete   – delete it at Modon (only before pickup)
 //    refresh  – read the latest Modon status (one order, or every open one)
+//
+// If an order is cancelled / deleted at Modon's side (from their panel, not ours), every
+// path here notices (refresh, webhook, send, update): the Modon fields on our order are
+// cleared so it shows as «not sent» again, and "send" / "update" create it again at Modon.
 // 2. From Modon (function URL): status-update webhook, checked by a secret header.
 //
 // Nothing here creates a Modon order except the "send" action.
@@ -156,6 +160,60 @@ type ModonOrder = {
   deliver_estimation_datetime?: string | null;
 };
 
+
+// ---- Cancelled at Modon ------------------------------------------------------
+
+// An order the merchant cancelled / deleted in Modon's own panel: Modon either stops
+// returning it, or returns it with a deleted/cancelled mark. Returned, refused and
+// postponed orders are NOT this: those are still live Modon orders.
+function cancelledAtModon(m: ModonOrder & { deleted_at?: string | null }): boolean {
+  if (m.deleted_at) return true;
+  return /ملغ|ألغ|الغ|محذوف|حذف|cancel|delet/i.test(String(m.status ?? ""));
+}
+
+// Clears every Modon field on the order so it counts as «not sent» and can be sent again.
+async function releaseModon(o: Order, why: string): Promise<void> {
+  console.log("modon order gone, releasing", o.orderNumber, o.modonQr, why);
+  const { errors } = await client.models.Order.update({
+    id: o.id,
+    modonId: null,
+    modonQr: null,
+    modonLink: null,
+    modonPrice: null,
+    modonFee: null,
+    modonStatusId: null,
+    modonStatus: null,
+    modonNote: null,
+    modonSentAt: null,
+    modonUpdatedAt: new Date().toISOString(),
+    trackStatus: null,
+    trackEta: null,
+    trackEvents: null,
+  });
+  if (errors?.length) {
+    console.error("releasing the Modon order failed", o.orderNumber, JSON.stringify(errors).slice(0, 600));
+    throw new Error("save_failed");
+  }
+}
+
+// Is the order still alive at Modon? "gone" = Modon no longer has it, or it is cancelled there.
+async function modonAlive(o: Order): Promise<"alive" | "gone"> {
+  if (!o.modonId) return "gone";
+  const reply = await authed("/get-orders-by-ids-bulk", { method: "POST" }, () => {
+    const f = new FormData();
+    f.append("ids", o.modonId!);
+    return f;
+  });
+  if (!reply.status) {
+    // Modon answering "not found" for a deleted order is the same as gone; anything else is a real error.
+    if (/لا يوجد|غير موجود|not found|no order/i.test(String(reply.msg ?? ""))) return "gone";
+    fail(reply, "check");
+  }
+  const rows = (Array.isArray(reply.data) ? reply.data : []) as (ModonOrder & { deleted_at?: string | null })[];
+  const m = rows.find((r) => String(r.id ?? "") === o.modonId || String(r.qr_id ?? "") === o.modonQr);
+  return !m || cancelledAtModon(m) ? "gone" : "alive";
+}
+
 // Saves a Modon status on our order (webhook, refresh).
 async function applyStatus(m: ModonOrder): Promise<string | null> {
   const modonId = String(m.id ?? "");
@@ -163,6 +221,10 @@ async function applyStatus(m: ModonOrder): Promise<string | null> {
   const { data } = await client.models.Order.listOrderByModonId({ modonId }, { limit: 1 });
   const o = data?.[0];
   if (!o) return null;
+  if (o.status !== "DELIVERED" && cancelledAtModon(m)) {
+    await releaseModon(o, String(m.status ?? "cancelled"));
+    return o.orderNumber;
+  }
   const next = statusFromModon(m);
   const keep = o.status === "CANCELLED" || o.status === "DELIVERED";
 
@@ -195,14 +257,14 @@ async function applyStatus(m: ModonOrder): Promise<string | null> {
   return o.orderNumber;
 }
 
-async function refresh(orderId?: string | null): Promise<{ updated: string[] }> {
-  let ids: string[];
+async function refresh(orderId?: string | null): Promise<{ updated: string[]; released: string[] }> {
+  // Our order for each Modon id we ask about, to find the ones Modon no longer has.
+  const byModonId = new Map<string, Order>();
   if (orderId) {
     const o = await getOrder(orderId);
-    ids = o.modonId ? [o.modonId] : [];
+    if (o.modonId) byModonId.set(o.modonId, o);
   } else {
     // Every order at Modon that isn't finished yet.
-    ids = [];
     let nextToken: string | null | undefined;
     do {
       const res = await client.models.Order.list({
@@ -210,11 +272,13 @@ async function refresh(orderId?: string | null): Promise<{ updated: string[] }> 
         limit: 500,
         nextToken,
       });
-      for (const o of res.data) if (o.modonId && o.status !== "CANCELLED") ids.push(o.modonId);
+      for (const o of res.data) if (o.modonId && o.status !== "CANCELLED") byModonId.set(o.modonId, o);
       nextToken = res.nextToken;
     } while (nextToken);
   }
+  const ids = [...byModonId.keys()];
   const updated: string[] = [];
+  const released: string[] = [];
   for (let i = 0; i < ids.length; i += 25) {
     const batch = ids.slice(i, i + 25);
     const reply = await authed("/get-orders-by-ids-bulk", { method: "POST" }, () => {
@@ -223,35 +287,50 @@ async function refresh(orderId?: string | null): Promise<{ updated: string[] }> 
       return f;
     });
     if (!reply.status) fail(reply, "refresh");
-    for (const m of (Array.isArray(reply.data) ? reply.data : []) as ModonOrder[]) {
+    const rows = (Array.isArray(reply.data) ? reply.data : []) as ModonOrder[];
+    const seen = new Set<string>();
+    for (const m of rows) {
+      seen.add(String(m.id ?? ""));
+      const o = byModonId.get(String(m.id ?? ""));
       const n = await applyStatus(m);
-      if (n) updated.push(n);
+      if (n) (o && cancelledAtModon(m) ? released : updated).push(n);
+    }
+    // Modon no longer returns an order we sent: it was deleted there. When checking one
+    // order that is enough; in a big batch, an empty answer is more likely a glitch than
+    // the deletion of every order, so those are left alone.
+    if (orderId || rows.length) {
+      for (const id of batch) {
+        const o = byModonId.get(id);
+        if (!o || seen.has(id)) continue;
+        await releaseModon(o, "missing from Modon");
+        released.push(o.orderNumber);
+      }
     }
   }
-  return { updated };
+  return { updated, released };
 }
 
-// ---- Admin actions ----------------------------------------------------------
-
-async function adminAction(args: {
-  action: string;
-  orderId?: string | null;
-  cityId?: number | null;
-  regionId?: number | null;
-  regionName?: string | null;
-}): Promise<unknown> {
-  switch (args.action) {
-    case "regions": {
-      const cityId = Number(args.cityId);
-      if (!cityId) throw new Error("missing_city");
-      return { regions: await regions(cityId) };
+// Creates the order at Modon (real: a driver comes to pick it up) and saves the result.
+async function createAtModon(o: Order, regionId: number, regionName?: string | null) {
+  const reply: ModonReply = PRODUCTION
+    ? await authed("/create-order", { method: "POST" }, () => orderForm(o, regionId))
+    : { status: true, data: { id: `DEV${Date.now()}`, qr_id: `DEV-${Date.now()}`, qr_link: null, company_price: 5000 } };
+  if (!reply.status) fail(reply, "send");
+     case "send": {
+      let o = await getOrder(args.orderId);
+      if (o.status === "CANCELLED") throw new Error("cancelled");
+      if (o.modonId) {
+        // Already sent before. If it was cancelled at Modon since, send it again (a new Modon order).
+        if (!PRODUCTION || (await modonAlive(o)) === "alive") throw new Error(`already_sent:${o.modonQr ?? o.modonId}`);
+        await releaseModon(o, "send: gone at Modon");
+        o = await getOrder(o.id);
+      }
+      const regionId = Number(args.regionId);
+      if (!regionId) throw new Error("missing_region");
+      return createAtModon(o, regionId, args.regionName);
     }
 
-    case "send": {
-      const o = await getOrder(args.orderId);
-      if (o.modonId) throw new Error(`already_sent:${o.modonQr ?? o.modonId}`);
-      if (o.status === "CANCELLED") throw new Error("cancelled");
-      const regionId = Number(args.regionId);
+onId);
       if (!regionId) throw new Error("missing_region");
       const reply: ModonReply = PRODUCTION
         ? await authed("/create-order", { method: "POST" }, () => orderForm(o, regionId))
@@ -282,9 +361,16 @@ async function adminAction(args: {
     }
 
     case "update": {
-      const o = await getOrder(args.orderId);
+      let o = await getOrder(args.orderId);
       if (!o.modonQr || !o.modonRegionId) throw new Error("not_sent");
       const regionId = Number(args.regionId) || o.modonRegionId;
+      // Upsert: if the order was cancelled / deleted at Modon, there is nothing to edit,
+      // so create it again with the current details.
+      if (PRODUCTION && (await modonAlive(o)) === "gone") {
+        await releaseModon(o, "update: gone at Modon");
+        o = await getOrder(o.id);
+        return { ...(await createAtModon(o, regionId, args.regionName)), recreated: true };
+      }
       const reply: ModonReply = PRODUCTION
         ? await authed("/edit-order", { method: "POST" }, () => orderForm(o, regionId, o.modonQr!))
         : { status: true };
@@ -309,28 +395,14 @@ async function adminAction(args: {
             return f;
           })
         : { status: true };
-      if (!reply.status) fail(reply, "delete");
-      await client.models.Order.update({
-        id: o.id,
-        modonId: null,
-        modonQr: null,
-        modonLink: null,
-        modonPrice: null,
-        modonFee: null,
-        modonStatusId: null,
-        modonStatus: null,
-        modonNote: null,
-        modonSentAt: null,
-        modonUpdatedAt: new Date().toISOString(),
-        trackStatus: null,
-        trackEta: null,
-        trackEvents: null,
-      });
+      // Already deleted at Modon is fine: the goal (not at Modon) is met, so just clear it here.
+      if (!reply.status && (await modonAlive(o)) === "alive") fail(reply, "delete");
+      await releaseModon(o, "deleted from the admin");
       return { ok: true };
     }
 
     case "refresh":
-      return PRODUCTION ? refresh(args.orderId) : { updated: [] };
+      return PRODUCTION ? refresh(args.orderId) : { updated: [], released: [] };
 
     default:
       throw new Error("unknown_action");
