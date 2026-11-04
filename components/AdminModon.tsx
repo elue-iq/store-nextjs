@@ -86,7 +86,11 @@ export function AdminModon({ order: o }: { order: Order }) {
     const last = o.modonUpdatedAt ? Date.parse(o.modonUpdatedAt) : 0;
     if (Date.now() - Math.max(last, lastAsked.get(o.id) ?? 0) < 60_000) return;
     lastAsked.set(o.id, Date.now());
-    void callModon({ action: "refresh", orderId: o.id });
+    void callModon({ action: "refresh", orderId: o.id }).then(({ data }) => {
+      // Cancelled / deleted at Modon: the order is «not sent» again and can be sent again below.
+      if ((data?.released as string[] | undefined)?.length)
+        toast({ id: "modon", tone: "attention", message: "هذا الطلب ملغى في مدن. يمكنك إرساله إلى مدن من جديد." });
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [o.id]);
 
@@ -134,8 +138,11 @@ export function AdminModon({ order: o }: { order: Order }) {
       toast({ id: "modon", tone: "attention", message: error });
       return;
     }
-    toast({ id: "modon", message: ok });
-    if (action === "send" && data?.link) window.open(String(data.link), "_blank", "noopener");
+    toast({
+      id: "modon",
+      message: data?.recreated ? "كان الطلب ملغى في مدن، فأُرسل إليهم من جديد برقم جديد." : ok,
+    });
+    if ((action === "send" || data?.recreated) && data?.link) window.open(String(data.link), "_blank", "noopener");
   }
 
   if (!sent) {
