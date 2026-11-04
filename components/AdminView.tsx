@@ -78,7 +78,9 @@ export function AdminView() {
   const [filter, setFilter] = useState<Filter>("ALL");
   const [sort, setSort] = useState<Sort>("newest");
   const [query, setQuery] = useState("");
-  const [flavor, setFlavor] = useState("");
+  const [flavors, setFlavors] = useState<string[]>([]); // any of these flavors; empty = all
+  const [when, setWhen] = useState<"" | "today" | "yesterday" | "7d" | "30d">("");
+  const [province, setProvince] = useState("");
   const [pay, setPay] = useState<"" | PayKey | "freeDelivery">("");
   const [courier, setCourier] = useState(""); // "" = all, "none", "MODON", or a local courier's id
   const [selected, setSelected] = useState<string | null>(null);
@@ -254,13 +256,18 @@ export function AdminView() {
 
   const customers = useMemo(() => buildCustomers(orders ?? []), [orders]);
 
-  const shown = useMemo(() => {
-    const q = toLatinDigits(query).trim().toLowerCase();
-    const qDigits = q.replace(/\D/g, "").replace(/^0+/, "");
-    const list = (orders ?? []).filter((o) => {
+  // Every filter except the flavor one, so each flavor chip can show how many orders it
+  // would give with the other filters as they are now.
+  const matches = useCallback(
+    (o: Order, q: string, qDigits: string): boolean => {
       if (filter !== "ALL" && o.status !== filter) return false;
-      if (flavor && !o.items.some((i) => i?.slug === flavor)) return false;
       if (pay === "freeDelivery" ? !o.freeDelivery || o.deliveryPaid : pay && payKeyOf(o) !== pay) return false;
+      if (province && o.province !== province) return false;
+      if (when) {
+        const day = baghdadDay(o.createdAt);
+        const ago = (n: number) => baghdadDay(new Date(Date.now() - n * 86_400_000).toISOString());
+        if (when === "today" ? day !== today : when === "yesterday" ? day !== ago(1) : day < ago(when === "7d" ? 6 : 29)) return false;
+      }
       if (courier) {
         const mine = o.modonQr || o.courierKind === "MODON" ? "MODON" : o.courierKind === "LOCAL" && o.courierId ? o.courierId : "none";
         if (courier === "LOCAL" ? !(o.courierKind === "LOCAL" && o.courierId) : mine !== courier) return false;
@@ -279,9 +286,37 @@ export function AdminView() {
         fullAddress(o).toLowerCase().includes(q) ||
         (qDigits.length >= 3 && o.phone.includes(qDigits))
       );
-    });
-    return sort === "newest" ? list : [...list].reverse();
-  }, [orders, filter, query, sort, flavor, pay, courier]);
+    },
+    [filter, pay, province, when, courier, today],
+  );
+
+  const { shown, flavorCounts, jarsOfPicked } = useMemo(() => {
+    const q = toLatinDigits(query).trim().toLowerCase();
+    const qDigits = q.replace(/\D/g, "").replace(/^0+/, "");
+    const base = (orders ?? []).filter((o) => matches(o, q, qDigits));
+    const counts: Record<string, number> = {};
+    for (const o of base) for (const slug of new Set(o.items.map((i) => i?.slug))) if (slug) counts[slug] = (counts[slug] ?? 0) + 1;
+    const list = flavors.length ? base.filter((o) => o.items.some((i) => i && flavors.includes(i.slug))) : base;
+    const jars = flavors.length
+      ? list.reduce((n, o) => n + o.items.reduce((m, i) => m + (i && flavors.includes(i.slug) ? i.qty : 0), 0), 0)
+      : list.reduce((n, o) => n + o.jars, 0);
+    return { shown: sort === "newest" ? list : [...list].reverse(), flavorCounts: counts, jarsOfPicked: jars };
+  }, [orders, query, sort, flavors, matches]);
+
+  const provinces = useMemo(
+    () => [...new Set((orders ?? []).map((o) => o.province).filter((p): p is string => Boolean(p)))].sort((a, b) => a.localeCompare(b, "ar")),
+    [orders],
+  );
+  const extraFilters = [flavors.length > 0, when !== "", province !== "", pay !== "", courier !== "", filter !== "ALL", query.trim() !== ""].filter(Boolean).length;
+  const clearFilters = () => {
+    setFilter("ALL");
+    setFlavors([]);
+    setWhen("");
+    setProvince("");
+    setPay("");
+    setCourier("");
+    setQuery("");
+  };
 
   // Orders for the label PDF: the local-courier orders shown, minus cancelled ones.
   const labelOrders = useMemo(
@@ -593,6 +628,22 @@ export function AdminView() {
           placeholder="ابحث برقم الطلب أو الاسم أو الهاتف أو رقم الكاشير أو مدن أو رقم العملية"
           aria-label="بحث"
         />
+        <div className="admin-filters admin-flavors" role="group" aria-label="فلترة حسب النكهة">
+          <button type="button" aria-pressed={flavors.length === 0} onClick={() => setFlavors([])}>
+            كل النكهات
+          </button>
+          {products.map((p) => (
+            <button
+              key={p.slug}
+              type="button"
+              aria-pressed={flavors.includes(p.slug)}
+              onClick={() => setFlavors((cur) => (cur.includes(p.slug) ? cur.filter((x) => x !== p.slug) : [...cur, p.slug]))}
+            >
+              {p.nameAr}
+              <span>{flavorCounts[p.slug] ?? 0}</span>
+            </button>
+          ))}
+        </div>
         <div className="admin-tools__row">
           <div className="admin-filters" role="group" aria-label="فلترة حسب الحالة">
             {(["ALL", ...STATUS_ORDER] as Filter[]).map((f) => (
@@ -603,11 +654,18 @@ export function AdminView() {
             ))}
           </div>
           <div className="admin-tools__selects">
-            <select className="admin-sort" value={flavor} onChange={(e) => setFlavor(e.target.value)} aria-label="النكهة">
-              <option value="">كل النكهات</option>
-              {products.map((p) => (
-                <option key={p.slug} value={p.slug}>
-                  {p.nameAr}
+            <select className="admin-sort" value={when} onChange={(e) => setWhen(e.target.value as typeof when)} aria-label="الفترة">
+              <option value="">كل الأوقات</option>
+              <option value="today">اليوم</option>
+              <option value="yesterday">أمس</option>
+              <option value="7d">آخر 7 أيام</option>
+              <option value="30d">آخر 30 يوماً</option>
+            </select>
+            <select className="admin-sort" value={province} onChange={(e) => setProvince(e.target.value)} aria-label="المحافظة">
+              <option value="">كل المحافظات</option>
+              {provinces.map((p) => (
+                <option key={p} value={p}>
+                  {p}
                 </option>
               ))}
             </select>
@@ -656,12 +714,24 @@ export function AdminView() {
       )}
 
       {orders === null && !failed && <p className="panel-loading">جارٍ تحميل الطلبات…</p>}
+      {orders && (
+        <p className="admin-summary" aria-live="polite">
+          <strong>{shown.length}</strong> طلب · <strong>{jarsOfPicked}</strong> علبة
+          {flavors.length > 0 && ` من ${flavors.map((f) => products.find((p) => p.slug === f)?.nameAr ?? f).join(" + ")}`}
+          {extraFilters > 0 && (
+            <button type="button" className="link-button" onClick={clearFilters}>
+              مسح الفلاتر ({extraFilters})
+            </button>
+          )}
+        </p>
+      )}
+
       {orders && shown.length === 0 && <p className="hint">لا توجد طلبات هنا.</p>}
 
       <ul className="order-rows">
         {shown.map((o) => (
           <li key={o.id}>
-            <OrderRow order={o} today={today} onOpen={openOrder} />
+            <OrderRow order={o} today={today} onOpen={openOrder} flavors={flavors} />
           </li>
         ))}
       </ul>
