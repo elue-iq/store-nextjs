@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AdminModon } from "./AdminModon";
+import { AdminModon, callModon } from "./AdminModon";
 import { requestOrdersRefresh } from "@/lib/ordersRefresh";
 import { useToast } from "./Toast";
 import { baghdadTime, dataClient, type Courier, type Order } from "@/lib/data";
@@ -63,6 +63,8 @@ export function AdminDelivery({ order: o, onOpenCouriers }: { order: Order; onOp
   const [couriers, setCouriers] = useState<Courier[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<string | null>(null); // courier id being assigned
+  const [changing, setChanging] = useState(false); // choosing a different delivery company
+  const [target, setTarget] = useState<string | null>(null); // "MODON" or a courier id, picked while changing
   const [reporting, setReporting] = useState(false);
   const [kind, setKind] = useState<IssueKind | "">("");
   const [text, setText] = useState("");
@@ -151,6 +153,52 @@ export function AdminDelivery({ order: o, onOpenCouriers }: { order: Order; onOp
     setBusy(false);
   }
 
+  // Move the order to another delivery company in one step. The old one is told
+  // (a local courier gets a «withdrawn» note on Telegram; at Modon the order is deleted,
+  // which is only possible before the Modon driver picks it up).
+  const beforePickup = (o.modonStatusId ?? "1") === "1";
+  async function switchTo(to: string) {
+    setBusy(true);
+    try {
+      if (atModon) {
+        const { error } = await callModon({ action: "delete", orderId: o.id });
+        if (error) return toast({ id: "dispatch", tone: "attention", message: error });
+      }
+      if (to === "MODON") {
+        if (local) {
+          const { error } = await callDispatch({ action: "unassign", orderId: o.id });
+          if (error) return toast({ id: "dispatch", tone: "attention", message: error });
+        }
+        const { errors } = await dataClient.models.Order.update({ id: o.id, courierKind: "MODON" });
+        requestOrdersRefresh();
+        if (errors?.length) return toast({ id: "dispatch", tone: "attention", message: "تعذّر الحفظ. حاول مجددًا." });
+        toast({ id: "dispatch", message: "اخترت مدن Express. اختر المنطقة وأرسل الطلب إليهم." });
+      } else {
+        const c = active.find((x) => x.id === to);
+        if (!c) return;
+        const { data, error } = await callDispatch({ action: "assign", orderId: o.id, courierId: c.id });
+        if (error) return toast({ id: "dispatch", tone: "attention", message: error });
+        toast(
+          data?.ok
+            ? { id: "dispatch", message: `نُقل ${o.orderNumber} إلى ${c.name} وأُرسل على تيليغرام.` }
+            : { id: "dispatch", tone: "attention", message: `نُقل الطلب إلى ${c.name} لكن لم يصل: ${String(data?.error ?? "")}` },
+        );
+      }
+      setChanging(false);
+      setTarget(null);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const canChange = (local || (atModon && beforePickup)) && !cancelled && !delivered;
+  const changeOptions: [string, string][] = [
+    ...(atModon || o.courierKind === "MODON" ? [] : [["MODON", "مدن Express"] as [string, string]]),
+    ...active.filter((c) => c.id !== o.courierId).map((c) => [c.id, c.name] as [string, string]),
+  ];
+  const targetName = changeOptions.find(([id]) => id === target)?.[1] ?? "";
+  const fromName = atModon ? "مدن Express" : (o.courierName ?? "شركة التوصيل");
+
   // ---- Problem report ------------------------------------------------------
 
   const reportOrder = { ...o, courierSentAt: o.courierSentAt ?? o.modonSentAt } as unknown as DispatchOrder;
@@ -206,7 +254,7 @@ export function AdminDelivery({ order: o, onOpenCouriers }: { order: Order; onOp
         <h2>شركة التوصيل</h2>
 
         {atModon ? (
-          <p className="hint">الطلب عند مدن Express. لتغييرها احذف الطلب من مدن أولاً.</p>
+          <p className="hint">الطلب عند مدن Express.{beforePickup ? "" : " استلمه المندوب: التغيير يكون بالاتصال بمدن."}</p>
         ) : local ? (
           <div className="delivery__status">
             <p>
@@ -285,6 +333,46 @@ export function AdminDelivery({ order: o, onOpenCouriers }: { order: Order; onOp
             </>
           )
         )}
+
+        {canChange &&
+          (changing ? (
+            <div className="modon__confirm">
+              <div className="delivery__chips" role="group" aria-label="انقل الطلب إلى">
+                {changeOptions.map(([id, name]) => (
+                  <button key={id} type="button" aria-pressed={target === id} disabled={busy} onClick={() => setTarget(id)}>
+                    {name}
+                  </button>
+                ))}
+              </div>
+              {changeOptions.length === 0 && <p className="hint">لا توجد شركة توصيل أخرى فعّالة.</p>}
+              {target && (
+                <>
+                  <p role="alert">
+                    {atModon
+                      ? `سيُحذف الطلب من مدن، ثم ${target === "MODON" ? "" : `يُرسل إلى «${targetName}» على تيليغرام`}.`
+                      : target === "MODON"
+                        ? `سيُسحب الطلب من «${fromName}» (يصله إشعار على تيليغرام) ثم تختار منطقة مدن وترسله.`
+                        : `سيُسحب الطلب من «${fromName}» (يصله إشعار) ويصل «${targetName}» بكل تفاصيله على تيليغرام الآن.`}
+                  </p>
+                  <button type="button" className="btn btn--full" disabled={busy} onClick={() => void switchTo(target)}>
+                    {busy ? "جارٍ النقل…" : `تأكيد النقل إلى ${targetName}`}
+                  </button>
+                </>
+              )}
+              <button
+                type="button"
+                className="btn btn--quiet btn--full"
+                disabled={busy}
+                onClick={() => (setChanging(false), setTarget(null))}
+              >
+                تراجع
+              </button>
+            </div>
+          ) : (
+            <button type="button" className="btn btn--quiet btn--full" disabled={busy} onClick={() => setChanging(true)}>
+              تغيير شركة التوصيل
+            </button>
+          ))}
       </section>
 
       {pickedModon && <AdminModon order={o} />}
