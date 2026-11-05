@@ -70,7 +70,9 @@ async function loadAllOrders(): Promise<Order[]> {
 export function AdminView() {
   const auth = useAuth();
   const toast = useToast();
-  const [orders, setOrders] = useState<Order[] | null>(null);
+  const [allOrders, setOrders] = useState<Order[] | null>(null);
+  // Orders waiting for a Qi payment aren't real orders yet: the team sees them once paid.
+  const orders = useMemo(() => allOrders?.filter((o) => !(o.qiStatus === "CREATED" && !o.paid)) ?? null, [allOrders]);
   const [synced, setSynced] = useState(false);
   const [failed, setFailed] = useState(false);
   // Shown on screen so a loading problem can be reported with a screenshot.

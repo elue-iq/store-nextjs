@@ -102,6 +102,10 @@ const schema = a
         reviewedAt: a.datetime(),
         // The customer accepted the Baghdad delivery window (6–10 pm, else next day).
         slotAccepted: a.boolean().authorization((allow) => [allow.group("ADMINS")]),
+        // Qi Card online payment: Qi's payment id (team only) and its state
+        // (CREATED = waiting for the customer to pay, SUCCESS, FAILED). The customer can read the state.
+        qiPaymentId: a.string().authorization((allow) => [allow.group("ADMINS")]),
+        qiStatus: a.string(),
         // Eatix (cashier device copy of the order). Team only.
         eatixId: a.string().authorization((allow) => [allow.group("ADMINS")]),
         eatixStatus: a.string().authorization((allow) => [allow.group("ADMINS")]), // SENT | SIMULATED | FAILED | OFF | CANCELLED
@@ -110,7 +114,7 @@ const schema = a
         owner: a.string().authorization((allow) => [allow.ownerDefinedIn("owner").to(["read"]), allow.group("ADMINS")]),
       })
       // Fast lookups: a customer's orders, and orders by phone number (admin search).
-      .secondaryIndexes((index) => [index("owner"), index("phone"), index("modonId")])
+      .secondaryIndexes((index) => [index("owner"), index("phone"), index("modonId"), index("qiPaymentId")])
       .authorization((allow) => [allow.ownerDefinedIn("owner").to(["read"]), allow.group("ADMINS")]),
 
     // A customer's review of a delivered order: one per order (the order number is the key,
@@ -174,6 +178,14 @@ const schema = a
       orderNumber: a.string().required(),
       createdAt: a.string().required(),
       telegramSent: a.boolean().required(),
+      // Online payment: where to send the customer to pay (Qi Card).
+      payUrl: a.string(),
+    }),
+
+    QiConfirmResult: a.customType({
+      orderNumber: a.string().required(),
+      status: a.string().required(), // CREATED | SUCCESS | FAILED
+      paid: a.boolean().required(),
     }),
 
     placeOrder: a
@@ -201,8 +213,19 @@ const schema = a
         payRef: a.string(),
         // The customer accepted the Baghdad delivery window.
         slotAccepted: a.boolean(),
+        // The customer pays now with Qi Card instead of cash to the driver.
+        payOnline: a.boolean(),
       })
       .returns(a.ref("PlaceOrderResult"))
+      .authorization((allow) => [allow.authenticated()])
+      .handler(a.handler.function(placeOrder)),
+
+    // After the customer comes back from Qi's page: asks Qi what happened to the payment
+    // (the signed notification does the same, this is the safety net) and updates the order.
+    qiConfirm: a
+      .mutation()
+      .arguments({ orderNumber: a.string().required() })
+      .returns(a.ref("QiConfirmResult"))
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(placeOrder)),
 

@@ -30,11 +30,15 @@ import { OPEN_STATUSES, ORDER_RULES } from "../../../lib/order-rules";
 import { freeDeliveryFor, needsPayRef, site } from "../../../lib/site";
 import { sendOrderConfirmation } from "../../../lib/orderConfirmation";
 import { pendingReview } from "../../../lib/reviews";
+import { createPayment, getPaymentStatus, qiConfig, verifyNotification, type QiPayment } from "../../../lib/qi";
+import { GetFunctionUrlConfigCommand, LambdaClient } from "@aws-sdk/client-lambda";
 
 // placeOrder: the only way an order is created.
 // 1. Checks the customer is logged in (their WhatsApp number comes from the login, not the form).
 // 2. Checks name/address and prices the cart from our own product list.
 // 3. Saves the order in DynamoDB.            <- the order is safe from here on
+// 3b. Paying now with Qi Card: the order waits (not sent to Telegram/Eatix) until Qi confirms the
+//     payment, by its signed notification (function URL) or by qiConfirm when the customer returns.
 // 4. Sends it to the Telegram group (3 tries). If Telegram fails the order is
 //    still saved and shows on /admin.
 
@@ -158,9 +162,18 @@ async function unlockCustomer(owner: string) {
 async function checkCustomerLimits(owner: string, isTeam: boolean) {
   const { data } = await client.models.Order.listOrderByOwner(
     { owner },
-    { limit: 200, selectionSet: ["orderNumber", "status", "createdAt", "reviewed"] },
+    { limit: 200, selectionSet: ["id", "orderNumber", "status", "createdAt", "reviewed", "qiStatus", "paid"] },
   );
-  const orders = data ?? [];
+  let orders = data ?? [];
+  // An order still waiting for a Qi payment the customer walked away from: they are starting
+  // again, so it is cancelled and doesn't count as an open order.
+  const abandoned = orders.filter((o) => o.qiStatus === "CREATED" && !o.paid && o.status === "NEW");
+  for (const o of abandoned) {
+    await client.models.Order.update({ id: o.id, status: "CANCELLED", qiStatus: "FAILED" }).catch((err) =>
+      console.error("cancelling an abandoned payment order failed", err),
+    );
+  }
+  if (abandoned.length) orders = orders.filter((o) => !abandoned.includes(o));
   const open = orders.filter((o) => (OPEN_STATUSES as readonly string[]).includes(o.status));
   if (open.length >= ORDER_RULES.maxOpenOrders) {
     open.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -203,7 +216,9 @@ function baghdadTime(d: Date): string {
   return new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Baghdad", dateStyle: "short", timeStyle: "short" }).format(d);
 }
 
-export const handler: Schema["placeOrder"]["functionHandler"] = async (event) => {
+type PlaceOrderEvent = Parameters<Schema["placeOrder"]["functionHandler"]>[0];
+
+async function placeOrderHandler(event: PlaceOrderEvent) {
   const identity = event.identity as AppSyncIdentityCognito | null;
   const callerPhone = await customerPhone(identity);
   if (!identity || !callerPhone) throw new Error("not_signed_in");
@@ -235,6 +250,10 @@ export const handler: Schema["placeOrder"]["functionHandler"] = async (event) =>
     if (needsPayRef(payMethod) && !payRef) throw new Error('invalid_fields:{"payRef":"اكتب رقم العملية أو الحوالة."}');
   }
   const slotAccepted = Boolean(args.slotAccepted);
+  // The customer pays now with Qi Card (customers only; the team records prepaid orders by hand).
+  const online = !isTeam && Boolean(args.payOnline);
+  const qi = qiConfig(env as unknown as Record<string, string>);
+  if (online && !qi) throw new Error("pay_unavailable");
   const { name, province, area, address } = cleanDelivery({
     name: String(args.name ?? ""),
     province: String(args.province ?? ""),
@@ -272,10 +291,8 @@ export const handler: Schema["placeOrder"]["functionHandler"] = async (event) =>
   const owner = customer ? customer.owner : `${identity.sub}::${identity.username}`;
 
   const saveAndNotify = async () => {
-    const previous = await client.models.Order.listOrderByPhone({ phone }, { limit: 1, selectionSet: ["id"] });
-    const returning = (previous.data?.length ?? 0) > 0;
-
     const number = await nextOrderNumber();
+    const payAmount = total + (freeDelivery ? 0 : site.deliveryFee);
     const { data: order, errors } = await client.models.Order.create({
       orderNumber: number,
       phone,
@@ -306,6 +323,7 @@ export const handler: Schema["placeOrder"]["functionHandler"] = async (event) =>
       slotAccepted,
       createdBy: forCustomer ? callerPhone : null,
       owner,
+      ...(online ? { qiStatus: "CREATED" } : {}),
     });
     if (!order || errors?.length) {
       console.error("Saving the order failed", JSON.stringify(errors));
@@ -318,56 +336,31 @@ export const handler: Schema["placeOrder"]["functionHandler"] = async (event) =>
       if (profileErrors?.length) console.error("saving the customer profile failed", JSON.stringify(profileErrors));
     }
 
-    const message = buildOrderMessage({
-      orderNumber: number,
-      time: baghdadTime(new Date(order.createdAt)),
-      lines,
-      total,
-      name,
-      phone,
-      province,
-      area,
-      address,
-      note,
-      source,
-      returning,
-      createdBy: forCustomer ? callerPhone : null,
-      cashierOrderId,
-      paid,
-      paidNote,
-      payMethod,
-      payRef,
-      freeDelivery,
-      deliveryPaid,
-    });
-    // The dev copy never messages the team's Telegram group.
-    const telegramSent = PRODUCTION ? await sendToTelegram(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_CHAT_ID, message) : false;
-    if (!PRODUCTION) console.log("DEV order, Telegram skipped:\n" + message);
-    if (telegramSent) await client.models.Order.update({ id: order.id, telegramSent: true });
-
-    // Copy of the order to Eatix (cashier device). Best effort: a failure is
-    // recorded on the order (retry on /admin) and never blocks the order.
-    try {
-      const r = PRODUCTION
-        ? await sendOrder(eatixCfg, toEatixOrder(order as Parameters<typeof toEatixOrder>[0]))
-        : ({ ok: true, eatixId: `DEV${Date.now()}` } as const);
-      const { errors: eErrors } = await client.models.Order.update({ id: order.id, ...eatixFields(r, !PRODUCTION) });
-      if (eErrors?.length) console.error("saving the Eatix result failed", JSON.stringify(eErrors));
-      if (!r.ok && r.error !== "disabled") console.error("Eatix push failed", r.error);
-    } catch (err) {
-      console.error("Eatix push crashed", err);
+    // Paying now: create the Qi payment and send the customer to its page. The team is told
+    // only after Qi confirms the payment (see finishPayment).
+    if (online && qi) {
+      const notificationUrl = await ownUrl();
+      const pay = notificationUrl
+        ? await createPayment(qi, {
+            orderNumber: number,
+            amount: payAmount,
+            finishUrl: `${siteOrigin()}/order/paid?o=${encodeURIComponent(number)}`,
+            notificationUrl,
+            name,
+            phone,
+          })
+        : ({ ok: false, error: "no_notification_url" } as const);
+      if (!pay.ok || !pay.data.formUrl || !pay.data.paymentId) {
+        console.error("Qi payment could not be created", pay.ok ? JSON.stringify(pay.data).slice(0, 300) : pay.error);
+        await client.models.Order.update({ id: order.id, status: "CANCELLED", qiStatus: "FAILED" });
+        throw new Error("pay_failed");
+      }
+      await client.models.Order.update({ id: order.id, qiPaymentId: pay.data.paymentId });
+      return { id: order.id, orderNumber: number, createdAt: order.createdAt, telegramSent: false, payUrl: pay.data.formUrl };
     }
 
-    // A customer who placed their own order gets a WhatsApp confirmation (orders the team enters are not).
-    // Live only, best effort: it never blocks or fails the order.
-    if (!isTeam && PRODUCTION) {
-      const r = await sendOrderConfirmation({ apiKey: env.OTPIQ_API_KEY, phone, name, orderNumber: number, origin: "https://elue-iq.com" });
-      if (!r.sent && r.reason !== "not_configured") console.error("order confirmation not sent:", r.reason);
-    } else if (!isTeam) {
-      console.log("DEV order, WhatsApp confirmation skipped");
-    }
-
-    return { id: order.id, orderNumber: number, createdAt: order.createdAt, telegramSent };
+    const telegramSent = await notifyTeam(order);
+    return { id: order.id, orderNumber: number, createdAt: order.createdAt, telegramSent, payUrl: null };
   };
 
   // Customers ordering for themselves: one order at a time (see lib/order-rules.ts).
@@ -379,4 +372,200 @@ export const handler: Schema["placeOrder"]["functionHandler"] = async (event) =>
   } finally {
     if (lockedOwner) await unlockCustomer(lockedOwner);
   }
+}
+
+// ---- Telling the team about an order ------------------------------------------
+
+type OrderRecord = Schema["Order"]["type"];
+
+// Telegram, the Eatix cashier copy and the customer's WhatsApp confirmation. Used when an
+// order is placed, or (Qi Card) when its payment is confirmed. Returns whether Telegram got it.
+async function notifyTeam(order: OrderRecord): Promise<boolean> {
+  const previous = await client.models.Order.listOrderByPhone({ phone: order.phone }, { limit: 2, selectionSet: ["id"] });
+  const returning = (previous.data ?? []).some((o) => o.id !== order.id);
+  const { lines } = priceCart(
+    (order.items ?? []).filter((i): i is NonNullable<typeof i> => Boolean(i)).map((i) => ({ slug: i.slug, qty: i.qty })),
+  );
+  const message = buildOrderMessage({
+    orderNumber: order.orderNumber,
+    time: baghdadTime(new Date(order.createdAt)),
+    lines,
+    total: order.total,
+    name: order.name,
+    phone: order.phone,
+    province: order.province ?? "",
+    area: order.area ?? "",
+    address: order.address,
+    note: order.note ?? null,
+    source: order.source ?? null,
+    returning,
+    createdBy: order.createdBy ?? null,
+    cashierOrderId: order.cashierOrderId ?? null,
+    paid: Boolean(order.paid),
+    paidNote: order.paidNote ?? null,
+    payMethod: order.payMethod ?? null,
+    payRef: order.payRef ?? null,
+    freeDelivery: Boolean(order.freeDelivery),
+    deliveryPaid: Boolean(order.deliveryPaid),
+  });
+  // The dev copy never messages the team's Telegram group.
+  const telegramSent = PRODUCTION ? await sendToTelegram(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_CHAT_ID, message) : false;
+  if (!PRODUCTION) console.log("DEV order, Telegram skipped:\n" + message);
+  if (telegramSent) await client.models.Order.update({ id: order.id, telegramSent: true });
+
+  // Copy of the order to Eatix (cashier device). Best effort: a failure is
+  // recorded on the order (retry on /admin) and never blocks the order.
+  try {
+    const r = PRODUCTION
+      ? await sendOrder(eatixCfg, toEatixOrder(order as Parameters<typeof toEatixOrder>[0]))
+      : ({ ok: true, eatixId: `DEV${Date.now()}` } as const);
+    const { errors: eErrors } = await client.models.Order.update({ id: order.id, ...eatixFields(r, !PRODUCTION) });
+    if (eErrors?.length) console.error("saving the Eatix result failed", JSON.stringify(eErrors));
+    if (!r.ok && r.error !== "disabled") console.error("Eatix push failed", r.error);
+  } catch (err) {
+    console.error("Eatix push crashed", err);
+  }
+
+  // A customer who placed their own order gets a WhatsApp confirmation (orders the team enters are not).
+  // Live only, best effort: it never blocks or fails the order.
+  if (!order.createdBy && PRODUCTION) {
+    const r = await sendOrderConfirmation({ apiKey: env.OTPIQ_API_KEY, phone: order.phone, name: order.name, orderNumber: order.orderNumber, origin: "https://elue-iq.com" });
+    if (!r.sent && r.reason !== "not_configured") console.error("order confirmation not sent:", r.reason);
+  } else if (!order.createdBy) {
+    console.log("DEV order, WhatsApp confirmation skipped");
+  }
+  return telegramSent;
+}
+
+// ---- Qi Card payments -----------------------------------------------------------
+
+const lambdaClient = new LambdaClient({});
+const siteOrigin = () => (PRODUCTION ? "https://elue-iq.com" : "https://dev.dqa1y51n2g520.amplifyapp.com");
+
+// This function's own public address (where Qi sends its signed notification).
+let cachedUrl = "";
+async function ownUrl(): Promise<string> {
+  if (cachedUrl) return cachedUrl;
+  try {
+    const r = await lambdaClient.send(new GetFunctionUrlConfigCommand({ FunctionName: process.env.AWS_LAMBDA_FUNCTION_NAME }));
+    cachedUrl = r.FunctionUrl ?? "";
+  } catch (err) {
+    console.error("own function url lookup failed", err);
+  }
+  return cachedUrl;
+}
+
+// Exactly-once guard: the first caller to claim an order's payment result does the work.
+async function claimPayment(orderNumber: string): Promise<boolean> {
+  try {
+    await dynamo.send(
+      new PutItemCommand({
+        TableName: process.env.COUNTERS_TABLE,
+        Item: { id: { S: `qipaid#${orderNumber}` }, at: { N: String(Date.now()) } },
+        ConditionExpression: "attribute_not_exists(id)",
+      }),
+    );
+    return true;
+  } catch (err) {
+    if (err instanceof ConditionalCheckFailedException) return false;
+    throw err;
+  }
+}
+
+// Applies Qi's verdict on an order's payment. SUCCESS: the order is paid (jars + delivery fee),
+// then the team is told. FAILED: the order is cancelled. Anything else changes nothing yet.
+async function finishPayment(order: OrderRecord, p: QiPayment): Promise<{ status: string; paid: boolean }> {
+  if (order.paid) return { status: "SUCCESS", paid: true };
+  const expected = order.total + (order.freeDelivery ? 0 : site.deliveryFee);
+  if (p.status === "SUCCESS") {
+    if (Number(p.amount ?? 0) < expected) {
+      console.error("Qi amount is lower than the order", order.orderNumber, p.amount, expected);
+      return { status: "CREATED", paid: false };
+    }
+    if (!(await claimPayment(order.orderNumber))) return { status: "SUCCESS", paid: true };
+    const { data: updated, errors } = await client.models.Order.update({
+      id: order.id,
+      paid: true,
+      deliveryPaid: !order.freeDelivery,
+      payMethod: "QI",
+      payRef: p.paymentId ?? order.qiPaymentId ?? null,
+      qiStatus: "SUCCESS",
+    });
+    if (!updated || errors?.length) {
+      console.error("saving the paid order failed", order.orderNumber, JSON.stringify(errors));
+      throw new Error("save_failed");
+    }
+    await notifyTeam(updated);
+    return { status: "SUCCESS", paid: true };
+  }
+  if (p.status === "FAILED" || p.status === "AUTHENTICATION_FAILED" || p.canceled) {
+    if (order.status === "NEW") await client.models.Order.update({ id: order.id, status: "CANCELLED", qiStatus: "FAILED" });
+    return { status: "FAILED", paid: false };
+  }
+  return { status: "CREATED", paid: false };
+}
+
+// Qi's notification (function URL): checked by its signature before anything is changed.
+type UrlEvent = {
+  requestContext: { http: { method: string } };
+  headers?: Record<string, string | undefined>;
+  body?: string;
+  isBase64Encoded?: boolean;
+};
+
+async function qiNotification(event: UrlEvent) {
+  const reply = (statusCode: number, body: unknown) => ({ statusCode, headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  if (event.requestContext.http.method !== "POST") return reply(405, { ok: false });
+  let body: QiPayment;
+  try {
+    const raw = event.isBase64Encoded ? Buffer.from(event.body ?? "", "base64").toString("utf8") : (event.body ?? "");
+    body = JSON.parse(raw) as QiPayment;
+  } catch {
+    return reply(400, { ok: false });
+  }
+  const signature = event.headers?.["x-signature"] ?? event.headers?.["X-Signature"] ?? "";
+  if (!verifyNotification(body, signature)) {
+    console.error("Qi notification: bad signature", JSON.stringify(body).slice(0, 300));
+    return reply(401, { ok: false });
+  }
+  if (!body.paymentId) return reply(400, { ok: false });
+  const { data } = await client.models.Order.listOrderByQiPaymentId({ qiPaymentId: body.paymentId }, { limit: 1 });
+  const order = data?.[0];
+  if (!order) {
+    console.error("Qi notification for an unknown payment", body.paymentId);
+    return reply(200, { ok: true, ignored: true });
+  }
+  const result = await finishPayment(order, body);
+  return reply(200, { ok: true, ...result });
+}
+
+// qiConfirm (the customer is back from Qi's page): asks Qi for the payment's status.
+async function qiConfirm(event: { identity: unknown; arguments: { orderNumber: string } }) {
+  const identity = event.identity as AppSyncIdentityCognito | null;
+  if (!identity?.sub || !identity.username) throw new Error("not_signed_in");
+  const owner = `${identity.sub}::${identity.username}`;
+  const orderNumber = String(event.arguments.orderNumber ?? "").trim();
+  const { data } = await client.models.Order.listOrderByOwner({ owner }, { limit: 200 });
+  const order = (data ?? []).find((o) => o.orderNumber === orderNumber);
+  if (!order) throw new Error("order_not_found");
+  if (order.paid) return { orderNumber, status: "SUCCESS", paid: true };
+  if (order.qiStatus !== "CREATED" || !order.qiPaymentId) return { orderNumber, status: order.qiStatus ?? "FAILED", paid: false };
+  const qi = qiConfig(env as unknown as Record<string, string>);
+  if (!qi) throw new Error("pay_unavailable");
+  const r = await getPaymentStatus(qi, order.qiPaymentId);
+  if (!r.ok) {
+    console.error("Qi status check failed", r.error);
+    return { orderNumber, status: "CREATED", paid: false };
+  }
+  const result = await finishPayment(order, r.data);
+  return { orderNumber, ...result };
+}
+
+// ---- Entry ----------------------------------------------------------------------
+
+export const handler = async (event: unknown) => {
+  if ((event as UrlEvent)?.requestContext?.http) return qiNotification(event as UrlEvent);
+  const field = (event as { info?: { fieldName?: string } })?.info?.fieldName;
+  if (field === "qiConfirm") return qiConfirm(event as Parameters<typeof qiConfirm>[0]);
+  return placeOrderHandler(event as PlaceOrderEvent);
 };

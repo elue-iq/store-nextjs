@@ -64,6 +64,14 @@ const counters = new Table(Stack.of(backend.placeOrder.resources.lambda), "Order
 counters.grantReadWriteData(backend.placeOrder.resources.lambda);
 backend.placeOrder.addEnvironment("COUNTERS_TABLE", counters.tableName);
 
+// Qi Card: Qi's signed payment notification arrives at placeOrder's own public address
+// (checked by signature in the function). The function finds its own address at runtime.
+const placeOrderUrl = backend.placeOrder.resources.lambda.addFunctionUrl({ authType: FunctionUrlAuthType.NONE });
+backend.addOutput({ custom: { qiNotificationUrl: placeOrderUrl.url } });
+backend.placeOrder.resources.lambda.addToRolePolicy(
+  new PolicyStatement({ actions: ["lambda:GetFunctionUrlConfig"], resources: ["*"] }),
+);
+
 // Instagram DM orders (ManyChat): a public address checked by a secret header. It
 // calls placeOrder as the team, and uses the counters table for its duplicate guard.
 counters.grantReadWriteData(backend.igOrder.resources.lambda);

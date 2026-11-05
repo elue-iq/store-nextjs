@@ -14,5 +14,9 @@ export const placeOrder = defineFunction({
     EATIX_ITEMS: secret("EATIX_ITEMS"),
     EATIX_ENABLED: secret("EATIX_ENABLED"),
     OTPIQ_API_KEY: secret("OTPIQ_API_KEY"),
+    QI_API_HOST: secret("QI_API_HOST"),
+    QI_USERNAME: secret("QI_USERNAME"),
+    QI_PASSWORD: secret("QI_PASSWORD"),
+    QI_TERMINAL_ID: secret("QI_TERMINAL_ID"),
   },
 });

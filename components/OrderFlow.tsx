@@ -32,6 +32,8 @@ type Placed = DeliveryInfo & {
   note: string;
 };
 
+const QI_LIVE_HOSTS = ["elue-iq.com", "www.elue-iq.com"];
+
 export function OrderFlow() {
   const cart = useCart();
   const toast = useToast();
@@ -54,6 +56,12 @@ export function OrderFlow() {
   const [saveToAccount, setSaveToAccount] = useState(true);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+  // Pay now with Qi Card: offered on the test site only until the live gateway is switched on.
+  const [payOnline, setPayOnline] = useState(false);
+  const [onlineOk, setOnlineOk] = useState(false);
+  useEffect(() => {
+    setOnlineOk(!QI_LIVE_HOSTS.includes(window.location.hostname));
+  }, []);
   // Inside Baghdad the customer sees the delivery window (6–10 pm, else next day) and must accept it.
   const [slotOk, setSlotOk] = useState(false);
   const [slotErr, setSlotErr] = useState(false);
@@ -208,7 +216,13 @@ export function OrderFlow() {
         source: cart.source || undefined,
         items: JSON.stringify(cart.items),
         slotAccepted: inBaghdad ? true : undefined,
+        payOnline: onlineOk && payOnline ? true : undefined,
       });
+      if (data?.orderNumber && data.payUrl) {
+        // Paying now: the order is kept until Qi confirms it; the cart is cleared on return.
+        window.location.href = data.payUrl;
+        return;
+      }
       if (data?.orderNumber) {
         setPlaced({ ...snapshot, orderNumber: data.orderNumber, createdAt: data.createdAt });
         pixelPurchase(cart.items, total, data.orderNumber);
@@ -244,6 +258,8 @@ export function OrderFlow() {
         });
       } else if (code === "busy") {
         toast({ id: "checkout", tone: "attention", message: "طلبك قيد الإرسال الآن. انتظر لحظة قبل المحاولة مجددًا." });
+      } else if (code === "pay_failed" || code === "pay_unavailable") {
+        toast({ id: "checkout", tone: "attention", message: "تعذّر فتح صفحة الدفع الإلكتروني. اختر الدفع عند الاستلام أو حاول لاحقًا." });
       } else if (code === "empty_cart") {
         toast({ id: "checkout", tone: "attention", message: "السلة فارغة أو فيها خطأ. عُد إلى النكهات وأضفها من جديد." });
       } else if (code === "not_signed_in") {
@@ -506,6 +522,19 @@ export function OrderFlow() {
                 {slotErr && !slotOk && <span className="field-error">يلزم الموافقة على الموعد لإكمال الطلب.</span>}
               </div>
             )}
+            {onlineOk && (
+              <fieldset className="pay-choice">
+                <legend>طريقة الدفع</legend>
+                <label className="check">
+                  <input type="radio" name="pay" checked={!payOnline} onChange={() => setPayOnline(false)} />
+                  الدفع نقدًا عند الاستلام
+                </label>
+                <label className="check">
+                  <input type="radio" name="pay" checked={payOnline} onChange={() => setPayOnline(true)} />
+                  الدفع الآن ببطاقة كي (Qi Card)
+                </label>
+              </fieldset>
+            )}
             {openOrder && (
               <div className="field-note open-order" role="alert">
                 <p>
@@ -523,7 +552,7 @@ export function OrderFlow() {
               </p>
             )}
             <button type="submit" className="btn btn--full" disabled={busy || soldOutLines.length > 0 || Boolean(openOrder)}>
-              {busy ? "جارٍ إرسال الطلب…" : `تأكيد الطلب · ${formatIQD(total)}`}
+              {busy ? "جارٍ إرسال الطلب…" : onlineOk && payOnline ? `الدفع الآن · ${formatIQD(total + (freeDelivery ? 0 : site.deliveryFee))}` : `تأكيد الطلب · ${formatIQD(total)}`}
             </button>
           </form>
         )}
