@@ -293,6 +293,19 @@ async function adminAction(args: {
     case "regions":
       return { regions: await regions(String(args.province ?? "")) };
 
+    // Saved pick-up addresses on the Boxy account (to find BOXY_PICKUP_UID).
+    case "pickups": {
+      const r = await call("/saved-pick-up-addresses");
+      if (!r.ok) fail(r, "pickups");
+      const items = ((r.reply.object as { items?: Array<Record<string, unknown>> })?.items ?? []).map((p) => ({
+        uid: p.uid,
+        title: p.title,
+        default: p.default,
+        address: p.address_text,
+      }));
+      return { pickups: items };
+    }
+
     case "send": {
       let o = await getOrder(args.orderId);
       if (o.status === "CANCELLED") throw new Error("cancelled");
