@@ -160,7 +160,6 @@ type ModonOrder = {
   deliver_estimation_datetime?: string | null;
 };
 
-
 // ---- Cancelled at Modon ------------------------------------------------------
 
 // An order the merchant cancelled / deleted in Modon's own panel: Modon either stops
@@ -291,9 +290,8 @@ async function refresh(orderId?: string | null): Promise<{ updated: string[]; re
     const seen = new Set<string>();
     for (const m of rows) {
       seen.add(String(m.id ?? ""));
-      const o = byModonId.get(String(m.id ?? ""));
       const n = await applyStatus(m);
-      if (n) (o && cancelledAtModon(m) ? released : updated).push(n);
+      if (n) (cancelledAtModon(m) ? released : updated).push(n);
     }
     // Modon no longer returns an order we sent: it was deleted there. When checking one
     // order that is enough; in a big batch, an empty answer is more likely a glitch than
@@ -316,7 +314,47 @@ async function createAtModon(o: Order, regionId: number, regionName?: string | n
     ? await authed("/create-order", { method: "POST" }, () => orderForm(o, regionId))
     : { status: true, data: { id: `DEV${Date.now()}`, qr_id: `DEV-${Date.now()}`, qr_link: null, company_price: 5000 } };
   if (!reply.status) fail(reply, "send");
-     case "send": {
+  const d = (Array.isArray(reply.data) ? reply.data[0] : reply.data) as Record<string, unknown>;
+  const now = new Date().toISOString();
+  await client.models.Order.update({
+    id: o.id,
+    modonId: String(d?.id ?? d?.qr_id ?? ""),
+    modonQr: String(d?.qr_id ?? d?.id ?? ""),
+    modonLink: d?.qr_link ? String(d.qr_link) : null,
+    modonPrice: Number(d?.price ?? modonCollect(o.total, Boolean(o.paid), deliveryPayOf(o))),
+    modonFee: d?.company_price != null ? Number(d.company_price) : null,
+    modonStatusId: "1",
+    modonStatus: "طلب جديد لدى مدن",
+    trackStatus: customerTrack("1"),
+    trackEvents: JSON.stringify([{ at: now, text: customerTrack("1")! }]),
+    trackEta: null,
+    modonNote: null,
+    modonRegionId: regionId,
+    modonRegionName: regionName ?? null,
+    modonSentAt: now,
+    modonUpdatedAt: now,
+    ...(o.status === "NEW" ? { status: "CONFIRMED" as const } : {}),
+  });
+  return { ok: true, qr: d?.qr_id ?? d?.id, link: d?.qr_link ?? null, fee: d?.company_price ?? null };
+}
+
+// ---- Admin actions ----------------------------------------------------------
+
+async function adminAction(args: {
+  action: string;
+  orderId?: string | null;
+  cityId?: number | null;
+  regionId?: number | null;
+  regionName?: string | null;
+}): Promise<unknown> {
+  switch (args.action) {
+    case "regions": {
+      const cityId = Number(args.cityId);
+      if (!cityId) throw new Error("missing_city");
+      return { regions: await regions(cityId) };
+    }
+
+    case "send": {
       let o = await getOrder(args.orderId);
       if (o.status === "CANCELLED") throw new Error("cancelled");
       if (o.modonId) {
@@ -328,36 +366,6 @@ async function createAtModon(o: Order, regionId: number, regionName?: string | n
       const regionId = Number(args.regionId);
       if (!regionId) throw new Error("missing_region");
       return createAtModon(o, regionId, args.regionName);
-    }
-
-onId);
-      if (!regionId) throw new Error("missing_region");
-      const reply: ModonReply = PRODUCTION
-        ? await authed("/create-order", { method: "POST" }, () => orderForm(o, regionId))
-        : { status: true, data: { id: `DEV${Date.now()}`, qr_id: `DEV-${Date.now()}`, qr_link: null, company_price: 5000 } };
-      if (!reply.status) fail(reply, "send");
-      const d = (Array.isArray(reply.data) ? reply.data[0] : reply.data) as Record<string, unknown>;
-      const now = new Date().toISOString();
-      await client.models.Order.update({
-        id: o.id,
-        modonId: String(d?.id ?? d?.qr_id ?? ""),
-        modonQr: String(d?.qr_id ?? d?.id ?? ""),
-        modonLink: d?.qr_link ? String(d.qr_link) : null,
-        modonPrice: Number(d?.price ?? modonCollect(o.total, Boolean(o.paid), deliveryPayOf(o))),
-        modonFee: d?.company_price != null ? Number(d.company_price) : null,
-        modonStatusId: "1",
-        modonStatus: "طلب جديد لدى مدن",
-        trackStatus: customerTrack("1"),
-        trackEvents: JSON.stringify([{ at: now, text: customerTrack("1")! }]),
-        trackEta: null,
-        modonNote: null,
-        modonRegionId: regionId,
-        modonRegionName: args.regionName ?? null,
-        modonSentAt: now,
-        modonUpdatedAt: now,
-        ...(o.status === "NEW" ? { status: "CONFIRMED" as const } : {}),
-      });
-      return { ok: true, qr: d?.qr_id ?? d?.id, link: d?.qr_link ?? null, fee: d?.company_price ?? null };
     }
 
     case "update": {
