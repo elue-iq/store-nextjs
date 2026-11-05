@@ -47,8 +47,7 @@ export function AdminBoxy({ order: o }: { order: Order }) {
   const hasProvince = Boolean(BOXY_PROVINCE[o.province ?? ""]);
   const [regions, setRegions] = useState<BoxyRegion[] | null>(null);
   const [regionsError, setRegionsError] = useState("");
-  const [regionId, setRegionId] = useState<number | null>(null);
-  const [search, setSearch] = useState("");
+  const [regionText, setRegionText] = useState(o.boxyRegionName || o.area || "");
   const [confirmSend, setConfirmSend] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -79,23 +78,25 @@ export function AdminBoxy({ order: o }: { order: Order }) {
       if (error) return setRegionsError(error);
       const list = (data?.regions as BoxyRegion[]) ?? [];
       setRegions(list);
-      const current = sent ? list.find((r) => r.id === o.boxyRegionId || r.name === o.boxyRegionName) : null;
+      // Boxy's list may hold just one area per province: it is only a hint. The
+      // area is free text, starting from the best match or what the customer wrote.
+      const current = sent ? list.find((r) => r.name === o.boxyRegionName) : null;
       const guess = current ?? suggestRegion(list, o.area ?? "", o.address);
-      if (guess) setRegionId(guess.id);
+      if (guess) setRegionText(guess.name);
     });
     return () => {
       alive = false;
     };
-  }, [sent, editing, cancelled, hasProvince, o.province, o.area, o.address, o.boxyRegionId, o.boxyRegionName]);
+  }, [sent, editing, cancelled, hasProvince, o.province, o.area, o.address, o.boxyRegionName]);
 
   const shown = useMemo(() => {
     if (!regions) return [];
-    const q = normalizeArabic(search);
+    const q = normalizeArabic(regionText);
     const list = q ? regions.filter((r) => normalizeArabic(r.name).includes(q)) : regions;
-    const chosenR = regions.find((r) => r.id === regionId);
-    return chosenR && !list.includes(chosenR) ? [chosenR, ...list] : list;
-  }, [regions, search, regionId]);
-  const chosen = regions?.find((r) => r.id === regionId) ?? null;
+    return list.slice(0, 40);
+  }, [regions, regionText]);
+  const typed = regionText.trim();
+  const chosen = typed ? { name: typed, id: regions?.find((r) => r.name === typed)?.id ?? null } : null;
   const collect = boxyCollect(o as unknown as Parameters<typeof boxyCollect>[0]);
 
   async function run(action: "send" | "update" | "cancel", ok: string) {
@@ -103,7 +104,7 @@ export function AdminBoxy({ order: o }: { order: Order }) {
     const { data, error } = await callBoxy({
       action,
       orderId: o.id,
-      ...(action !== "cancel" && chosen ? { regionId: chosen.id, regionName: chosen.name } : {}),
+      ...(action !== "cancel" && chosen ? { ...(chosen.id != null ? { regionId: chosen.id } : {}), regionName: chosen.name } : {}),
     });
     setBusy(false);
     setConfirmSend(false);
@@ -128,33 +129,32 @@ export function AdminBoxy({ order: o }: { order: Order }) {
     }
   }
 
-  const picker = regionsError ? (
-    <p className="panel-note">{regionsError}</p>
-  ) : !regions ? (
-    <p className="panel-loading">جارٍ تحميل مناطق بوكسي…</p>
-  ) : (
+  const picker = (
     <>
       <p className="modon__area">
         كتب العميل: <strong>{[o.area, o.address].filter(Boolean).join(" — ") || "—"}</strong>
       </p>
+      {regionsError && <p className="panel-note">{regionsError}</p>}
       <label className="modon__label">
         المنطقة لدى بوكسي
-        <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={`ابحث بين ${regions.length} منطقة`} />
+        <input type="text" value={regionText} onChange={(e) => setRegionText(e.target.value)} placeholder="اكتب اسم المنطقة" />
       </label>
-      <div className="modon__regions" role="listbox" aria-label="المنطقة لدى بوكسي">
-        {shown.map((r) => (
-          <button
-            key={r.id}
-            type="button"
-            role="option"
-            aria-selected={r.id === regionId}
-            className={r.id === regionId ? "modon__region is-picked" : "modon__region"}
-            onClick={() => setRegionId(r.id)}
-          >
-            {r.name}
-          </button>
-        ))}
-      </div>
+      {shown.length > 0 && (
+        <div className="modon__regions" role="listbox" aria-label="مناطق بوكسي المقترحة">
+          {shown.map((r) => (
+            <button
+              key={r.name}
+              type="button"
+              role="option"
+              aria-selected={r.name === typed}
+              className={r.name === typed ? "modon__region is-picked" : "modon__region"}
+              onClick={() => setRegionText(r.name)}
+            >
+              {r.name}
+            </button>
+          ))}
+        </div>
+      )}
       <p className="modon__sum">
         يستلم المندوب من العميل <strong>{formatIQD(collect)}</strong>
         <small>{collectBreakdown(o.total, Boolean(o.paid), deliveryPayOf(o))}</small>
@@ -186,7 +186,7 @@ export function AdminBoxy({ order: o }: { order: Order }) {
               </div>
             ) : (
               <button type="button" className="btn btn--full" disabled={!chosen} onClick={() => setConfirmSend(true)}>
-                {chosen ? "أرسل إلى بوكسي" : "اختر المنطقة أولًا"}
+                {chosen ? "أرسل إلى بوكسي" : "اكتب المنطقة أولًا"}
               </button>
             )}
           </>
