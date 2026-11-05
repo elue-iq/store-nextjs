@@ -5,6 +5,7 @@ import { useAuth } from "./AuthProvider";
 import { useToast } from "./Toast";
 import { DeliveryFields, type DeliveryFieldsHandle } from "./DeliveryFields";
 import { callModon } from "./AdminModon";
+import { callBoxy } from "./AdminBoxy";
 import { dataClient, errorCode, errorFields, type Order } from "@/lib/data";
 import { products } from "@/lib/products";
 import { MAX_QTY_PER_LINE } from "@/lib/order-text";
@@ -203,6 +204,13 @@ export function AdminOrderForm({
           error
             ? { id: "admin", tone: "attention", message: `حُفظت التعديلات هنا، لكن لم تُحدَّث لدى مدن: ${error} اتصل بمدن.` }
             : { id: "admin", message: `حُفظت تعديلات ${order.orderNumber} وحُدّثت لدى مدن.` },
+        );
+      } else if (order.boxyUid && modonFields.some((k) => k in changes)) {
+        const { error } = await callBoxy({ action: "update", orderId: order.id });
+        toast(
+          error
+            ? { id: "admin", tone: "attention", message: `حُفظت التعديلات هنا، لكن لم تُحدَّث لدى بوكسي: ${error} اتصل ببوكسي.` }
+            : { id: "admin", message: `حُفظت تعديلات ${order.orderNumber} وحُدّثت لدى بوكسي.` },
         );
       } else {
         toast({ id: "admin", message: `حُفظت تعديلات ${order.orderNumber}.` });

@@ -271,7 +271,14 @@ export function AdminView() {
         if (when === "today" ? day !== today : when === "yesterday" ? day !== ago(1) : day < ago(when === "7d" ? 6 : 29)) return false;
       }
       if (courier) {
-        const mine = o.modonQr || o.courierKind === "MODON" ? "MODON" : o.courierKind === "LOCAL" && o.courierId ? o.courierId : "none";
+        const mine =
+          o.modonQr || o.courierKind === "MODON"
+            ? "MODON"
+            : o.boxyUid || o.courierKind === "BOXY"
+              ? "BOXY"
+              : o.courierKind === "LOCAL" && o.courierId
+                ? o.courierId
+                : "none";
         if (courier === "LOCAL" ? !(o.courierKind === "LOCAL" && o.courierId) : mine !== courier) return false;
       }
       if (!q) return true;
@@ -281,6 +288,7 @@ export function AdminView() {
         // Modon's order number (on the sticker) and its internal id.
         (o.modonQr ?? "").toLowerCase().includes(q) ||
         (o.modonId ?? "").toLowerCase().includes(q) ||
+        (o.boxyCode ?? "").toLowerCase().includes(q) ||
         // The payment's transaction number, and the courier's name.
         (o.payRef ?? "").toLowerCase().includes(q) ||
         (o.courierName ?? "").toLowerCase().includes(q) ||
@@ -683,6 +691,7 @@ export function AdminView() {
             <select className="admin-sort" value={courier} onChange={(e) => setCourier(e.target.value)} aria-label="شركة التوصيل">
               <option value="">كل شركات التوصيل</option>
               <option value="MODON">مدن Express</option>
+              <option value="BOXY">بوكسي</option>
               {courierOptions.length > 0 && <option value="LOCAL">كل التوصيل المحلي</option>}
               {courierOptions.map(([id, name]) => (
                 <option key={id} value={id}>

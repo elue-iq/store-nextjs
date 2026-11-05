@@ -1,6 +1,7 @@
 import { a, defineData, type ClientSchema } from "@aws-amplify/backend";
 import { placeOrder } from "../functions/place-order/resource";
 import { modon } from "../functions/modon/resource";
+import { boxy } from "../functions/boxy/resource";
 import { eatix } from "../functions/eatix/resource";
 import { dispatch } from "../functions/dispatch/resource";
 import { submitReview } from "../functions/submit-review/resource";
@@ -87,6 +88,18 @@ const schema = a
         modonRegionName: a.string().authorization((allow) => [allow.group("ADMINS")]),
         modonSentAt: a.datetime().authorization((allow) => [allow.group("ADMINS")]),
         modonUpdatedAt: a.datetime().authorization((allow) => [allow.group("ADMINS")]),
+        // Boxy (delivery). Set by the boxy function; team only.
+        boxyUid: a.string().authorization((allow) => [allow.group("ADMINS")]), // Boxy's order uid (status, edit, cancel, label)
+        boxyCode: a.string().authorization((allow) => [allow.group("ADMINS")]), // BXO-… number printed on the label
+        boxyLink: a.string().authorization((allow) => [allow.group("ADMINS")]), // tracking page
+        boxyFee: a.integer().authorization((allow) => [allow.group("ADMINS")]),
+        boxyStatus: a.string().authorization((allow) => [allow.group("ADMINS")]), // Boxy status slug
+        boxyStatusTitle: a.string().authorization((allow) => [allow.group("ADMINS")]),
+        boxyNote: a.string().authorization((allow) => [allow.group("ADMINS")]),
+        boxyRegionId: a.integer().authorization((allow) => [allow.group("ADMINS")]),
+        boxyRegionName: a.string().authorization((allow) => [allow.group("ADMINS")]),
+        boxySentAt: a.datetime().authorization((allow) => [allow.group("ADMINS")]),
+        boxyUpdatedAt: a.datetime().authorization((allow) => [allow.group("ADMINS")]),
         // Who delivers: MODON, or LOCAL = one of our own couriers (the Courier model), who gets
         // the order on Telegram. Team only.
         courierKind: a.string().authorization((allow) => [allow.group("ADMINS")]),
@@ -269,6 +282,20 @@ const schema = a
       .authorization((allow) => [allow.group("ADMINS")])
       .handler(a.handler.function(modon)),
 
+    // Boxy actions from the admin: regions, send, update, cancel, label, refresh.
+    boxy: a
+      .mutation()
+      .arguments({
+        action: a.string().required(),
+        orderId: a.string(),
+        province: a.string(),
+        regionId: a.integer(),
+        regionName: a.string(),
+      })
+      .returns(a.json())
+      .authorization((allow) => [allow.group("ADMINS")])
+      .handler(a.handler.function(boxy)),
+
     // Local couriers (Telegram) from the admin: assign / resend / unassign an order,
     // report a delivery problem, test a chat, cancel notice.
     dispatch: a
@@ -293,7 +320,7 @@ const schema = a
       .authorization((allow) => [allow.group("ADMINS")])
       .handler(a.handler.function(eatix)),
   })
-  .authorization((allow) => [allow.resource(placeOrder), allow.resource(modon), allow.resource(eatix), allow.resource(dispatch), allow.resource(submitReview), allow.resource(courierApp)]);
+  .authorization((allow) => [allow.resource(placeOrder), allow.resource(modon), allow.resource(boxy), allow.resource(eatix), allow.resource(dispatch), allow.resource(submitReview), allow.resource(courierApp)]);
 
 export type Schema = ClientSchema<typeof schema>;
 

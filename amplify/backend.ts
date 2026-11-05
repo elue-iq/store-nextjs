@@ -6,6 +6,7 @@ import { auth } from "./auth/resource";
 import { data } from "./data/resource";
 import { placeOrder } from "./functions/place-order/resource";
 import { modon } from "./functions/modon/resource";
+import { boxy } from "./functions/boxy/resource";
 import { eatix } from "./functions/eatix/resource";
 import { dispatch } from "./functions/dispatch/resource";
 import { submitReview } from "./functions/submit-review/resource";
@@ -17,13 +18,14 @@ import { createAuthChallenge } from "./auth/create-auth-challenge/resource";
 import { verifyAuthChallenge } from "./auth/verify-auth-challenge/resource";
 import { CfnFunction } from "aws-cdk-lib/aws-lambda";
 
-const backend = defineBackend({ auth, data, placeOrder, modon, eatix, dispatch, submitReview, courierApp, igOrder, createAuthChallenge, verifyAuthChallenge });
+const backend = defineBackend({ auth, data, placeOrder, modon, boxy, eatix, dispatch, submitReview, courierApp, igOrder, createAuthChallenge, verifyAuthChallenge });
 
 // Which copy this is: "amplify" = the live site; anything else (dev) is a test
 // copy that never sends real Modon orders or Telegram messages.
 const stage = process.env.AWS_BRANCH ?? "sandbox";
 backend.placeOrder.addEnvironment("STAGE", stage);
 backend.modon.addEnvironment("STAGE", stage);
+backend.boxy.addEnvironment("STAGE", stage);
 backend.eatix.addEnvironment("STAGE", stage);
 backend.dispatch.addEnvironment("STAGE", stage);
 backend.igOrder.addEnvironment("STAGE", stage);
@@ -103,6 +105,7 @@ for (const fn of [backend.createAuthChallenge, backend.verifyAuthChallenge]) {
 const ceilings: [typeof backend.placeOrder, number][] = [
   [backend.placeOrder, 10],
   [backend.modon, 5],
+  [backend.boxy, 5],
   [backend.eatix, 3],
   [backend.dispatch, 3],
   [backend.submitReview, 5],
