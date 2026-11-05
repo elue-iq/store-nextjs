@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AdminModon, callModon } from "./AdminModon";
+import { AdminBoxy, callBoxy } from "./AdminBoxy";
 import { requestOrdersRefresh } from "@/lib/ordersRefresh";
 import { useToast } from "./Toast";
 import { baghdadTime, dataClient, type Courier, type Order } from "@/lib/data";
@@ -72,6 +73,8 @@ export function AdminDelivery({ order: o, onOpenCouriers }: { order: Order; onOp
   const atModon = Boolean(o.modonQr);
   const local = o.courierKind === "LOCAL" && Boolean(o.courierId);
   const pickedModon = atModon || o.courierKind === "MODON";
+  const atBoxy = Boolean(o.boxyUid);
+  const pickedBoxy = atBoxy || o.courierKind === "BOXY";
   const cancelled = o.status === "CANCELLED";
   const delivered = o.status === "DELIVERED";
 
@@ -146,6 +149,21 @@ export function AdminDelivery({ order: o, onOpenCouriers }: { order: Order; onOp
     if (errors?.length) toast({ id: "dispatch", tone: "attention", message: "تعذّر الحفظ. حاول مجددًا." });
   }
 
+  async function pickBoxy() {
+    setBusy(true);
+    const { errors } = await dataClient.models.Order.update({ id: o.id, courierKind: "BOXY" });
+    requestOrdersRefresh();
+    setBusy(false);
+    if (errors?.length) toast({ id: "dispatch", tone: "attention", message: "تعذّر الحفظ. حاول مجددًا." });
+  }
+
+  async function clearBoxy() {
+    setBusy(true);
+    await dataClient.models.Order.update({ id: o.id, courierKind: null });
+    requestOrdersRefresh();
+    setBusy(false);
+  }
+
   async function clearModon() {
     setBusy(true);
     await dataClient.models.Order.update({ id: o.id, courierKind: null });
@@ -164,7 +182,20 @@ export function AdminDelivery({ order: o, onOpenCouriers }: { order: Order; onOp
         const { error } = await callModon({ action: "delete", orderId: o.id });
         if (error) return toast({ id: "dispatch", tone: "attention", message: error });
       }
-      if (to === "MODON") {
+      if (atBoxy) {
+        const { error } = await callBoxy({ action: "cancel", orderId: o.id });
+        if (error) return toast({ id: "dispatch", tone: "attention", message: error });
+      }
+      if (to === "BOXY") {
+        if (local) {
+          const { error } = await callDispatch({ action: "unassign", orderId: o.id });
+          if (error) return toast({ id: "dispatch", tone: "attention", message: error });
+        }
+        const { errors } = await dataClient.models.Order.update({ id: o.id, courierKind: "BOXY" });
+        requestOrdersRefresh();
+        if (errors?.length) return toast({ id: "dispatch", tone: "attention", message: "تعذّر الحفظ. حاول مجددًا." });
+        toast({ id: "dispatch", message: "اخترت بوكسي. اختر المنطقة وأرسل الطلب إليهم." });
+      } else if (to === "MODON") {
         if (local) {
           const { error } = await callDispatch({ action: "unassign", orderId: o.id });
           if (error) return toast({ id: "dispatch", tone: "attention", message: error });
@@ -191,13 +222,15 @@ export function AdminDelivery({ order: o, onOpenCouriers }: { order: Order; onOp
     }
   }
 
-  const canChange = (local || (atModon && beforePickup)) && !cancelled && !delivered;
+  const boxyBeforePickup = ["new", "scheduled", ""].includes(o.boxyStatus ?? "new");
+  const canChange = (local || (atModon && beforePickup) || (atBoxy && boxyBeforePickup)) && !cancelled && !delivered;
   const changeOptions: [string, string][] = [
     ...(atModon || o.courierKind === "MODON" ? [] : [["MODON", "مدن Express"] as [string, string]]),
+    ...(atBoxy || o.courierKind === "BOXY" ? [] : [["BOXY", "بوكسي"] as [string, string]]),
     ...active.filter((c) => c.id !== o.courierId).map((c) => [c.id, c.name] as [string, string]),
   ];
   const targetName = changeOptions.find(([id]) => id === target)?.[1] ?? "";
-  const fromName = atModon ? "مدن Express" : (o.courierName ?? "شركة التوصيل");
+  const fromName = atModon ? "مدن Express" : atBoxy ? "بوكسي" : (o.courierName ?? "شركة التوصيل");
 
   // ---- Problem report ------------------------------------------------------
 
@@ -246,7 +279,7 @@ export function AdminDelivery({ order: o, onOpenCouriers }: { order: Order; onOp
   const canReport = atModon || local;
   const issues = issuesOf(o);
 
-  if (!pickedModon && !local && (cancelled || delivered)) return null;
+  if (!pickedModon && !pickedBoxy && !local && (cancelled || delivered)) return null;
 
   return (
     <>
@@ -255,6 +288,8 @@ export function AdminDelivery({ order: o, onOpenCouriers }: { order: Order; onOp
 
         {atModon ? (
           <p className="hint">الطلب عند مدن Express.{beforePickup ? "" : " استلمه المندوب: التغيير يكون بالاتصال بمدن."}</p>
+        ) : atBoxy ? (
+          <p className="hint">الطلب عند بوكسي.{boxyBeforePickup ? "" : " استلمه المندوب: التغيير يكون بالاتصال ببوكسي."}</p>
         ) : local ? (
           <div className="delivery__status">
             <p>
@@ -291,6 +326,9 @@ export function AdminDelivery({ order: o, onOpenCouriers }: { order: Order; onOp
               <div className="delivery__chips" role="group" aria-label="اختر شركة التوصيل">
                 <button type="button" aria-pressed={pickedModon} disabled={busy} onClick={() => void pickModon()}>
                   مدن Express
+                </button>
+                <button type="button" aria-pressed={pickedBoxy} disabled={busy} onClick={() => void pickBoxy()}>
+                  بوكسي
                 </button>
                 {active.map((c) => (
                   <button key={c.id} type="button" aria-pressed={confirm === c.id} disabled={busy} onClick={() => setConfirm(c.id)}>
@@ -330,6 +368,11 @@ export function AdminDelivery({ order: o, onOpenCouriers }: { order: Order; onOp
                   إلغاء اختيار مدن
                 </button>
               )}
+              {o.courierKind === "BOXY" && (
+                <button type="button" className="link-button" disabled={busy} onClick={() => void clearBoxy()}>
+                  إلغاء اختيار بوكسي
+                </button>
+              )}
             </>
           )
         )}
@@ -348,7 +391,11 @@ export function AdminDelivery({ order: o, onOpenCouriers }: { order: Order; onOp
               {target && (
                 <>
                   <p role="alert">
-                    {atModon
+                    {target === "BOXY"
+                      ? `سيُسحب الطلب من «${fromName}» ثم تختار منطقة بوكسي وترسله.`
+                      : atBoxy
+                        ? `سيُلغى الطلب لدى بوكسي ثم ${target === "MODON" ? "تختار منطقة مدن" : `يُرسل إلى «${targetName}» على تيليغرام`}.`
+                      : atModon
                       ? `سيُحذف الطلب من مدن، ثم ${target === "MODON" ? "" : `يُرسل إلى «${targetName}» على تيليغرام`}.`
                       : target === "MODON"
                         ? `سيُسحب الطلب من «${fromName}» (يصله إشعار على تيليغرام) ثم تختار منطقة مدن وترسله.`
@@ -376,6 +423,7 @@ export function AdminDelivery({ order: o, onOpenCouriers }: { order: Order; onOp
       </section>
 
       {pickedModon && <AdminModon order={o} />}
+      {pickedBoxy && <AdminBoxy order={o} />}
 
       {canReport && (
         <section className="order-detail__block delivery">

@@ -80,6 +80,11 @@ export function OrderRow({
               {" · "}مدن: <span dir="ltr">{o.modonQr}</span>
             </>
           )}
+          {o.boxyCode && (
+            <>
+              {" · "}بوكسي: <span dir="ltr">{o.boxyCode}</span>
+            </>
+          )}
         </span>
         <span className="order-row__sub">{[o.province, o.area].filter(Boolean).join("، ") || fullAddress(o)}</span>
       </span>

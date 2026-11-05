@@ -5120,3 +5120,6 @@ button.dash-bars__row:focus-visible {
   gap: 0.3rem;
   margin-top: 0.15rem;
 }
+
+.pay-choice { border: 1px solid var(--line, #d9cfc2); border-radius: 12px; padding: 12px 14px; margin: 14px 0; display: grid; gap: 8px; }
+.pay-choice legend { padding: 0 6px; font-weight: 600; }

@@ -1,6 +1,7 @@
 import { a, defineData, type ClientSchema } from "@aws-amplify/backend";
 import { placeOrder } from "../functions/place-order/resource";
 import { modon } from "../functions/modon/resource";
+import { boxy } from "../functions/boxy/resource";
 import { eatix } from "../functions/eatix/resource";
 import { dispatch } from "../functions/dispatch/resource";
 import { submitReview } from "../functions/submit-review/resource";
@@ -87,6 +88,18 @@ const schema = a
         modonRegionName: a.string().authorization((allow) => [allow.group("ADMINS")]),
         modonSentAt: a.datetime().authorization((allow) => [allow.group("ADMINS")]),
         modonUpdatedAt: a.datetime().authorization((allow) => [allow.group("ADMINS")]),
+        // Boxy (delivery). Set by the boxy function; team only.
+        boxyUid: a.string().authorization((allow) => [allow.group("ADMINS")]), // Boxy's order uid (status, edit, cancel, label)
+        boxyCode: a.string().authorization((allow) => [allow.group("ADMINS")]), // BXO-… number printed on the label
+        boxyLink: a.string().authorization((allow) => [allow.group("ADMINS")]), // tracking page
+        boxyFee: a.integer().authorization((allow) => [allow.group("ADMINS")]),
+        boxyStatus: a.string().authorization((allow) => [allow.group("ADMINS")]), // Boxy status slug
+        boxyStatusTitle: a.string().authorization((allow) => [allow.group("ADMINS")]),
+        boxyNote: a.string().authorization((allow) => [allow.group("ADMINS")]),
+        boxyRegionId: a.integer().authorization((allow) => [allow.group("ADMINS")]),
+        boxyRegionName: a.string().authorization((allow) => [allow.group("ADMINS")]),
+        boxySentAt: a.datetime().authorization((allow) => [allow.group("ADMINS")]),
+        boxyUpdatedAt: a.datetime().authorization((allow) => [allow.group("ADMINS")]),
         // Who delivers: MODON, or LOCAL = one of our own couriers (the Courier model), who gets
         // the order on Telegram. Team only.
         courierKind: a.string().authorization((allow) => [allow.group("ADMINS")]),
@@ -102,6 +115,10 @@ const schema = a
         reviewedAt: a.datetime(),
         // The customer accepted the Baghdad delivery window (6–10 pm, else next day).
         slotAccepted: a.boolean().authorization((allow) => [allow.group("ADMINS")]),
+        // Qi Card online payment: Qi's payment id (team only) and its state
+        // (CREATED = waiting for the customer to pay, SUCCESS, FAILED). The customer can read the state.
+        qiPaymentId: a.string().authorization((allow) => [allow.group("ADMINS")]),
+        qiStatus: a.string(),
         // Eatix (cashier device copy of the order). Team only.
         eatixId: a.string().authorization((allow) => [allow.group("ADMINS")]),
         eatixStatus: a.string().authorization((allow) => [allow.group("ADMINS")]), // SENT | SIMULATED | FAILED | OFF | CANCELLED
@@ -110,7 +127,7 @@ const schema = a
         owner: a.string().authorization((allow) => [allow.ownerDefinedIn("owner").to(["read"]), allow.group("ADMINS")]),
       })
       // Fast lookups: a customer's orders, and orders by phone number (admin search).
-      .secondaryIndexes((index) => [index("owner"), index("phone"), index("modonId")])
+      .secondaryIndexes((index) => [index("owner"), index("phone"), index("modonId"), index("qiPaymentId")])
       .authorization((allow) => [allow.ownerDefinedIn("owner").to(["read"]), allow.group("ADMINS")]),
 
     // A customer's review of a delivered order: one per order (the order number is the key,
@@ -174,6 +191,14 @@ const schema = a
       orderNumber: a.string().required(),
       createdAt: a.string().required(),
       telegramSent: a.boolean().required(),
+      // Online payment: where to send the customer to pay (Qi Card).
+      payUrl: a.string(),
+    }),
+
+    QiConfirmResult: a.customType({
+      orderNumber: a.string().required(),
+      status: a.string().required(), // CREATED | SUCCESS | FAILED
+      paid: a.boolean().required(),
     }),
 
     placeOrder: a
@@ -201,8 +226,19 @@ const schema = a
         payRef: a.string(),
         // The customer accepted the Baghdad delivery window.
         slotAccepted: a.boolean(),
+        // The customer pays now with Qi Card instead of cash to the driver.
+        payOnline: a.boolean(),
       })
       .returns(a.ref("PlaceOrderResult"))
+      .authorization((allow) => [allow.authenticated()])
+      .handler(a.handler.function(placeOrder)),
+
+    // After the customer comes back from Qi's page: asks Qi what happened to the payment
+    // (the signed notification does the same, this is the safety net) and updates the order.
+    qiConfirm: a
+      .mutation()
+      .arguments({ orderNumber: a.string().required() })
+      .returns(a.ref("QiConfirmResult"))
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(placeOrder)),
 
@@ -246,6 +282,20 @@ const schema = a
       .authorization((allow) => [allow.group("ADMINS")])
       .handler(a.handler.function(modon)),
 
+    // Boxy actions from the admin: regions, send, update, cancel, label, refresh.
+    boxy: a
+      .mutation()
+      .arguments({
+        action: a.string().required(),
+        orderId: a.string(),
+        province: a.string(),
+        regionId: a.integer(),
+        regionName: a.string(),
+      })
+      .returns(a.json())
+      .authorization((allow) => [allow.group("ADMINS")])
+      .handler(a.handler.function(boxy)),
+
     // Local couriers (Telegram) from the admin: assign / resend / unassign an order,
     // report a delivery problem, test a chat, cancel notice.
     dispatch: a
@@ -270,7 +320,7 @@ const schema = a
       .authorization((allow) => [allow.group("ADMINS")])
       .handler(a.handler.function(eatix)),
   })
-  .authorization((allow) => [allow.resource(placeOrder), allow.resource(modon), allow.resource(eatix), allow.resource(dispatch), allow.resource(submitReview), allow.resource(courierApp)]);
+  .authorization((allow) => [allow.resource(placeOrder), allow.resource(modon), allow.resource(boxy), allow.resource(eatix), allow.resource(dispatch), allow.resource(submitReview), allow.resource(courierApp)]);
 
 export type Schema = ClientSchema<typeof schema>;
 
