@@ -1,12 +1,13 @@
 import { setDefaultResultOrder } from "node:dns";
 import { timingSafeEqual } from "node:crypto";
 import { InvokeCommand, LambdaClient } from "@aws-sdk/client-lambda";
-import { ConditionalCheckFailedException, DynamoDBClient, PutItemCommand } from "@aws-sdk/client-dynamodb";
+import { ConditionalCheckFailedException, DynamoDBClient, GetItemCommand, PutItemCommand } from "@aws-sdk/client-dynamodb";
 import { env } from "$amplify/env/ig-order";
 import { priceCart, type CartItem } from "../../../lib/order-text";
 import { normalizeIraqiMobile } from "../../../lib/phone";
 import { freeDeliveryFor, site } from "../../../lib/site";
 import { products } from "../../../lib/products";
+import { begin, isStart, next, notStarted, type ChatState, type Reply, type Turn } from "../../../lib/ig-chat";
 
 // Instagram DM orders from ManyChat (External Request step).
 //
@@ -99,30 +100,18 @@ function explain(message: string): { error: string; field?: string } {
   return { error: "تعذّر تسجيل الطلب الآن. راح يتواصل معكم واحد من الفريق." };
 }
 
-export const handler = async (event: UrlEvent) => {
-  if (event.requestContext.http.method !== "POST") return json(405, { ok: false });
-  const key = event.headers?.[KEY_HEADER] ?? "";
-  if (!env.IG_ORDER_KEY || !sameSecret(key, env.IG_ORDER_KEY)) return json(401, { ok: false });
-
-  let body: Record<string, unknown>;
-  try {
-    const raw = event.isBase64Encoded ? Buffer.from(event.body ?? "", "base64").toString("utf8") : (event.body ?? "");
-    body = JSON.parse(raw) as Record<string, unknown>;
-  } catch {
-    return json(400, { ok: false });
-  }
-
+async function placeIgOrder(body: Record<string, unknown>): Promise<Record<string, unknown>> {
   const phone = normalizeIraqiMobile(String(body.phone ?? ""));
-  if (!phone) return json(200, { ok: false, field: "phone", error: "رقم الهاتف غير صحيح. اكتبوه بصيغة 07xxxxxxxxx." });
+  if (!phone) return { ok: false, field: "phone", error: "رقم الهاتف غير صحيح. اكتبوه بصيغة 07xxxxxxxxx." };
 
   const items = itemsFrom(body);
   const { lines, total } = priceCart(items);
-  if (!lines.length) return json(200, { ok: false, field: "items", error: "لم يتم اختيار أي علبة. اختاروا النكهة والعدد." });
+  if (!lines.length) return { ok: false, field: "items", error: "لم يتم اختيار أي علبة. اختاروا النكهة والعدد." };
   const jars = lines.reduce((n, l) => n + l.qty, 0);
 
   // Same customer + same cart = same order.
   const dedupe = `${phone}#${lines.map((l) => `${l.product.slug}x${l.qty}`).sort().join(",")}`;
-  if (!(await firstTime(dedupe))) return json(200, { ok: false, duplicate: true, error: "طلبكم مسجّل قبل قليل. راح يتواصل معكم الفريق." });
+  if (!(await firstTime(dedupe))) return { ok: false, duplicate: true, error: "طلبكم مسجّل قبل قليل. راح يتواصل معكم الفريق." };
 
   // placeOrder reads who is calling from the AppSync identity. This is the ÉLUE
   // team (ADMINS) placing the order for the customer's number; ÉLUE's own
@@ -166,11 +155,11 @@ export const handler = async (event: UrlEvent) => {
       /* ignore */
     }
     console.error("ig-order: placeOrder failed", message.slice(0, 300));
-    return json(200, { ok: false, ...explain(message) });
+    return { ok: false, ...explain(message) };
   }
   const result = JSON.parse(payload) as { orderNumber?: string };
   const free = freeDeliveryFor(jars);
-  return json(200, {
+  return {
     ok: true,
     orderNumber: result.orderNumber,
     jars,
@@ -180,5 +169,80 @@ export const handler = async (event: UrlEvent) => {
     message: `تم تسجيل طلبكم ✅ رقم الطلب ${result.orderNumber}. المبلغ ${total.toLocaleString("en-US")} دينار${
       free ? " والتوصيل مجاني" : ` + ${site.deliveryFee.toLocaleString("en-US")} توصيل`
     }. راح يتواصل معكم الفريق لتأكيد الموعد.`,
-  });
+  };
+}
+
+// ---- The DM conversation (ManyChat dynamic block) ---------------------------------------
+
+// Quick replies jump back into the ManyChat automation that calls us (its flow id).
+const FLOW_ID = "content20261105211553_659322";
+
+async function loadState(id: string): Promise<ChatState | null> {
+  const r = await dynamo.send(new GetItemCommand({ TableName: process.env.COUNTERS_TABLE, Key: { id: { S: `igchat#${id}` } } }));
+  const until = Number(r.Item?.until?.N ?? 0);
+  if (!r.Item?.state?.S || until < Date.now()) return null;
+  return JSON.parse(r.Item.state.S) as ChatState;
+}
+
+async function saveState(id: string, state: ChatState | null): Promise<void> {
+  await dynamo.send(
+    new PutItemCommand({
+      TableName: process.env.COUNTERS_TABLE,
+      Item: state
+        ? { id: { S: `igchat#${id}` }, state: { S: JSON.stringify(state) }, until: { N: String(Date.now() + 60 * 60_000) } }
+        : { id: { S: `igchat#${id}` }, until: { N: "0" } },
+    }),
+  );
+}
+
+const block = (replies: Reply[]) => {
+  const last = replies[replies.length - 1];
+  return {
+    version: "v2",
+    content: {
+      type: "instagram",
+      messages: replies.map((r) => ({ type: "text", text: r.text })),
+      actions: [],
+      ...(last?.quick?.length ? { quick_replies: last.quick.map((caption) => ({ type: "flow", caption, target: FLOW_ID })) } : {}),
+    },
+  };
+};
+
+async function chatTurn(body: Record<string, unknown>) {
+  const c = body.chat as Record<string, unknown>;
+  const id = String(c.id ?? "").trim();
+  const text = String(c.text ?? "").trim();
+  if (!id) return block([{ text: "حدث خطأ بسيط. اكتبوا «أحچي ويا الفريق»." }]);
+
+  const state = await loadState(id);
+  let turn: Turn;
+  if (isStart(text)) turn = begin();
+  else if (!state) turn = notStarted();
+  else turn = next(state, text);
+
+  if (turn.place) {
+    const result = await placeIgOrder(turn.place as unknown as Record<string, unknown>);
+    await saveState(id, null);
+    const message = result.ok ? String(result.message) : String(result.error ?? "تعذّر تسجيل الطلب. راح يتواصل معكم الفريق.");
+    return block([{ text: message }]);
+  }
+  await saveState(id, turn.state);
+  return block(turn.replies);
+}
+
+export const handler = async (event: UrlEvent) => {
+  if (event.requestContext.http.method !== "POST") return json(405, { ok: false });
+  const key = event.headers?.[KEY_HEADER] ?? "";
+  if (!env.IG_ORDER_KEY || !sameSecret(key, env.IG_ORDER_KEY)) return json(401, { ok: false });
+
+  let body: Record<string, unknown>;
+  try {
+    const raw = event.isBase64Encoded ? Buffer.from(event.body ?? "", "base64").toString("utf8") : (event.body ?? "");
+    body = JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    return json(400, { ok: false });
+  }
+
+  if (body.chat && typeof body.chat === "object") return json(200, await chatTurn(body));
+  return json(200, await placeIgOrder(body));
 };
