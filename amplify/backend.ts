@@ -10,13 +10,14 @@ import { eatix } from "./functions/eatix/resource";
 import { dispatch } from "./functions/dispatch/resource";
 import { submitReview } from "./functions/submit-review/resource";
 import { courierApp } from "./functions/courier-app/resource";
+import { igOrder } from "./functions/ig-order/resource";
 import { FunctionUrlAuthType } from "aws-cdk-lib/aws-lambda";
 
 import { createAuthChallenge } from "./auth/create-auth-challenge/resource";
 import { verifyAuthChallenge } from "./auth/verify-auth-challenge/resource";
 import { CfnFunction } from "aws-cdk-lib/aws-lambda";
 
-const backend = defineBackend({ auth, data, placeOrder, modon, eatix, dispatch, submitReview, courierApp, createAuthChallenge, verifyAuthChallenge });
+const backend = defineBackend({ auth, data, placeOrder, modon, eatix, dispatch, submitReview, courierApp, igOrder, createAuthChallenge, verifyAuthChallenge });
 
 // Which copy this is: "amplify" = the live site; anything else (dev) is a test
 // copy that never sends real Modon orders or Telegram messages.
@@ -25,6 +26,7 @@ backend.placeOrder.addEnvironment("STAGE", stage);
 backend.modon.addEnvironment("STAGE", stage);
 backend.eatix.addEnvironment("STAGE", stage);
 backend.dispatch.addEnvironment("STAGE", stage);
+backend.igOrder.addEnvironment("STAGE", stage);
 
 // Login settings for the website's Cognito app client:
 // - only the WhatsApp-code sign-in (custom auth) plus token refresh
@@ -62,6 +64,15 @@ const counters = new Table(Stack.of(backend.placeOrder.resources.lambda), "Order
 counters.grantReadWriteData(backend.placeOrder.resources.lambda);
 backend.placeOrder.addEnvironment("COUNTERS_TABLE", counters.tableName);
 
+// Instagram DM orders (ManyChat): a public address checked by a secret header. It
+// calls placeOrder as the team, and uses the counters table for its duplicate guard.
+counters.grantReadWriteData(backend.igOrder.resources.lambda);
+backend.igOrder.addEnvironment("COUNTERS_TABLE", counters.tableName);
+backend.placeOrder.resources.lambda.grantInvoke(backend.igOrder.resources.lambda);
+backend.igOrder.addEnvironment("PLACE_ORDER_FUNCTION", backend.placeOrder.resources.lambda.functionName);
+const igOrderUrl = backend.igOrder.resources.lambda.addFunctionUrl({ authType: FunctionUrlAuthType.NONE });
+backend.addOutput({ custom: { igOrderUrl: igOrderUrl.url } });
+
 // Modon's status-update webhook: a public address (Modon can't log in), checked
 // by a secret header in the function. Give Modon this address and the header.
 const modonUrl = backend.modon.resources.lambda.addFunctionUrl({ authType: FunctionUrlAuthType.NONE });
@@ -88,6 +99,7 @@ const ceilings: [typeof backend.placeOrder, number][] = [
   [backend.dispatch, 3],
   [backend.submitReview, 5],
   [backend.courierApp, 5],
+  [backend.igOrder, 3],
   [backend.createAuthChallenge, 10],
   [backend.verifyAuthChallenge, 10],
 ];
