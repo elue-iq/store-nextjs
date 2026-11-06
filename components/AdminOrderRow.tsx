@@ -1,6 +1,7 @@
 "use client";
 
 import { StatusChip } from "./OrderBits";
+import { boxyNeedsAttention } from "@/lib/boxy";
 import { baghdadTime, type Order } from "@/lib/data";
 import { fullAddress } from "@/lib/iraq";
 import { formatIQD, PAY_KEY_LABELS, payKeyOf } from "@/lib/site";
@@ -86,6 +87,11 @@ export function OrderRow({
             </>
           )}
         </span>
+        {o.boxyUid && o.boxyStatusTitle && o.status !== "DELIVERED" && o.status !== "CANCELLED" && (
+          <span className={boxyNeedsAttention(o.boxyStatus) ? "order-row__courier is-problem" : "order-row__courier"}>
+            لدى بوكسي: {o.boxyStatusTitle}
+          </span>
+        )}
         <span className="order-row__sub">{[o.province, o.area].filter(Boolean).join("، ") || fullAddress(o)}</span>
       </span>
       <span className="order-row__side">

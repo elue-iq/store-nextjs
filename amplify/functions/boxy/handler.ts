@@ -495,7 +495,9 @@ async function webhook(event: UrlEvent) {
 export const handler = async (event: unknown) => {
   if ((event as UrlEvent)?.requestContext?.http) return webhook(event as UrlEvent);
   // Every 10 minutes: pull the latest status of every open Boxy order.
-  if ((event as { source?: string })?.source === "aws.events") {
+  // EventBridge Scheduler sends no fixed shape (an empty event), so: not the admin's call (arguments) = the schedule.
+  if (!(event as { arguments?: unknown })?.arguments) {
+    if (!PRODUCTION) return { skipped: "dev" };
     try {
       return await refresh();
     } catch (err) {

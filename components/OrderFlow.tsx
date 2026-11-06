@@ -32,8 +32,6 @@ type Placed = DeliveryInfo & {
   note: string;
 };
 
-const QI_LIVE_HOSTS = ["elue-iq.com", "www.elue-iq.com"];
-
 export function OrderFlow() {
   const cart = useCart();
   const toast = useToast();
@@ -56,12 +54,9 @@ export function OrderFlow() {
   const [saveToAccount, setSaveToAccount] = useState(true);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
-  // Pay now with Qi Card: offered on the test site only until the live gateway is switched on.
+  // Pay now with Qi Card.
   const [payOnline, setPayOnline] = useState(false);
-  const [onlineOk, setOnlineOk] = useState(false);
-  useEffect(() => {
-    setOnlineOk(!QI_LIVE_HOSTS.includes(window.location.hostname));
-  }, []);
+  const onlineOk = true;
   // Inside Baghdad the customer sees the delivery window (6–10 pm, else next day) and must accept it.
   const [slotOk, setSlotOk] = useState(false);
   const [slotErr, setSlotErr] = useState(false);
