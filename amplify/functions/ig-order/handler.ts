@@ -217,7 +217,10 @@ async function chatTurn(body: Record<string, unknown>) {
   const state = await loadState(id);
   let turn: Turn;
   if (isStart(text)) turn = begin();
-  else if (!state) turn = notStarted();
+  else if (!state) {
+    console.log("ig-order notStarted", { len: text.length, head: text.slice(0, 12) });
+    turn = notStarted();
+  }
   else turn = next(state, text);
 
   if (turn.place) {
