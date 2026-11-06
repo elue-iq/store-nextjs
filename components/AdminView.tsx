@@ -13,6 +13,7 @@ import { AdminEatix } from "./AdminEatix";
 import { SendOrderToCustomer, SendReviewRequest } from "./SendOrderToCustomer";
 import { AdminDelivery, callDispatch } from "./AdminDelivery";
 import { AdminCouriers } from "./AdminCouriers";
+import { AdminBoxyFeed } from "./AdminBoxy";
 import { AdminPrep } from "./AdminPrep";
 import { AdminReviews } from "./AdminReviews";
 import { AdminDashboard } from "./AdminDashboard";
@@ -539,6 +540,7 @@ export function AdminView() {
         {pullEl}
         {listHead("شركات التوصيل", "الشركات المحلية وقناة تيليغرام لكل واحدة")}
         <AdminCouriers orders={orders} onOpenOrder={(n) => openOrder(n)} />
+        <AdminBoxyFeed onOpenOrder={(n) => openOrder(n)} />
         {drawer}
       </div>
     );
