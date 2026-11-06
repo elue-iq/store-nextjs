@@ -25,7 +25,7 @@ export type ChatState = {
 
 export type Reply = {
   text: string;
-  quick?: string[]; // quick-reply captions
+  quick?: string[]; // button captions (max 3)
 };
 
 export type Turn = {
@@ -43,8 +43,8 @@ export const isStart = (text: string) => START.test(norm(text.trim()));
 
 const label = (i: number) => products[i].nameAr;
 const askQty = (i: number): Reply => ({
-  text: `كم علبة تريدون من ${label(i)}؟`,
-  quick: ["0", "1", "2", "3", "4"],
+  text: `كم علبة تريدون من ${label(i)}؟ اضغطوا رقم أو اكتبوه.`,
+  quick: ["0", "1", "2"],
 });
 
 export const begin = (): Turn => ({
