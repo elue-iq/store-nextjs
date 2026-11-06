@@ -88,6 +88,11 @@ backend.addOutput({ custom: { igOrderUrl: igOrderUrl.url } });
 const modonUrl = backend.modon.resources.lambda.addFunctionUrl({ authType: FunctionUrlAuthType.NONE });
 backend.addOutput({ custom: { modonWebhookUrl: modonUrl.url } });
 
+// Boxy's notification webhook: a public address (Boxy can't log in), checked by a
+// secret header in the function. Give Boxy this address and the header.
+const boxyUrl = backend.boxy.resources.lambda.addFunctionUrl({ authType: FunctionUrlAuthType.NONE });
+backend.addOutput({ custom: { boxyWebhookUrl: boxyUrl.url } });
+
 // Login abuse limits (see amplify/auth/limits.ts): counters that expire by themselves.
 const limits = new Table(Stack.of(backend.createAuthChallenge.resources.lambda), "LoginLimits", {
   partitionKey: { name: "id", type: AttributeType.STRING },

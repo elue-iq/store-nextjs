@@ -19,6 +19,68 @@ function boxyError(errors: { message?: string }[] | null | undefined, fallback: 
   return fallback;
 }
 
+export function boxyEventList(raw: unknown): { at: string; text: string }[] {
+  let v: unknown = raw;
+  for (let i = 0; i < 2 && typeof v === "string"; i++) {
+    try {
+      v = JSON.parse(v);
+    } catch {
+      return [];
+    }
+  }
+  return Array.isArray(v) ? v.filter((e): e is { at: string; text: string } => Boolean(e) && typeof e.at === "string" && typeof e.text === "string") : [];
+}
+
+// Every notification Boxy sent to our webhook, newest first (the Delivery tab).
+export function AdminBoxyFeed({ onOpenOrder }: { onOpenOrder: (orderNumber: string) => void }) {
+  const [list, setList] = useState<{ id: string; at: string; title?: string | null; detail?: string | null; orderNumber?: string | null; kind?: string | null; raw?: string | null }[] | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    const load = () =>
+      dataClient.models.BoxyEvent.list({ limit: 200 })
+        .then(({ data }) => live && setList([...data].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 60)))
+        .catch(() => live && setList([]));
+    void load();
+    const t = setInterval(load, 30000);
+    return () => {
+      live = false;
+      clearInterval(t);
+    };
+  }, []);
+  return (
+    <section className="order-detail__block">
+      <h3 className="order-detail__title">إشعارات بوكسي</h3>
+      {list === null ? (
+        <p className="hint">جارٍ التحميل…</p>
+      ) : list.length === 0 ? (
+        <p className="hint">لا توجد إشعارات بعد.</p>
+      ) : (
+        <ol className="boxy-feed">
+          {list.map((e) => (
+            <li key={e.id}>
+              <small>{new Date(e.at).toLocaleString("ar-IQ")}</small>
+              <strong>{e.title || e.kind || "إشعار"}</strong>
+              {e.detail && <span>{e.detail}</span>}
+              {e.orderNumber && (
+                <button type="button" className="btn btn--small btn--ghost" onClick={() => onOpenOrder(e.orderNumber as string)}>
+                  {e.orderNumber}
+                </button>
+              )}
+              {e.raw && (
+                <button type="button" className="btn btn--small btn--quiet" onClick={() => setOpen(open === e.id ? null : e.id)}>
+                  {open === e.id ? "إخفاء" : "التفاصيل"}
+                </button>
+              )}
+              {open === e.id && <pre dir="ltr">{e.raw}</pre>}
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
+  );
+}
+
 export async function callBoxy(args: {
   action: "regions" | "send" | "update" | "cancel" | "refresh" | "label";
   orderId?: string;
@@ -228,6 +290,18 @@ export function AdminBoxy({ order: o }: { order: Order }) {
         )}
       </dl>
       {o.boxyNote && <p className="panel-note">ملاحظة بوكسي: {o.boxyNote}</p>}
+      {boxyEventList(o.boxyEvents).length > 0 && (
+        <details className="boxy-events">
+          <summary>إشعارات بوكسي ({boxyEventList(o.boxyEvents).length})</summary>
+          <ol>
+            {[...boxyEventList(o.boxyEvents)].reverse().map((e, i) => (
+              <li key={i}>
+                <small>{new Date(e.at).toLocaleString("ar-IQ")}</small> {e.text}
+              </li>
+            ))}
+          </ol>
+        </details>
+      )}
       <div className="modon__actions">
         <button type="button" className="btn btn--small" disabled={busy} onClick={() => void label()}>
           طباعة الملصق

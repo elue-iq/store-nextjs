@@ -7,6 +7,7 @@ import type { Schema } from "../../data/resource";
 import { BOXY_PROVINCE, boxyCollect, boxyProducts, boxyTrack, statusFromBoxy, type BoxyRegion } from "../../../lib/boxy";
 import { parseTrackEvents, type TrackEvent } from "../../../lib/modon";
 import { site } from "../../../lib/site";
+import { timingSafeEqual } from "node:crypto";
 
 // Boxy integration (mirrors the Modon one).
 //
@@ -96,7 +97,7 @@ function orderBody(o: Order, regionName: string): Record<string, unknown> {
     shipment_fee_type: "BY_MERCHANT",
     payment_type: "COLLECT_ON_DELIVERY",
     pick_up_type: "PICK_UP",
-    description: `${o.orderNumber}\n${[site.returnBoxNote, o.note].filter(Boolean).join(" — ")}`.slice(0, 400),
+    description: "", // notes stay empty: the order number is already in custom_id
     custom_id: o.orderNumber,
     products: boxyProducts(o as Parameters<typeof boxyProducts>[0]),
     saved_pick_up_address_uid: env.BOXY_PICKUP_UID,
@@ -384,7 +385,115 @@ async function adminAction(args: {
 
 // ---- Entry ----------------------------------------------------------------------
 
+// ---- Webhook (Boxy's notifications) ------------------------------------------------
+
+type UrlEvent = {
+  requestContext: { http: { method: string } };
+  headers?: Record<string, string | undefined>;
+  body?: string;
+  isBase64Encoded?: boolean;
+};
+
+const WEBHOOK_HEADER = "x-elue-key";
+
+function sameSecret(given: string, expected: string): boolean {
+  const a = Buffer.from(given);
+  const b = Buffer.from(expected);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+// Boxy's payload shape isn't fixed for us, so look for the fields we need anywhere in it.
+function findText(v: unknown, keys: string[], depth = 0): string | null {
+  if (!v || typeof v !== "object" || depth > 5) return null;
+  const rec = v as Record<string, unknown>;
+  for (const k of keys) {
+    const x = rec[k];
+    if (typeof x === "string" && x.trim()) return x.trim();
+    if (typeof x === "number") return String(x);
+  }
+  for (const x of Object.values(rec)) {
+    const f = findText(x, keys, depth + 1);
+    if (f) return f;
+  }
+  return null;
+}
+
+async function webhook(event: UrlEvent) {
+  const reply = (statusCode: number, body: unknown) => ({
+    statusCode,
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (event.requestContext.http.method !== "POST") return reply(405, { ok: false });
+  const key = event.headers?.[WEBHOOK_HEADER] ?? "";
+  if (!env.BOXY_WEBHOOK_KEY || !sameSecret(key, env.BOXY_WEBHOOK_KEY)) return reply(401, { ok: false });
+
+  const raw = event.isBase64Encoded ? Buffer.from(event.body ?? "", "base64").toString("utf8") : (event.body ?? "");
+  let payload: unknown = null;
+  try {
+    payload = JSON.parse(raw);
+  } catch {
+    payload = { text: raw.slice(0, 500) };
+  }
+  console.log("boxy webhook", raw.slice(0, 2000));
+
+  const uid = findText(payload, ["order_uid", "uid"]);
+  const code = findText(payload, ["platform_code", "code", "tracking_code"]);
+  const custom = findText(payload, ["custom_id", "merchant_order_id"]);
+  const kind = findText(payload, ["event", "event_type", "trigger", "type", "topic", "name"]);
+  const title = findText(payload, ["merchant_title", "title", "message", "text", "comment", "exception_comment", "description"]);
+  const detail = findText(payload, ["exception_comment", "merchant_action_required_merchant_text", "comment", "message", "description"]);
+
+  // Find our order from whatever identifier came.
+  let order: Order | null = null;
+  const or = [
+    ...(uid ? [{ boxyUid: { eq: uid } }] : []),
+    ...(code ? [{ boxyCode: { eq: code } }] : []),
+    ...(custom ? [{ orderNumber: { eq: custom } }] : []),
+  ];
+  if (or.length) {
+    const { data } = await client.models.Order.list({ filter: { or }, limit: 5 });
+    order = data[0] ?? null;
+  }
+
+  const now = new Date().toISOString();
+  let statusTitle: string | null = null;
+  if (order?.boxyUid) {
+    try {
+      const b = await fetchBoxy(order.boxyUid);
+      if (b !== "gone") {
+        statusTitle = b.status?.merchant_title || b.status?.title || null;
+        await applyStatus(order, b);
+      }
+    } catch (err) {
+      console.error("boxy webhook refresh failed", order.orderNumber, err);
+    }
+  }
+
+  const eventTitle = [statusTitle, title].filter((x, i, a) => x && a.indexOf(x) === i).join(" — ") || kind || "إشعار من بوكسي";
+  await client.models.BoxyEvent.create({
+    at: now,
+    kind: kind ?? undefined,
+    orderNumber: order?.orderNumber ?? custom ?? undefined,
+    boxyCode: code ?? order?.boxyCode ?? undefined,
+    title: eventTitle.slice(0, 300),
+    detail: detail?.slice(0, 600) ?? undefined,
+    raw: raw.slice(0, 3500),
+  });
+  if (order) {
+    // Re-read: applyStatus may have just saved the order.
+    const fresh = (await client.models.Order.get({ id: order.id })).data ?? order;
+    const prev = Array.isArray(fresh.boxyEvents) ? (fresh.boxyEvents as { at: string; text: string }[]) : [];
+    await client.models.Order.update({
+      id: order.id,
+      boxyEvents: [...prev, { at: now, text: eventTitle.slice(0, 300) }].slice(-40),
+    });
+  }
+  return reply(200, { ok: true, matched: Boolean(order) });
+}
+
 export const handler = async (event: unknown) => {
+  if ((event as UrlEvent)?.requestContext?.http) return webhook(event as UrlEvent);
   // Every 10 minutes: pull the latest status of every open Boxy order.
   if ((event as { source?: string })?.source === "aws.events") {
     try {

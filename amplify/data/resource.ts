@@ -100,6 +100,7 @@ const schema = a
         boxyRegionName: a.string().authorization((allow) => [allow.group("ADMINS")]),
         boxySentAt: a.datetime().authorization((allow) => [allow.group("ADMINS")]),
         boxyUpdatedAt: a.datetime().authorization((allow) => [allow.group("ADMINS")]),
+        boxyEvents: a.json().authorization((allow) => [allow.group("ADMINS")]), // webhook notifications for this order
         // Who delivers: MODON, or LOCAL = one of our own couriers (the Courier model), who gets
         // the order on Telegram. Team only.
         courierKind: a.string().authorization((allow) => [allow.group("ADMINS")]),
@@ -161,6 +162,19 @@ const schema = a
         phone: a.string(),
         active: a.boolean(),
         note: a.string(),
+      })
+      .authorization((allow) => [allow.group("ADMINS")]),
+
+    // Every notification Boxy sends to our webhook (written by the boxy function). Team only.
+    BoxyEvent: a
+      .model({
+        at: a.datetime().required(),
+        kind: a.string(), // the event / trigger name Boxy sent, as received
+        orderNumber: a.string(), // ours (EL-…) when we could match it
+        boxyCode: a.string(),
+        title: a.string(),
+        detail: a.string(),
+        raw: a.string(), // the payload as received (trimmed)
       })
       .authorization((allow) => [allow.group("ADMINS")]),
 

@@ -5123,3 +5123,9 @@ button.dash-bars__row:focus-visible {
 
 .pay-choice { border: 1px solid var(--line, #d9cfc2); border-radius: 12px; padding: 12px 14px; margin: 14px 0; display: grid; gap: 8px; }
 .pay-choice legend { padding: 0 6px; font-weight: 600; }
+
+.boxy-feed { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.6rem; }
+.boxy-feed li { display: flex; flex-wrap: wrap; gap: 0.4rem 0.6rem; align-items: center; padding: 0.6rem 0; border-bottom: 1px solid var(--line, #e7ddd0); }
+.boxy-feed pre { width: 100%; margin: 0; padding: 0.6rem; background: rgba(0, 0, 0, 0.04); border-radius: 8px; font-size: 0.75rem; white-space: pre-wrap; word-break: break-all; }
+.boxy-events { margin-top: 0.6rem; font-size: 0.9rem; }
+.boxy-events ol { margin: 0.4rem 0 0; padding-inline-start: 1.1rem; display: grid; gap: 0.3rem; }
