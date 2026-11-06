@@ -5132,3 +5132,15 @@ button.dash-bars__row:focus-visible {
 
 .order-row__courier { display: block; font-size: 0.82rem; color: var(--ink-soft, #7a6a5c); }
 .order-row__courier.is-problem { color: #b3402a; font-weight: 600; }
+
+/* Baghdad delivery period picker. */
+.slot-picker { border: 1px solid var(--line, #d9cfc2); border-radius: 12px; padding: 12px 14px; margin: 14px 0; display: grid; gap: 10px; background: #fff4ee; }
+.slot-picker legend { padding: 0 6px; font-weight: 600; }
+.slot-picker .field-note { margin: 0; }
+.slot-picker__day { display: grid; gap: 4px; }
+.slot-picker__day select { min-height: 2.7rem; }
+.slot-picker__slots { display: grid; gap: 8px; }
+.slot-picker__slot { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1.5px solid var(--sand-deep, #d9cfc2); border-radius: 12px; background: #fff; cursor: pointer; }
+.slot-picker__slot.is-on { border-color: var(--terracotta-deep, #a4472b); }
+.slot-picker__slot span { display: grid; line-height: 1.5; }
+.slot-picker__slot small { color: var(--ink-soft, #7a6a5c); }

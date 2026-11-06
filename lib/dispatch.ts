@@ -7,6 +7,7 @@ import { formatIraqiMobile } from "./phone";
 import { fullAddress } from "./iraq";
 import { deliveryPayOf, formatIQD, payMethodText, site } from "./site";
 import { escapeHtml } from "./telegram";
+import { slotText } from "./delivery-slot";
 
 export type DispatchOrder = {
   orderNumber: string;
@@ -16,6 +17,8 @@ export type DispatchOrder = {
   area?: string | null;
   address: string;
   note?: string | null;
+  deliverySlot?: string | null; // Baghdad delivery period
+  deliveryDate?: string | null; // wanted day (YYYY-MM-DD)
   items?: ({ slug?: string; nameAr: string; qty: number } | null)[] | null;
   jars?: number | null;
   total: number;
@@ -104,7 +107,7 @@ function courierText(o: DispatchOrder, st: Style, test: boolean): string {
     `• الهاتف: ${st.num(formatIraqiMobile(o.phone).replace(/ /g, ""))}`,
     `• العنوان: ${st.esc(fullAddress(o))}`,
     o.note ? `• ملاحظة: ${st.esc(o.note)}` : null,
-    baghdad ? `• موعد التوصيل: ${site.baghdadWindow.short}` : null,
+    baghdad ? `• ${st.b("موعد التوصيل")}: ${slotText(o) ?? site.baghdadWindow.short}` : null,
     "",
     "📦 الطلب:",
     ...itemLines(o, st),

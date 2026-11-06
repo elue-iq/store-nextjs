@@ -10,6 +10,7 @@
 import qrcode from "qrcode-generator";
 import { LOGO_PATH, LOGO_VIEWBOX } from "./brand-mark";
 import { collectAmount, type DispatchOrder } from "./dispatch";
+import { slotLines } from "./delivery-slot";
 import { formatIraqiMobile } from "./phone";
 import { makePdf, type PdfPage } from "./pdf";
 import { loadFonts } from "./receipt";
@@ -131,16 +132,28 @@ function drawLabel(ctx: CanvasRenderingContext2D, o: LabelOrder, courierName: st
     rect(dx === 1 ? x : x - th, dy === 1 ? y : y - arm, th, arm);
   }
 
-  let ly = y1 + 100;
+  let ly = y1 + 80;
   text("رقم الطلب", lr, ly, { size: CAP });
   text(o.orderNumber, lr, ly + 62, { size: VAL + 6, weight: BOLD, dir: "ltr" });
   text(dateText(o.createdAt), lr, ly + 62 + 50, { size: CAP, dir: "ltr" });
-  ly += 62 + 50 + 84;
+  ly += 62 + 50 + 70;
+
+  // Baghdad: the delivery day and period the customer picked, in bold.
+  const slot = slotLines(o);
+  if (slot.length) {
+    text("موعد التوصيل :", lr, ly, { size: CAP });
+    for (const l of slot) {
+      for (const part of wrap(l, lw, { size: 36, weight: BOLD })) {
+        ly += 46;
+        text(part, lr, ly, { size: 36, weight: BOLD });
+      }
+    }
+    ly += 64;
+  }
 
   // Notes, numbered like the Modon label.
   text("ملاحظات الشركة :", lr, ly, { size: CAP });
   const notes = [site.returnBoxNote];
-  if (o.province === site.baghdadWindow.province) notes.push(`التوصيل في بغداد ${site.baghdadWindow.short}`);
   notes.push(`للاستفسار ${site.whatsappDisplay.replace(/ /g, "")}`);
   notes.forEach((note, i) => {
     ly += 26;

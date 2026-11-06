@@ -28,6 +28,7 @@ import { buildOrderMessage, sendToTelegram } from "../../../lib/telegram";
 import { eatixConfig, eatixFields, sendOrder, toEatixOrder } from "../../../lib/eatix";
 import { OPEN_STATUSES, ORDER_RULES } from "../../../lib/order-rules";
 import { freeDeliveryFor, needsPayRef, site } from "../../../lib/site";
+import { cleanSlotDate, DEFAULT_SLOT, isSlotKey, SLOT_PROVINCE } from "../../../lib/delivery-slot";
 import { sendOrderConfirmation } from "../../../lib/orderConfirmation";
 import { pendingReview } from "../../../lib/reviews";
 import { createPayment, getPaymentStatus, qiConfig, verifyNotification, type QiPayment } from "../../../lib/qi";
@@ -261,6 +262,10 @@ async function placeOrderHandler(event: PlaceOrderEvent) {
     address: String(args.address ?? ""),
   });
   const note = String(args.note ?? "").trim().slice(0, 400) || null;
+  // Baghdad: the delivery period and the wanted day (anything else is ignored).
+  const inBaghdad = province === SLOT_PROVINCE;
+  const deliverySlot = inBaghdad ? (isSlotKey(args.deliverySlot) ? args.deliverySlot : DEFAULT_SLOT) : null;
+  const deliveryDate = inBaghdad ? cleanSlotDate(args.deliveryDate) : null;
   const source = String(args.source ?? "").trim().slice(0, 200) || null;
 
   let rawItems: unknown = args.items;
@@ -320,7 +325,9 @@ async function placeOrderHandler(event: PlaceOrderEvent) {
       payRef,
       freeDelivery,
       deliveryPaid,
-      slotAccepted,
+      slotAccepted: slotAccepted || inBaghdad,
+      deliverySlot,
+      deliveryDate,
       createdBy: forCustomer ? callerPhone : null,
       owner,
       ...(online ? { qiStatus: "CREATED" } : {}),
@@ -397,6 +404,8 @@ async function notifyTeam(order: OrderRecord): Promise<boolean> {
     area: order.area ?? "",
     address: order.address,
     note: order.note ?? null,
+    deliverySlot: order.deliverySlot ?? null,
+    deliveryDate: order.deliveryDate ?? null,
     source: order.source ?? null,
     returning,
     createdBy: order.createdBy ?? null,

@@ -5,6 +5,7 @@ import { formatIraqiMobile } from "./phone";
 import { collectStatement, deliveryPayOf, formatIQD, payMethodText, site } from "./site";
 import type { OrderLine } from "./order-text";
 import { fullAddress } from "./iraq";
+import { slotText } from "./delivery-slot";
 
 export function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -25,6 +26,8 @@ export function buildOrderMessage(o: {
   area: string;
   address: string;
   note?: string | null;
+  deliverySlot?: string | null; // Baghdad delivery period
+  deliveryDate?: string | null; // wanted day (YYYY-MM-DD)
   source?: string | null;
   returning: boolean;
   createdBy?: string | null; // team member who placed it for the customer
@@ -65,6 +68,7 @@ export function buildOrderMessage(o: {
     `الرقم: <a href="https://wa.me/${o.phone}">${ltr(formatIraqiMobile(o.phone))}</a>`,
     `العنوان: ${escapeHtml(fullAddress(o))}`,
     o.note ? `ملاحظة: ${escapeHtml(o.note)}` : null,
+    slotText(o) ? `<b>موعد التوصيل: ${slotText(o)}</b>` : null,
     o.source ? `المصدر: ${ltr(escapeHtml(o.source))}` : null,
     `الوقت: ${ltr(o.time)}`,
     o.createdBy ? `أنشأه الفريق: ${ltr(formatIraqiMobile(o.createdBy))}` : null,

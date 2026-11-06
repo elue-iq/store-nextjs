@@ -2,6 +2,7 @@
 
 import { StatusChip } from "./OrderBits";
 import { boxyNeedsAttention } from "@/lib/boxy";
+import { slotText } from "@/lib/delivery-slot";
 import { baghdadTime, type Order } from "@/lib/data";
 import { fullAddress } from "@/lib/iraq";
 import { formatIQD, PAY_KEY_LABELS, payKeyOf } from "@/lib/site";
@@ -53,6 +54,7 @@ export function OrderRow({
               {o.reviewed ? "★ مُقيَّم" : "بانتظار التقييم"}
             </span>
           )}
+          {slotText(o) && <span className="order-row__paid">{slotText(o)}</span>}
           {o.courierKind === "LOCAL" && o.courierName && (
             <span className="order-row__paid order-row__free">{o.courierName}</span>
           )}

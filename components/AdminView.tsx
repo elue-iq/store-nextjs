@@ -24,6 +24,7 @@ import { DeliveryTracking, OrderItemsList, StatusTrack } from "./OrderBits";
 import { formatPoints, pointsFor } from "@/lib/loyalty";
 import { dataClient, newestFirst, STATUS_LABELS, STATUS_ORDER, type Order, type OrderStatus } from "@/lib/data";
 import { formatIraqiMobile, toLatinDigits } from "@/lib/phone";
+import { slotText } from "@/lib/delivery-slot";
 import { formatIQD, payKeyOf, PAY_KEY_LABELS, payMethodText, type PayKey } from "@/lib/site";
 import { fullAddress } from "@/lib/iraq";
 import { products } from "@/lib/products";
@@ -914,6 +915,7 @@ function OrderDetail({
 
       <section className="order-detail__block">
         <h2>الطلب</h2>
+        {slotText(o) && <p className="order-detail__paid">موعد التوصيل: <strong>{slotText(o)}</strong></p>}
         <OrderItemsList items={o.items} />
         <p className="order-card__total">
           <span>المجموع · {jarsLabel(o.jars)}</span>

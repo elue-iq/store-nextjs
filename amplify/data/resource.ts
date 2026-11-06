@@ -116,6 +116,10 @@ const schema = a
         reviewedAt: a.datetime(),
         // The customer accepted the Baghdad delivery window (6–10 pm, else next day).
         slotAccepted: a.boolean().authorization((allow) => [allow.group("ADMINS")]),
+        // Baghdad delivery period the customer picked: open | eve | night (see lib/delivery-slot.ts),
+        // and the day they asked for (YYYY-MM-DD, empty = earliest). Printed on the courier label.
+        deliverySlot: a.string(),
+        deliveryDate: a.string(),
         // Qi Card online payment: Qi's payment id (team only) and its state
         // (CREATED = waiting for the customer to pay, SUCCESS, FAILED). The customer can read the state.
         qiPaymentId: a.string().authorization((allow) => [allow.group("ADMINS")]),
@@ -240,6 +244,9 @@ const schema = a
         payRef: a.string(),
         // The customer accepted the Baghdad delivery window.
         slotAccepted: a.boolean(),
+        // Baghdad only: delivery period (open | eve | night) and the wanted day (YYYY-MM-DD).
+        deliverySlot: a.string(),
+        deliveryDate: a.string(),
         // The customer pays now with Qi Card instead of cash to the driver.
         payOnline: a.boolean(),
       })
