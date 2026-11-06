@@ -38,6 +38,15 @@ export function statusFromBoxy(slug: string | null | undefined): "OUT_FOR_DELIVE
   return null; // new, scheduled, collecting, on-hold, postponed, partially-delivered, returns…
 }
 
+// Boxy statuses that need the team to look (customer unreachable, postponed, returns, partial, failed…).
+// Anything Boxy adds later that is not a normal forward step is shown too, so nothing is missed.
+export function boxyNeedsAttention(slug: string | null | undefined): boolean {
+  const s = String(slug ?? "").toLowerCase().replace(/_/g, "-");
+  if (!s) return false;
+  const normal = ["new", "scheduled", "collecting", "collected", "in-transit", "out-for-delivery", "delivered", "ready-to-pick-up", "ready-for-pickup", "ready-to-collect"];
+  return !normal.includes(s);
+}
+
 // What the customer sees on their order (our own wording). null = internal.
 export function boxyTrack(slug: string | null | undefined): string | null {
   const s = String(slug ?? "").toLowerCase().replace(/_/g, "-");
@@ -49,6 +58,8 @@ export function boxyTrack(slug: string | null | undefined): string | null {
     "in-transit": "طلبك في طريقه إليك",
     "out-for-delivery": "طلبك مع مندوب التوصيل في طريقه إليك",
     delivered: "تم تسليم طلبك. بالهناء والعافية",
+    "partially-delivered": "سُلّم جزء من طلبك. سنتواصل معك",
+    returned: "سيُعاد إرسال طلبك إليك قريبًا",
     "on-hold": "نحتاج إلى تأكيد رقم هاتفك أو عنوانك. سنتواصل معك",
     postponed: "تأجّل التوصيل",
     "returned-warehouse": "سيُعاد إرسال طلبك إليك قريبًا",

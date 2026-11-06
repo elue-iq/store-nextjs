@@ -5129,3 +5129,6 @@ button.dash-bars__row:focus-visible {
 .boxy-feed pre { width: 100%; margin: 0; padding: 0.6rem; background: rgba(0, 0, 0, 0.04); border-radius: 8px; font-size: 0.75rem; white-space: pre-wrap; word-break: break-all; }
 .boxy-events { margin-top: 0.6rem; font-size: 0.9rem; }
 .boxy-events ol { margin: 0.4rem 0 0; padding-inline-start: 1.1rem; display: grid; gap: 0.3rem; }
+
+.order-row__courier { display: block; font-size: 0.82rem; color: var(--ink-soft, #7a6a5c); }
+.order-row__courier.is-problem { color: #b3402a; font-weight: 600; }
