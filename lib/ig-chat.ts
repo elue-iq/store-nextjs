@@ -25,7 +25,7 @@ export type ChatState = {
 
 export type Reply = {
   text: string;
-  quick?: string[]; // quick-reply captions
+  quick?: string[]; // button captions (max 3)
 };
 
 export type Turn = {
@@ -34,16 +34,17 @@ export type Turn = {
   place?: { name: string; phone: string; province: string; area: string; address: string; items: { slug: string; qty: number }[] };
 };
 
-const START = /(^|\s)(اطلب|اطلبو|طلب|ابي اطلب|أريد أطلب|اريد اطلب|order)(\s|$)/i;
+const START = /(^|\s)(اطلب|اطلبو|طلب|ابي اطلب|اريد اطلب|اريد اطلبو|order)(\s|$)/i;
 const CANCEL = /^(إلغاء|الغاء|الغي|ألغي|cancel)$/i;
 const digits = (s: string) => s.replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))).replace(/[۰-۹]/g, (d) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)));
 
-export const isStart = (text: string) => START.test(text.trim());
+const norm = (s: string) => s.replace(/[أإآ]/g, "ا").replace(/ى/g, "ي");
+export const isStart = (text: string) => START.test(norm(text.trim()));
 
 const label = (i: number) => products[i].nameAr;
 const askQty = (i: number): Reply => ({
-  text: `كم علبة تريدون من ${label(i)}؟`,
-  quick: ["0", "1", "2", "3", "4"],
+  text: `كم علبة تريدون من ${label(i)}؟ اضغطوا رقم أو اكتبوه.`,
+  quick: ["0", "1", "2"],
 });
 
 export const begin = (): Turn => ({
@@ -53,7 +54,7 @@ export const begin = (): Turn => ({
 
 export const notStarted = (): Turn => ({
   state: null,
-  replies: [{ text: "لتسجيل طلب اضغطوا الزر، أو اكتبوا «أحچي ويا الفريق» ويرد عليكم واحد منا.", quick: ["اطلب"] }],
+  replies: [{ text: "لتسجيل طلب اكتبوا «اطلب»، أو اكتبوا «أحچي ويا الفريق» ويرد عليكم واحد منا.", quick: ["اطلب"] }],
 });
 
 function summary(s: ChatState): string {

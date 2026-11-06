@@ -195,18 +195,19 @@ async function saveState(id: string, state: ChatState | null): Promise<void> {
   );
 }
 
-const block = (replies: Reply[]) => {
-  const last = replies[replies.length - 1];
-  return {
-    version: "v2",
-    content: {
-      type: "instagram",
-      messages: replies.map((r) => ({ type: "text", text: r.text })),
-      actions: [],
-      ...(last?.quick?.length ? { quick_replies: last.quick.map((caption) => ({ type: "flow", caption, target: FLOW_ID })) } : {}),
-    },
-  };
-};
+// Buttons (not quick replies): Instagram's AI-suggestion chips hide quick replies, buttons stay visible. Max 3.
+const block = (replies: Reply[]) => ({
+  version: "v2",
+  content: {
+    type: "instagram",
+    messages: replies.map((r) => ({
+      type: "text",
+      text: r.text,
+      ...(r.quick?.length ? { buttons: r.quick.slice(0, 3).map((caption) => ({ type: "flow", caption, target: FLOW_ID })) } : {}),
+    })),
+    actions: [],
+  },
+});
 
 async function chatTurn(body: Record<string, unknown>) {
   const c = body.chat as Record<string, unknown>;
@@ -217,7 +218,10 @@ async function chatTurn(body: Record<string, unknown>) {
   const state = await loadState(id);
   let turn: Turn;
   if (isStart(text)) turn = begin();
-  else if (!state) turn = notStarted();
+  else if (!state) {
+    console.log("ig-order notStarted", { len: text.length, head: text.slice(0, 12) });
+    turn = notStarted();
+  }
   else turn = next(state, text);
 
   if (turn.place) {
