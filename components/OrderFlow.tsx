@@ -18,7 +18,7 @@ import { buildWhatsAppText, priceCart, type CartItem } from "@/lib/order-text";
 import { formatIraqiMobile } from "@/lib/phone";
 import { collectStatement, formatIQD, freeDeliveryFor, freeDeliveryHint, site } from "@/lib/site";
 import { fullAddress } from "@/lib/iraq";
-import { checkDelivery, cleanDelivery, ltr, type DeliveryInfo, type FieldErrors } from "@/lib/validate";
+import { checkDelivery, cleanDelivery, ltr, phone2Error, type DeliveryInfo, type FieldErrors } from "@/lib/validate";
 import { dataClient, errorCode, errorDetail, errorFields } from "@/lib/data";
 import { OPEN_STATUSES } from "@/lib/order-rules";
 import { EMPTY_DELIVERY, loadProfile, saveProfile, type Profile } from "@/lib/profile";
@@ -55,6 +55,8 @@ export function OrderFlow() {
   const [errors, setErrors] = useState<FieldErrors>({});
   const [saveToAccount, setSaveToAccount] = useState(true);
   const [note, setNote] = useState("");
+  const [phone2, setPhone2] = useState("");
+  const [phone2Err, setPhone2Err] = useState("");
   const [busy, setBusy] = useState(false);
   // Pay now with Qi Card.
   const [payOnline, setPayOnline] = useState(false);
@@ -186,7 +188,10 @@ export function OrderFlow() {
       return;
     }
     const found = checkDelivery(delivery);
+    const p2 = phone2Error(phone2);
+    setPhone2Err(p2 ?? "");
     if (Object.keys(found).length) return showErrors(found);
+    if (p2) return;
     const info = cleanDelivery(delivery);
 
     setBusy(true);
@@ -204,6 +209,7 @@ export function OrderFlow() {
       const { data, errors: gqlErrors } = await dataClient.mutations.placeOrder({
         ...info,
         note: snapshot.note || undefined,
+        phone2: phone2.trim() || undefined,
         source: cart.source || undefined,
         items: JSON.stringify(cart.items),
         slotAccepted: inBaghdad ? true : undefined,
@@ -487,6 +493,26 @@ export function OrderFlow() {
                 </button>
               </div>
             )}
+
+            <label className={phone2Err ? "has-error" : undefined}>
+              <span>
+                رقم هاتف ثانٍ <span className="optional">(اختياري)</span>
+              </span>
+              <input
+                type="tel"
+                inputMode="tel"
+                autoComplete="off"
+                dir="ltr"
+                placeholder="0771 234 5678"
+                value={phone2}
+                onChange={(e) => {
+                  setPhone2(e.target.value);
+                  if (phone2Err) setPhone2Err(phone2Error(e.target.value) ?? "");
+                }}
+                aria-invalid={phone2Err ? true : undefined}
+              />
+              {phone2Err && <span className="field-error">{phone2Err}</span>}
+            </label>
 
             <label>
               <span>

@@ -35,6 +35,12 @@ export function phoneError(raw: string): string | null {
   return null;
 }
 
+// Optional second number: empty is fine, a filled one must be a real Iraqi mobile.
+export function phone2Error(raw: string): string | null {
+  if (!raw.trim()) return null;
+  return normalizeIraqiMobile(raw) ? null : "الرقم الثاني غير صحيح: رقم عراقي من 11 خانة يبدأ بـ 07.";
+}
+
 export function provinceError(raw: string): string | null {
   return isProvince(raw.trim()) ? null : "اختر المحافظة.";
 }

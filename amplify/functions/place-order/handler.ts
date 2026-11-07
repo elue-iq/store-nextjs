@@ -262,6 +262,10 @@ async function placeOrderHandler(event: PlaceOrderEvent) {
     address: String(args.address ?? ""),
   });
   const note = String(args.note ?? "").trim().slice(0, 400) || null;
+  // Optional second phone number.
+  const phone2Raw = String(args.phone2 ?? "").trim();
+  const phone2 = phone2Raw ? normalizeIraqiMobile(phone2Raw) : null;
+  if (phone2Raw && !phone2) throw new Error('invalid_fields:{"phone2":"الرقم الثاني غير صحيح."}');
   // Baghdad: the delivery period and the wanted day (anything else is ignored).
   const inBaghdad = province === SLOT_PROVINCE;
   const deliverySlot = inBaghdad ? (isSlotKey(args.deliverySlot) ? args.deliverySlot : DEFAULT_SLOT) : null;
@@ -306,6 +310,7 @@ async function placeOrderHandler(event: PlaceOrderEvent) {
       area,
       address,
       note,
+      phone2: phone2 && phone2 !== phone ? phone2 : null,
       source,
       items: lines.map((l) => ({
         slug: l.product.slug,
@@ -404,6 +409,7 @@ async function notifyTeam(order: OrderRecord): Promise<boolean> {
     area: order.area ?? "",
     address: order.address,
     note: order.note ?? null,
+    phone2: order.phone2 ?? null,
     deliverySlot: order.deliverySlot ?? null,
     deliveryDate: order.deliveryDate ?? null,
     source: order.source ?? null,

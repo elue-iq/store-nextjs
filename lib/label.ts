@@ -185,6 +185,7 @@ function drawLabel(ctx: CanvasRenderingContext2D, o: LabelOrder, courierName: st
   y += 38;
   field("اسم الزبون", o.name);
   field("هاتف الزبون", formatIraqiMobile(o.phone).replace(/ /g, ""), { dir: "ltr" });
+  if (o.phone2) field("هاتف ثانٍ", formatIraqiMobile(o.phone2).replace(/ /g, ""), { dir: "ltr" });
   field("المحافظة والمنطقة", [o.province, o.area].filter(Boolean).join("، ") || "—");
   field("العنوان", o.address, { sizes: [VAL, 40, 36] });
   if (o.note) field("ملاحظة الزبون", o.note, { sizes: [38, 34, 30], weight: 500 });
