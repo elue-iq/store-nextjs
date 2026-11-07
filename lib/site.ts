@@ -11,9 +11,7 @@ export const site = {
   // Shown on the order page. Change it if you start taking online payments.
   paymentNote: "الدفع نقداً عند الاستلام",
   // Printed on every courier label (note), sent to Telegram, and shown to the customer.
-  courierNote: "يرجى تسليم بوكس الفلين الى مندوب التوصيل، والتأكد من الطلب",
-  // The note written on the order sent to Modon (merchant_notes) and on local courier labels.
-  returnBoxNote: "راجع الفلين، يلزم ارجاعها",
+  courierNote: "يرجى التأكد من الطلب عند الاستلام",
   // A customer must review their latest delivered order before ordering again
   // (a short, playful form). false = reviews are optional (current choice).
   reviewRequiredToReorder: false,
@@ -45,7 +43,7 @@ export const site = {
     title: "مهم: يُحفظ دائماً في البراد",
     text:
       "لأن منتجاتنا لا تحتوي على مواد حافظة أو سكر مضاف أو دهون مضافة، فلازم دائماً تكون مبرّدة. " +
-      "بعد ما تستلمونه من المندوب، سلّموا المندوب بوكس الفلين وخلّوه بالبراد مباشرة.",
+      "بعد ما تستلمونه من المندوب، خلّوه بالبراد مباشرة.",
     problem: "في حال وصلكم المنتج مو بارد، يرجى التواصل مع فريق الدعم مباشرة",
     thanks: "شكراً لاختياركم ÉLUE",
   },
@@ -67,7 +65,7 @@ export const deliverySteps = [
   { title: "اطلبوا", text: "اختاروا نكهاتكم وأكملوا الطلب، وسجّلوا الدخول برقم الواتساب لمتابعته." },
   { title: "نجهّزه بحب", text: "نستلم طلبكم، ونجهّزه ونغلّفه بعناية داخل بوكس الفلين." },
   { title: "يوصلكم المندوب", text: `اطلبوا قبل الساعة ${site.deliveryCutoff} ويصلكم غداً.` },
-  { title: "للبراد مباشرة", text: "تأكدوا من الطلب، وسلّموا المندوب بوكس الفلين، وحطّوا الترافل بالبراد فوراً." },
+  { title: "للبراد مباشرة", text: "تأكدوا من الطلب، وحطّوا الترافل بالبراد فوراً." },
 ];
 
 // The site's public address. Link previews (WhatsApp, Instagram, Telegram,

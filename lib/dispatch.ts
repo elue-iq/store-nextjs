@@ -118,7 +118,7 @@ function courierText(o: DispatchOrder, st: Style, test: boolean): string {
       : "✅ لا يُطلب أي مبلغ من الزبون (مدفوع مسبقاً)",
     "",
     "❄️ الطلب يجب أن يبقى مبرّداً حتى التسليم",
-    "• بعد التسليم، استرجع بوكس الفلين من الزبون وتأكد من الطلب",
+    "• تأكد من الطلب عند التسليم",
     `📞 للاستفسار: ${st.num(site.whatsappDisplay.replace(/ /g, ""))}`,
   ]
     .filter((l): l is string => l !== null)

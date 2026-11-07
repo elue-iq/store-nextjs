@@ -153,8 +153,7 @@ function drawLabel(ctx: CanvasRenderingContext2D, o: LabelOrder, courierName: st
 
   // Notes, numbered like the Modon label.
   text("ملاحظات الشركة :", lr, ly, { size: CAP });
-  const notes = [site.returnBoxNote];
-  notes.push(`للاستفسار ${site.whatsappDisplay.replace(/ /g, "")}`);
+  const notes = [`للاستفسار ${site.whatsappDisplay.replace(/ /g, "")}`];
   notes.forEach((note, i) => {
     ly += 26;
     for (const l of wrap(`0${i + 1}  ${note}`, lw, { size: CAP })) {
