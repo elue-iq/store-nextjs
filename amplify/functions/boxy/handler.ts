@@ -93,6 +93,7 @@ function orderBody(o: Order, regionName: string): Record<string, unknown> {
   if (!code) throw new Error("boxy_province:لا توجد محافظة مطابقة لدى بوكسي.");
   return {
     is_fragile: true, // «قابل للكسر»
+    temperature_control: true, // «نقل مبرد» (field name as Boxy returns it in order webhooks)
     ready_to_pick_up: false,
     shipment_fee_type: "BY_MERCHANT",
     payment_type: "COLLECT_ON_DELIVERY",
