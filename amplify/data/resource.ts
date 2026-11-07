@@ -40,6 +40,7 @@ const schema = a
         area: a.string(),
         address: a.string().required(),
         note: a.string(),
+        phone2: a.string(), // optional second phone number (9647XXXXXXXXX)
         source: a.string(),
         items: a.ref("OrderItem").required().array().required(),
         jars: a.integer().required(),
@@ -229,6 +230,7 @@ const schema = a
         area: a.string().required(),
         address: a.string().required(),
         note: a.string(),
+        phone2: a.string(), // optional second phone number (any Iraqi format)
         source: a.string(),
         items: a.json().required(),
         // Team only: place the order for this customer (WhatsApp number).

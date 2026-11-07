@@ -107,7 +107,7 @@ function orderBody(o: Order, regionName: string): Record<string, unknown> {
       full_name: o.name,
       address_text: [o.province, o.area, o.address].filter(Boolean).join(" - ").slice(0, 250),
       phone: o.phone,
-      secondary_phone: null,
+      secondary_phone: o.phone2 ?? null,
       email: FALLBACK_EMAIL,
       region_name: regionName,
       province_code: code,

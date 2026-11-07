@@ -26,6 +26,7 @@ export function buildOrderMessage(o: {
   area: string;
   address: string;
   note?: string | null;
+  phone2?: string | null;
   deliverySlot?: string | null; // Baghdad delivery period
   deliveryDate?: string | null; // wanted day (YYYY-MM-DD)
   source?: string | null;

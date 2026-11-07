@@ -14,7 +14,7 @@ import { MAX_QTY_PER_LINE } from "@/lib/order-text";
 import { collectBreakdown, modonCollect } from "@/lib/modon";
 import { formatIraqiMobile, normalizeIraqiMobile } from "@/lib/phone";
 import { deliveryPayOf, formatIQD, freeDeliveryFor, needsPayRef, PAID_METHODS, PAY_METHOD_LABELS, site, type DeliveryPay, type PayMethod } from "@/lib/site";
-import { checkDelivery, cleanDelivery, phoneError, type DeliveryInfo, type FieldErrors } from "@/lib/validate";
+import { checkDelivery, cleanDelivery, phone2Error, phoneError, type DeliveryInfo, type FieldErrors } from "@/lib/validate";
 
 // Team form for one order:
 // - "create": a new order for a customer (e.g. taken by phone). Goes through
@@ -44,6 +44,8 @@ export function AdminOrderForm({
   const seed = order ?? prefill;
   const [phone, setPhone] = useState(seed ? formatIraqiMobile(seed.phone) : "");
   const [phoneErr, setPhoneErr] = useState("");
+  const [phone2, setPhone2] = useState(seed?.phone2 ? formatIraqiMobile(seed.phone2) : "");
+  const [phone2Err, setPhone2Err] = useState("");
   const [delivery, setDelivery] = useState<DeliveryInfo>({
     name: seed?.name ?? "",
     province: seed?.province ?? "",
@@ -98,10 +100,13 @@ export function AdminOrderForm({
   async function save() {
     if (busy) return;
     const pErr = phoneError(phone);
+    const p2Err = phone2Error(phone2);
+    setPhone2Err(p2Err ?? "");
     const found = checkDelivery(delivery);
     setPhoneErr(pErr ?? "");
     setErrors(found);
     if (pErr) return phoneRef.current?.focus();
+    if (p2Err) return;
     if (Object.keys(found).length) return fieldsRef.current?.focusFirstError(found);
     if (!lines.length) {
       toast({ id: "admin", tone: "attention", message: "أضف نكهة واحدة على الأقل." });
@@ -145,6 +150,7 @@ export function AdminOrderForm({
         area: order.area ?? "",
         address: order.address,
         note: order.note ?? null,
+        phone2: order.phone2 ?? null,
         cashierOrderId: order.cashierOrderId ?? null,
         paid: Boolean(order.paid),
         paidNote: order.paidNote ?? null,
@@ -159,6 +165,7 @@ export function AdminOrderForm({
         phone: customerPhone,
         ...info,
         note: note.trim() || null,
+        phone2: phone2.trim() ? normalizeIraqiMobile(phone2) : null,
         cashierOrderId: cashier.trim() || null,
         paid,
         paidNote: savedNote,
@@ -197,7 +204,7 @@ export function AdminOrderForm({
       }
       // Already at Modon: send the new details there too (only possible before pickup).
       // "paid" changes the amount the driver collects, so it must re-sync.
-      const modonFields = ["phone", "name", "province", "area", "address", "note", "items", "paid", "freeDelivery", "deliveryPaid"];
+      const modonFields = ["phone", "phone2", "name", "province", "area", "address", "note", "items", "paid", "freeDelivery", "deliveryPaid"];
       if (order.modonQr && modonFields.some((k) => k in changes)) {
         const { error } = await callModon({ action: "update", orderId: order.id });
         toast(
@@ -222,6 +229,7 @@ export function AdminOrderForm({
     const { data, errors: gqlErrors } = await dataClient.mutations.placeOrder({
       ...info,
       note: note.trim() || undefined,
+      phone2: phone2.trim() || undefined,
       items: JSON.stringify(lines.map((l) => ({ slug: l.product.slug, qty: l.qty }))),
       customerPhone,
       cashierOrderId: cashier.trim() || undefined,
@@ -290,6 +298,21 @@ export function AdminOrderForm({
           onErrors={setErrors}
           idPrefix="admin-order"
         />
+        <label className={phone2Err ? "has-error" : undefined}>
+          رقم هاتف ثانٍ (اختياري)
+          <input
+            type="tel"
+            inputMode="tel"
+            dir="ltr"
+            placeholder="0771 234 5678"
+            value={phone2}
+            onChange={(e) => {
+              setPhone2(e.target.value);
+              if (phone2Err) setPhone2Err(phone2Error(e.target.value) ?? "");
+            }}
+          />
+          {phone2Err && <span className="field-error">{phone2Err}</span>}
+        </label>
         <label>
           ملاحظة (اختياري)
           <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={400} />

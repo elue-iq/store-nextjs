@@ -13,6 +13,7 @@ export type DispatchOrder = {
   orderNumber: string;
   name: string;
   phone: string; // 9647XXXXXXXXX
+  phone2?: string | null; // optional second number
   province?: string | null;
   area?: string | null;
   address: string;
@@ -94,32 +95,22 @@ function itemLines(o: DispatchOrder, st: Style): string[] {
   return (o.items ?? []).filter((i): i is NonNullable<typeof i> => Boolean(i)).map((i) => `• ${st.esc(i.nameAr)}: ${jarsWord(i.qty)}`);
 }
 
-// A new order for a local courier.
+// A new order for a local courier. Kept short on purpose: the driver is busy.
+// Order number, phone numbers, address, note (if any), items, and what to collect.
 function courierText(o: DispatchOrder, st: Style, test: boolean): string {
-  const jars = o.jars ?? (o.items ?? []).reduce((n, i) => n + (i?.qty ?? 0), 0);
   const collect = collectAmount(o);
-  const baghdad = o.province === site.baghdadWindow.province;
+  const phones = [o.phone, o.phone2].filter((p): p is string => Boolean(p)).map((p) => st.num(formatIraqiMobile(p).replace(/ /g, "")));
   return [
     test ? "🧪 نسخة تجريبية: لا تنفّذ هذا الطلب" : null,
-    `🛵 ${st.b("طلب توصيل جديد من ÉLUE")} ${st.num(o.orderNumber)}`,
+    `🛵 ${st.b(st.num(o.orderNumber))}`,
+    `📞 ${phones.join(" / ")}`,
+    `📍 ${st.esc(fullAddress(o))}`,
+    o.note ? `📝 ${st.esc(o.note)}` : null,
+    o.province === site.baghdadWindow.province && slotText(o) ? `🕐 ${st.b(slotText(o)!)}` : null,
     "",
-    `• الزبون: ${st.esc(o.name)}`,
-    `• الهاتف: ${st.num(formatIraqiMobile(o.phone).replace(/ /g, ""))}`,
-    `• العنوان: ${st.esc(fullAddress(o))}`,
-    o.note ? `• ملاحظة: ${st.esc(o.note)}` : null,
-    baghdad ? `• ${st.b("موعد التوصيل")}: ${slotText(o) ?? site.baghdadWindow.short}` : null,
+    ...(o.items ?? []).filter((i): i is NonNullable<typeof i> => Boolean(i)).map((i) => `• ${st.esc(i.nameAr)} × ${st.num(String(i.qty))}`),
     "",
-    "📦 الطلب:",
-    ...itemLines(o, st),
-    `• عدد العلب: ${st.num(String(jars))}`,
-    "",
-    collect > 0
-      ? `💵 ${st.b(`المطلوب من الزبون: ${formatIQD(collect)}`)} (${collectParts(o)})`
-      : "✅ لا يُطلب أي مبلغ من الزبون (مدفوع مسبقاً)",
-    "",
-    "❄️ الطلب يجب أن يبقى مبرّداً حتى التسليم",
-    "• تأكد من الطلب عند التسليم",
-    `📞 للاستفسار: ${st.num(site.whatsappDisplay.replace(/ /g, ""))}`,
+    collect > 0 ? `💵 ${st.b(formatIQD(collect))} (شامل التوصيل)` : "✅ مدفوع: لا يُطلب شيء",
   ]
     .filter((l): l is string => l !== null)
     .join("\n");
