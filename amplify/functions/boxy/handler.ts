@@ -30,7 +30,7 @@ Amplify.configure(resourceConfig, libraryOptions);
 const client = generateClient<Schema>({ authMode: "iam" });
 
 const PRODUCTION = process.env.STAGE === "amplify";
-const SIZE = "M"; // our box is about 20×30×20 cm
+const SIZE = "S"; // «صغير» in the Boxy form
 const FALLBACK_EMAIL = "orders@elue-iq.com"; // Boxy asks for an email; customers don't give one
 
 type Order = Schema["Order"]["type"];
@@ -92,7 +92,7 @@ function orderBody(o: Order, regionName: string): Record<string, unknown> {
   const code = BOXY_PROVINCE[o.province ?? ""];
   if (!code) throw new Error("boxy_province:لا توجد محافظة مطابقة لدى بوكسي.");
   return {
-    is_fragile: false,
+    is_fragile: true, // «قابل للكسر»
     ready_to_pick_up: false,
     shipment_fee_type: "BY_MERCHANT",
     payment_type: "COLLECT_ON_DELIVERY",

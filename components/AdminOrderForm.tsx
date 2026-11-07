@@ -4,6 +4,8 @@ import { useRef, useState } from "react";
 import { useAuth } from "./AuthProvider";
 import { useToast } from "./Toast";
 import { DeliveryFields, type DeliveryFieldsHandle } from "./DeliveryFields";
+import { SlotPicker } from "./SlotPicker";
+import { DEFAULT_SLOT, isSlotKey, type SlotKey } from "@/lib/delivery-slot";
 import { callModon } from "./AdminModon";
 import { callBoxy } from "./AdminBoxy";
 import { dataClient, errorCode, errorFields, type Order } from "@/lib/data";
@@ -67,10 +69,9 @@ export function AdminOrderForm({
   const [deliveryPay, setDeliveryPay] = useState<DeliveryPay>(order ? deliveryPayOf(order) : "driver");
   const prepaidSomething = jarsPay === "prepaid" || deliveryPay === "prepaid";
   // Inside Baghdad the customer must have accepted the 6–10 pm delivery window.
-  const [slotOk, setSlotOk] = useState(false);
-  const [slotErr, setSlotErr] = useState(false);
+  const [slot, setSlot] = useState<SlotKey>(isSlotKey(order?.deliverySlot) ? order.deliverySlot : DEFAULT_SLOT);
+  const [slotDate, setSlotDate] = useState(order?.deliveryDate ?? "");
   const inBaghdad = delivery.province === site.baghdadWindow.province;
-  const needsSlot = inBaghdad && (!editing || order?.province !== site.baghdadWindow.province);
   const [qty, setQty] = useState<Record<string, number>>(() =>
     Object.fromEntries((order?.items ?? []).filter(Boolean).map((i) => [i!.slug, i!.qty])),
   );
@@ -120,11 +121,6 @@ export function AdminOrderForm({
       document.getElementById("order-pay")?.scrollIntoView({ block: "center", behavior: "smooth" });
       return;
     }
-    if (needsSlot && !slotOk) {
-      setSlotErr(true);
-      document.getElementById("order-slot")?.scrollIntoView({ block: "center", behavior: "smooth" });
-      return;
-    }
     const info = cleanDelivery(delivery);
     const customerPhone = normalizeIraqiMobile(phone)!;
     const savedMethod: PayMethod | null = jarsPay === "gift" ? "GIFT" : prepaidSomething && method ? method : null;
@@ -156,6 +152,8 @@ export function AdminOrderForm({
         payRef: order.payRef ?? null,
         freeDelivery: Boolean(order.freeDelivery),
         deliveryPaid: Boolean(order.deliveryPaid),
+        deliverySlot: order.deliverySlot ?? null,
+        deliveryDate: order.deliveryDate ?? null,
       };
       const after = {
         phone: customerPhone,
@@ -168,6 +166,8 @@ export function AdminOrderForm({
         payRef: savedRef,
         freeDelivery: deliveryPay === "gift" || autoFreeDelivery,
         deliveryPaid: deliveryPay === "prepaid",
+        deliverySlot: inBaghdad ? slot : null,
+        deliveryDate: inBaghdad && slotDate ? slotDate : null,
       };
       const changes: Record<string, unknown> = {};
       for (const key of Object.keys(after) as (keyof typeof after)[]) {
@@ -177,7 +177,7 @@ export function AdminOrderForm({
         JSON.stringify(items.map((i) => [i.slug, i.qty])) ===
         JSON.stringify(products.filter((p) => oldQty[p.slug]).map((p) => [p.slug, oldQty[p.slug]]));
       if (!sameItems) Object.assign(changes, { items, jars, total });
-      if (needsSlot) changes.slotAccepted = true;
+      if (inBaghdad && !order.slotAccepted) changes.slotAccepted = true;
       if (!Object.keys(changes).length) {
         setBusy(false);
         onDone(order.orderNumber);
@@ -229,7 +229,9 @@ export function AdminOrderForm({
       paidNote: savedNote ?? undefined,
       payMethod: savedMethod ?? undefined,
       payRef: savedRef ?? undefined,
-      slotAccepted: inBaghdad ? slotOk : undefined,
+      slotAccepted: inBaghdad ? true : undefined,
+      deliverySlot: inBaghdad ? slot : undefined,
+      deliveryDate: inBaghdad && slotDate ? slotDate : undefined,
       freeDelivery: deliveryPay === "gift",
       deliveryPaid: deliveryPay === "prepaid",
     });
@@ -430,24 +432,7 @@ export function AdminOrderForm({
 
       {inBaghdad && (
         <section className="order-detail__block" id="order-slot">
-          <h2>موعد التوصيل في بغداد</h2>
-          <p className="field-note">{site.baghdadWindow.note}</p>
-          {needsSlot ? (
-            <label className={slotErr && !slotOk ? "admin-order-form__check has-error" : "admin-order-form__check"}>
-              <input
-                type="checkbox"
-                checked={slotOk}
-                onChange={(e) => {
-                  setSlotOk(e.target.checked);
-                  if (e.target.checked) setSlotErr(false);
-                }}
-              />
-              <span>العميل اطّلع على موعد التوصيل ووافق عليه</span>
-            </label>
-          ) : (
-            <p className="hint">وافق العميل على الموعد عند إنشاء الطلب.</p>
-          )}
-          {slotErr && !slotOk && <span className="field-error">يلزم موافقة العميل على موعد التوصيل.</span>}
+          <SlotPicker id="order-slot-picker" slot={slot} date={slotDate} onSlot={setSlot} onDate={setSlotDate} />
         </section>
       )}
 

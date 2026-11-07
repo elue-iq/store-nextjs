@@ -13,6 +13,7 @@ import { AdminEatix } from "./AdminEatix";
 import { SendOrderToCustomer, SendReviewRequest } from "./SendOrderToCustomer";
 import { AdminDelivery, callDispatch } from "./AdminDelivery";
 import { AdminCouriers } from "./AdminCouriers";
+import { AdminSettle } from "./AdminSettle";
 import { AdminBoxyFeed } from "./AdminBoxy";
 import { AdminPrep } from "./AdminPrep";
 import { AdminReviews } from "./AdminReviews";
@@ -24,6 +25,7 @@ import { DeliveryTracking, OrderItemsList, StatusTrack } from "./OrderBits";
 import { formatPoints, pointsFor } from "@/lib/loyalty";
 import { dataClient, newestFirst, STATUS_LABELS, STATUS_ORDER, type Order, type OrderStatus } from "@/lib/data";
 import { formatIraqiMobile, toLatinDigits } from "@/lib/phone";
+import { slotText } from "@/lib/delivery-slot";
 import { formatIQD, payKeyOf, PAY_KEY_LABELS, payMethodText, type PayKey } from "@/lib/site";
 import { fullAddress } from "@/lib/iraq";
 import { products } from "@/lib/products";
@@ -539,6 +541,7 @@ export function AdminView() {
       <div className="admin-screen">
         {pullEl}
         {listHead("شركات التوصيل", "الشركات المحلية وقناة تيليغرام لكل واحدة")}
+        <AdminSettle orders={orders} onOpenOrder={(n) => openOrder(n)} />
         <AdminCouriers orders={orders} onOpenOrder={(n) => openOrder(n)} />
         <AdminBoxyFeed onOpenOrder={(n) => openOrder(n)} />
         {drawer}
@@ -914,6 +917,7 @@ function OrderDetail({
 
       <section className="order-detail__block">
         <h2>الطلب</h2>
+        {slotText(o) && <p className="order-detail__paid">موعد التوصيل: <strong>{slotText(o)}</strong></p>}
         <OrderItemsList items={o.items} />
         <p className="order-card__total">
           <span>المجموع · {jarsLabel(o.jars)}</span>

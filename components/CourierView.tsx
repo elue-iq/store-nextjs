@@ -12,6 +12,7 @@ import { collectAmount } from "@/lib/dispatch";
 import { fullAddress } from "@/lib/iraq";
 import { formatIraqiMobile } from "@/lib/phone";
 import { formatIQD, site } from "@/lib/site";
+import { slotText } from "@/lib/delivery-slot";
 import { courierComingMessage } from "@/lib/share";
 
 const STATUS_AR: Record<string, string> = { NEW: "جديد", CONFIRMED: "جديد", OUT_FOR_DELIVERY: "في الطريق", DELIVERED: "تم التسليم" };
@@ -31,6 +32,7 @@ function OrderCard({ o, busy, onStatus, courierName }: { o: CourierOrder; busy: 
       <p className="courier-card__name">{o.name}</p>
       <p>{fullAddress(o)}</p>
       {o.note && <p className="courier-card__note">ملاحظة: {o.note}</p>}
+      {slotText(o) && <p className="courier-card__note"><strong>موعد التوصيل: {slotText(o)}</strong></p>}
       <p className="courier-card__items">
         {items} {items && "·"} {o.jars} علبة
       </p>

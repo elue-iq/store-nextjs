@@ -48,6 +48,8 @@ const view = (o: Order) => ({
   area: o.area,
   address: o.address,
   note: o.note,
+  deliverySlot: o.deliverySlot,
+  deliveryDate: o.deliveryDate,
   items: o.items,
   jars: o.jars,
   total: o.total,

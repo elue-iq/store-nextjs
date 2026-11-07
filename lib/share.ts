@@ -6,6 +6,7 @@
 
 import { formatIraqiMobile } from "./phone";
 import { deliveryPayOf, formatIQD, site } from "./site";
+import { slotText } from "./delivery-slot";
 
 type Who = { name: string; phone: string; orderNumber: string };
 
@@ -17,6 +18,8 @@ type OrderInfo = Who & {
   freeDelivery?: boolean | null;
   deliveryPaid?: boolean | null;
   province?: string | null;
+  deliverySlot?: string | null;
+  deliveryDate?: string | null;
 };
 
 function origin(): string {
@@ -39,7 +42,7 @@ function summary(o: OrderInfo): string[] {
   return [
     `• ${items.map((i) => `${i.nameAr} × ${i.qty}`).join("، ")}`,
     collect > 0 ? `💵 عند الاستلام: ${formatIQD(collect)}${delivery === "driver" ? " (شامل التوصيل)" : ""}` : "✅ مدفوع، ولا يُطلب شي عند الاستلام",
-    o.province === site.baghdadWindow.province ? `🕐 التوصيل: ${site.baghdadWindow.short}` : null,
+    o.province === site.baghdadWindow.province ? `🕐 التوصيل: ${slotText(o) ?? site.baghdadWindow.short}` : null,
     `🔖 ${o.orderNumber}`,
   ].filter((l): l is string => l !== null);
 }
@@ -55,7 +58,6 @@ export function orderMessage(o: OrderInfo, link = `${origin()}/account?order=${e
     `📦 تابعوا طلبكم: ${link}`,
     "",
     "❄️ يُحفظ دائماً بالبراد",
-    "• يرجى تسليم الفلين للمندوب.",
   ];
   return lines.join("\n");
 }
@@ -99,7 +101,6 @@ export function courierComingMessage(o: OrderInfo, courierName: string): string 
     ...summary(o),
     "",
     "❄️ يُحفظ دائماً بالبراد",
-    "• يرجى تسليم الفلين لي.",
     "📞 إذا احتجتم أي شي، تواصلوا معي على هذا الرقم.",
   ].join("\n");
 }

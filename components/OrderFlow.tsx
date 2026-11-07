@@ -11,6 +11,8 @@ import { useAuth } from "./AuthProvider";
 import { useStock } from "./StockProvider";
 import { jarsLabel } from "./AddToCart";
 import { LoginPanel } from "./LoginPanel";
+import { SlotPicker } from "./SlotPicker";
+import { DEFAULT_SLOT, type SlotKey } from "@/lib/delivery-slot";
 import { DeliveryFields, type DeliveryFieldsHandle } from "./DeliveryFields";
 import { buildWhatsAppText, priceCart, type CartItem } from "@/lib/order-text";
 import { formatIraqiMobile } from "@/lib/phone";
@@ -58,8 +60,8 @@ export function OrderFlow() {
   const [payOnline, setPayOnline] = useState(false);
   const onlineOk = true;
   // Inside Baghdad the customer sees the delivery window (6–10 pm, else next day) and must accept it.
-  const [slotOk, setSlotOk] = useState(false);
-  const [slotErr, setSlotErr] = useState(false);
+  const [slot, setSlot] = useState<SlotKey>(DEFAULT_SLOT);
+  const [slotDate, setSlotDate] = useState("");
   const inBaghdad = delivery.province === site.baghdadWindow.province;
 
   // An order still being handled blocks a new one (the server checks this too).
@@ -185,12 +187,6 @@ export function OrderFlow() {
     }
     const found = checkDelivery(delivery);
     if (Object.keys(found).length) return showErrors(found);
-    if (inBaghdad && !slotOk) {
-      setSlotErr(true);
-      toast({ id: "checkout", tone: "attention", message: "يُرجى الموافقة على موعد التوصيل في بغداد." });
-      document.getElementById("slot-accept")?.scrollIntoView({ block: "center", behavior: "smooth" });
-      return;
-    }
     const info = cleanDelivery(delivery);
 
     setBusy(true);
@@ -211,6 +207,8 @@ export function OrderFlow() {
         source: cart.source || undefined,
         items: JSON.stringify(cart.items),
         slotAccepted: inBaghdad ? true : undefined,
+        deliverySlot: inBaghdad ? slot : undefined,
+        deliveryDate: inBaghdad && slotDate ? slotDate : undefined,
         payOnline: onlineOk && payOnline ? true : undefined,
       });
       if (data?.orderNumber && data.payUrl) {
@@ -497,26 +495,7 @@ export function OrderFlow() {
               <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={400} />
             </label>
 
-            {inBaghdad && (
-              <div className={slotErr && !slotOk ? "slot-accept has-error" : "slot-accept"} id="slot-accept">
-                <p>
-                  <strong>موعد التوصيل في بغداد</strong>
-                  {site.baghdadWindow.note}
-                </p>
-                <label className="check">
-                  <input
-                    type="checkbox"
-                    checked={slotOk}
-                    onChange={(e) => {
-                      setSlotOk(e.target.checked);
-                      if (e.target.checked) setSlotErr(false);
-                    }}
-                  />
-                  {site.baghdadWindow.accept}
-                </label>
-                {slotErr && !slotOk && <span className="field-error">يلزم الموافقة على الموعد لإكمال الطلب.</span>}
-              </div>
-            )}
+            {inBaghdad && <SlotPicker id="slot-accept" slot={slot} date={slotDate} onSlot={setSlot} onDate={setSlotDate} />}
             {onlineOk && (
               <fieldset className="pay-choice">
                 <legend>طريقة الدفع</legend>
