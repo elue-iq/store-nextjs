@@ -4,7 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { useToast } from "./Toast";
 import type { Order } from "@/lib/data";
 import type { receiptFromOrder } from "@/lib/receipt";
-import { chatUrl, orderMessage, reviewRequestMessage } from "@/lib/share";
+import { chatUrl, orderMessage, reviewReminderMessage, reviewRequestMessage } from "@/lib/share";
+import { dataClient } from "@/lib/data";
+import { Stars, type ReviewRow } from "./ReviewStats";
 
 type Mode = "share" | "chat";
 
@@ -27,6 +29,7 @@ export function SendOnWhatsApp({
   chatHint,
   shareHint,
   business = false,
+  compact = false,
 }: {
   order: Parameters<typeof receiptFromOrder>[0];
   phone: string; // "" = WhatsApp asks which chat or group
@@ -37,6 +40,8 @@ export function SendOnWhatsApp({
   shareHint: string;
   // The team's WhatsApp Business: skip the share sheet (it asks which WhatsApp) and open the chat directly.
   business?: boolean;
+  // A small button without the explanation line (the order screen's quick actions).
+  compact?: boolean;
 }) {
   const toast = useToast();
   const [mode, setMode] = useState<Mode>("chat");
@@ -89,69 +94,176 @@ export function SendOnWhatsApp({
   }
 
   return (
-    <div className="send-order">
+    <div className={compact ? "send-order send-order--compact" : "send-order"}>
       <a
-        className={primary ? "btn btn--full" : "btn btn--quiet btn--full"}
+        className={compact ? "btn btn--quiet btn--small" : primary ? "btn btn--full" : "btn btn--quiet btn--full"}
         href={chat}
         target="_blank"
         rel="noopener noreferrer"
         onClick={onClick}
+        title={mode === "share" ? shareHint : chatHint}
       >
         {label}
       </a>
-      <small>{mode === "share" ? shareHint : chatHint}</small>
+      {!compact && <small>{mode === "share" ? shareHint : chatHint}</small>}
     </div>
   );
 }
 
 // To the customer: order summary, delivery, tracking link.
-export function SendOrderToCustomer({ order: o }: { order: Order }) {
+export function SendOrderToCustomer({ order: o, compact = false }: { order: Order; compact?: boolean }) {
   return (
     <SendOnWhatsApp
       order={o}
       phone={o.phone}
       text={orderMessage(o)}
       business
-      label="إرسال الطلب للعميل على واتساب"
+      compact={compact}
+      label={compact ? "إرسال الطلب" : "إرسال الطلب للعميل على واتساب"}
       shareHint="اختر واتساب ثم محادثة العميل: تُرسل صورة الملخص ومعها النص."
       chatHint="تُفتح محادثة العميل والنص جاهز، وتُنسخ صورة الملخص: الصقها في المحادثة."
     />
   );
 }
 
-// Asks the customer for their review (a link to /review, with the transparency promise).
-// Always shown, so the team knows where it is: the review itself opens once the order is delivered.
-export function SendReviewRequest({ order: o }: { order: Order }) {
+// «التقييم» on the order screen: whether the customer was asked, how many times, and the
+// review itself once it arrives. Asking opens WhatsApp with the review link and records it.
+export function ReviewPanel({ order: o, me }: { order: Order; me: string }) {
+  const [review, setReview] = useState<ReviewRow | null>(null);
+  useEffect(() => {
+    if (!o.reviewed) return;
+    let alive = true;
+    dataClient.models.Review.get({ orderNumber: o.orderNumber })
+      .then(({ data }) => alive && setReview((data as unknown as ReviewRow) ?? null))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [o.reviewed, o.orderNumber]);
+
   if (o.status === "CANCELLED") return null;
   if (o.reviewed) {
     return (
-      <div className="send-order">
-        <p className="delivery__ok">✓ العميل قيّم هذا الطلب</p>
-      </div>
+      <section className="order-detail__block review-panel is-done">
+        <h2>تقييم العميل</h2>
+        {review ? (
+          <>
+            <div className="review-panel__stars">
+              <Stars n={review.taste} label="الطعم" />
+              <Stars n={review.delivery} label="التوصيل" />
+            </div>
+            {review.comment ? <blockquote>{review.comment}</blockquote> : <p className="hint">بدون تعليق.</p>}
+          </>
+        ) : (
+          <p className="delivery__ok">✓ العميل قيّم هذا الطلب</p>
+        )}
+      </section>
     );
   }
-  const delivered = o.status === "DELIVERED";
+  if (o.status !== "DELIVERED") return null;
   return (
-    <div className="send-order">
-      {delivered ? (
-        <a
-          className="btn btn--quiet btn--full"
-          href={chatUrl(o.phone, reviewRequestMessage(o, window.location.origin))}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          اطلب من العميل تقييم الطلب (واتساب)
-        </a>
-      ) : (
-        <button type="button" className="btn btn--quiet btn--full" disabled>
-          اطلب من العميل تقييم الطلب (واتساب)
+    <section className="order-detail__block review-panel">
+      <h2>التقييم</h2>
+      <ReviewRequestButton order={o} me={me} />
+    </section>
+  );
+}
+
+// Delivered and nobody asked for the review yet: a prompt with the same «ask» action.
+// «لاحقاً» hides it for this order until the app is reopened.
+const promptDismissed = new Set<string>();
+export function ReviewPrompt({ order: o, me, force = false }: { order: Order; me: string; force?: boolean }) {
+  const due = o.status === "DELIVERED" && !o.reviewed && !o.reviewRequestedAt;
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (due && (force || !promptDismissed.has(o.id))) setOpen(true);
+    if (!due) setOpen(false);
+  }, [due, force, o.id]);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+  function close() {
+    promptDismissed.add(o.id);
+    setOpen(false);
+  }
+  if (!open) return null;
+  return (
+    <div className="ask-dialog" role="presentation" onClick={close}>
+      <div className="ask-dialog__panel" role="dialog" aria-modal="true" aria-labelledby="ask-title" onClick={(e) => e.stopPropagation()}>
+        <h2 id="ask-title">اطلب تقييم العميل</h2>
+        <p>
+          الطلب <strong dir="ltr">{o.orderNumber}</strong> وصل إلى {o.name.trim().split(/\s+/)[0]}، وما انطلب منه التقييم بعد. أرسلوا له رابط
+          التقييم على واتساب الآن.
+        </p>
+        <ReviewRequestButton order={o} me={me} compact onSent={close} />
+        <button type="button" className="btn btn--quiet btn--full" onClick={close}>
+          لاحقاً
         </button>
+      </div>
+    </div>
+  );
+}
+
+const ago = (iso: string) => {
+  const m = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (m < 60) return `قبل ${m} دقيقة`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `قبل ${h} ساعة`;
+  const d = Math.round(h / 24);
+  return d === 1 ? "أمس" : `قبل ${d} أيام`;
+};
+
+// The ask (first time) or a gentle reminder; recorded on the order so the team sees it.
+export function ReviewRequestButton({
+  order: o,
+  me,
+  compact = false,
+  onSent,
+}: {
+  order: Order;
+  me: string;
+  compact?: boolean;
+  onSent?: () => void;
+}) {
+  const toast = useToast();
+  const asked = Boolean(o.reviewRequestedAt);
+  const text = asked ? reviewReminderMessage(o, window.location.origin) : reviewRequestMessage(o, window.location.origin);
+  function record() {
+    onSent?.();
+    void dataClient.models.Order.update({
+      id: o.id,
+      reviewRequestedAt: new Date().toISOString(),
+      reviewRequests: (o.reviewRequests ?? 0) + 1,
+      editedBy: me,
+      editedAt: new Date().toISOString(),
+    }).then(({ errors }) => {
+      if (errors?.length) {
+        console.error("recording the review request failed", errors);
+        toast({ id: "review", tone: "attention", message: "فُتح واتساب، لكن ما انحفظ أنه انطلب التقييم." });
+      }
+    });
+  }
+  return (
+    <div className={compact ? "review-ask review-ask--compact" : "review-ask"}>
+      {!compact && (
+        <p className={asked ? "review-ask__state is-asked" : "review-ask__state"}>
+          {asked
+            ? `طُلب التقييم ${ago(o.reviewRequestedAt!)}${(o.reviewRequests ?? 1) > 1 ? ` (${o.reviewRequests} مرات)` : ""} · لم يقيّم بعد`
+            : "لم يُطلب التقييم بعد"}
+        </p>
       )}
-      <small>
-        {delivered
-          ? "تُفتح محادثة العميل ومعها رابط التقييم. التقييم اختياري، وننشره كما هو."
-          : "يُفعَّل الزر بعد تسليم الطلب، لأن التقييم يفتح عند التسليم."}
-      </small>
+      <a
+        className={asked ? "btn btn--quiet btn--full" : "btn btn--full"}
+        href={chatUrl(o.phone, text)}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={record}
+      >
+        {asked ? "تذكير العميل بالتقييم" : "اطلب التقييم على واتساب"}
+      </a>
     </div>
   );
 }

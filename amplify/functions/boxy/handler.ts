@@ -34,7 +34,7 @@ const SIZE = "S"; // «صغير» in the Boxy form
 const FALLBACK_EMAIL = "orders@elue-iq.com"; // Boxy asks for an email; customers don't give one
 
 type Order = Schema["Order"]["type"];
-type Reply = { status?: string; code?: number; message?: string; object?: unknown };
+type Reply = { status?: string; code?: number; message?: string; object?: unknown; errors?: unknown };
 
 // ---- Boxy API -------------------------------------------------------------------
 
@@ -88,12 +88,12 @@ async function regions(province: string): Promise<BoxyRegion[]> {
 }
 
 // The order in Boxy's create / edit form.
-function orderBody(o: Order, regionName: string): Record<string, unknown> {
+function orderBody(o: Order, regionName: string, cooled = true): Record<string, unknown> {
   const code = BOXY_PROVINCE[o.province ?? ""];
   if (!code) throw new Error("boxy_province:لا توجد محافظة مطابقة لدى بوكسي.");
   return {
     is_fragile: true, // «قابل للكسر»
-    temperature_control: true, // «نقل مبرد» (field name as Boxy returns it in order webhooks)
+    temperature_control: cooled, // «نقل مبرد» (field name as Boxy returns it in order webhooks)
     ready_to_pick_up: false,
     shipment_fee_type: "BY_MERCHANT",
     payment_type: "COLLECT_ON_DELIVERY",
@@ -113,6 +113,27 @@ function orderBody(o: Order, regionName: string): Record<string, unknown> {
       province_code: code,
     },
   };
+}
+
+// ---- Cooled delivery fallback ----------------------------------------------------
+// Boxy can't deliver cooled orders to some areas (e.g. «لا تستطيع Boxy توصيل الطلبات المبردة إلى
+// simawa حاليًا»), and the list can change. So: send cooled; if Boxy refuses for that reason, send
+// the same order without cooling and mark it (boxyCooled = false) so the team warns the customer.
+// Areas that refused are remembered while this function stays warm, to skip the first try.
+const noCold = new Set<string>();
+const coldKey = (o: Order, region: string) => `${BOXY_PROVINCE[o.province ?? ""] ?? ""}|${region.trim().toLowerCase()}`;
+const coldRefused = (r: { reply: Reply }) => /مبرد|temperature|cool|refrigerat|chill/i.test(String(r.reply.message ?? "") + JSON.stringify(r.reply.errors ?? ""));
+
+async function sendOrder(path: string, method: "POST" | "PATCH", o: Order, regionName: string) {
+  const key = coldKey(o, regionName);
+  if (!noCold.has(key)) {
+    const r = await call(path, { method, body: JSON.stringify(orderBody(o, regionName, true)) });
+    if (r.ok || !coldRefused(r)) return { r, cooled: true };
+    console.log("boxy refused cooled delivery, sending without cooling", o.orderNumber, regionName, r.reply.message);
+    noCold.add(key);
+  }
+  const r = await call(path, { method, body: JSON.stringify(orderBody(o, regionName, false)) });
+  return { r, cooled: false };
 }
 
 // ---- Orders ---------------------------------------------------------------------
@@ -250,8 +271,11 @@ async function createAtBoxy(o: Order, regionName: string, regionId?: number | nu
   let code = `DEV-BXO-${Date.now()}`;
   let fee: number | null = null;
   let track: string | null = null;
+  let cooled = true;
   if (PRODUCTION) {
-    const r = await call("/orders/request", { method: "POST", body: JSON.stringify(orderBody(o, regionName)) });
+    const sent = await sendOrder("/orders/request", "POST", o, regionName);
+    const r = sent.r;
+    cooled = sent.cooled;
     if (!r.ok) fail(r, "send");
     const order = ((r.reply.object as { order?: BoxyOrder } | undefined)?.order ?? {}) as BoxyOrder;
     if (!order.uid) fail(r, "send");
@@ -272,6 +296,7 @@ async function createAtBoxy(o: Order, regionName: string, regionId?: number | nu
     boxyNote: null,
     boxyRegionId: regionId ?? null,
     boxyRegionName: regionName,
+    boxyCooled: cooled,
     boxySentAt: now,
     boxyUpdatedAt: now,
     trackStatus: boxyTrack("new"),
@@ -279,7 +304,7 @@ async function createAtBoxy(o: Order, regionName: string, regionId?: number | nu
     trackEta: null,
     ...(o.status === "NEW" ? { status: "CONFIRMED" as const } : {}),
   });
-  return { ok: true, code, link: track, fee, collect: boxyCollect(o as Parameters<typeof boxyCollect>[0]) };
+  return { ok: true, code, link: track, fee, cooled, collect: boxyCollect(o as Parameters<typeof boxyCollect>[0]) };
 }
 
 // ---- Admin actions --------------------------------------------------------------
@@ -328,6 +353,7 @@ async function adminAction(args: {
       if (!o.boxyUid) throw new Error("not_sent");
       const name = String(args.regionName ?? o.boxyRegionName ?? "").trim();
       if (!name) throw new Error("missing_region");
+      let cooled: boolean | null = null;
       if (PRODUCTION) {
         const b = await fetchBoxy(o.boxyUid);
         if (b === "gone" || cancelledAtBoxy(b)) {
@@ -335,12 +361,14 @@ async function adminAction(args: {
           o = await getOrder(o.id);
           return { ...(await createAtBoxy(o, name, args.regionId)), recreated: true };
         }
-        const r = await call(`/orders/${encodeURIComponent(o.boxyUid)}`, { method: "PATCH", body: JSON.stringify(orderBody(o, name)) });
-        if (!r.ok) fail(r, "update");
+        const sent = await sendOrder(`/orders/${encodeURIComponent(o.boxyUid)}`, "PATCH", o, name);
+        if (!sent.r.ok) fail(sent.r, "update");
+        cooled = sent.cooled;
       }
       await client.models.Order.update({
         id: o.id,
         boxyRegionName: name,
+        ...(cooled === null ? {} : { boxyCooled: cooled }),
         ...(args.regionId ? { boxyRegionId: args.regionId } : {}),
         boxyUpdatedAt: new Date().toISOString(),
       });

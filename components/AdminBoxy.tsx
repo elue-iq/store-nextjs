@@ -173,6 +173,13 @@ export function AdminBoxy({ order: o }: { order: Order }) {
     setConfirmCancel(false);
     if (!error && action === "update") setEditing(false);
     if (error) return toast({ id: "boxy", tone: "attention", message: error });
+    if (data?.cooled === false) {
+      return toast({
+        id: "boxy",
+        tone: "attention",
+        message: "أُرسل بدون تبريد: بوكسي ما يوصّل المبرد لهذه المنطقة حالياً. نبّهوا العميل يحط الطلب بالبراد أول ما يستلمه.",
+      });
+    }
     toast({ id: "boxy", message: data?.recreated ? "كان الطلب ملغى في بوكسي، فأُرسل إليهم من جديد." : ok });
   }
 
@@ -289,6 +296,11 @@ export function AdminBoxy({ order: o }: { order: Order }) {
           </div>
         )}
       </dl>
+      {o.boxyCooled === false && (
+        <p className="panel-note">
+          ❄️ أُرسل بدون تبريد: بوكسي ما يوصّل المبرد لهذه المنطقة حالياً. نبّهوا العميل يحط الطلب بالبراد أول ما يستلمه.
+        </p>
+      )}
       {o.boxyNote && <p className="panel-note">ملاحظة بوكسي: {o.boxyNote}</p>}
       {boxyEventList(o.boxyEvents).length > 0 && (
         <details className="boxy-events">

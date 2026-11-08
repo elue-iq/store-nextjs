@@ -99,6 +99,8 @@ const schema = a
         boxyNote: a.string().authorization((allow) => [allow.group("ADMINS")]),
         boxyRegionId: a.integer().authorization((allow) => [allow.group("ADMINS")]),
         boxyRegionName: a.string().authorization((allow) => [allow.group("ADMINS")]),
+        // false = Boxy refused cooled delivery to this area, so it went without cooling. Team only.
+        boxyCooled: a.boolean().authorization((allow) => [allow.group("ADMINS")]),
         boxySentAt: a.datetime().authorization((allow) => [allow.group("ADMINS")]),
         boxyUpdatedAt: a.datetime().authorization((allow) => [allow.group("ADMINS")]),
         boxyEvents: a.json().authorization((allow) => [allow.group("ADMINS")]), // webhook notifications for this order
@@ -117,6 +119,23 @@ const schema = a
         // The customer reviewed this delivered order (set by submitReview). Readable by the customer.
         reviewed: a.boolean(),
         reviewedAt: a.datetime(),
+        // When the team last asked the customer for a review on WhatsApp, and how many times. Team only.
+        reviewRequestedAt: a.datetime().authorization((allow) => [allow.group("ADMINS")]),
+        reviewRequests: a.integer().authorization((allow) => [allow.group("ADMINS")]),
+        // Coupons and credit (see lib/coupons.ts). total = subtotal - discount - creditUsed.
+        subtotal: a.integer(), // jars before any discount (null on orders without one)
+        discount: a.integer(), // the coupon's discount on the jars
+        couponCode: a.string(),
+        couponLabel: a.string(), // what the customer sees, e.g. «خصم 10%»
+        coupon: a.json().authorization((allow) => [allow.group("ADMINS")]), // the coupon's rule when it was used
+        cashback: a.integer(), // credit the customer earns once this order is delivered
+        creditUsed: a.integer(), // credit from earlier cashback spent on this order
+        // Affiliate campaign that brought the order (link or its coupon), and the sponsor's commission. Team only.
+        campaignId: a.string().authorization((allow) => [allow.group("ADMINS")]),
+        campaignSlug: a.string().authorization((allow) => [allow.group("ADMINS")]),
+        sponsorId: a.string().authorization((allow) => [allow.group("ADMINS")]),
+        commission: a.integer().authorization((allow) => [allow.group("ADMINS")]),
+        commissionPaidAt: a.string().authorization((allow) => [allow.group("ADMINS")]),
         // The customer accepted the Baghdad delivery window (6–10 pm, else next day).
         slotAccepted: a.boolean().authorization((allow) => [allow.group("ADMINS")]),
         // Baghdad delivery period the customer picked: open | eve | night (see lib/delivery-slot.ts),
@@ -167,6 +186,55 @@ const schema = a
         // The courier's own WhatsApp number (9647XXXXXXXXX): they log in on /courier with it,
         // see only the orders given to them, and mark them in delivery / delivered.
         phone: a.string(),
+        active: a.boolean(),
+        note: a.string(),
+      })
+      .authorization((allow) => [allow.group("ADMINS")]),
+
+    // A discount code (see lib/coupons.ts for the rules). The code is the key. Team only:
+    // customers check a code through the «quote» query, which never lists codes.
+    Coupon: a
+      .model({
+        code: a.string().required(), // UPPERCASE letters/digits
+        title: a.string(), // internal note: what it is for
+        kind: a.string().required(), // PERCENT | FIXED | FREE_DELIVERY | FREE_JARS | CASHBACK
+        value: a.integer(), // PERCENT/CASHBACK: percent; FIXED: IQD
+        maxDiscount: a.integer(), // PERCENT/CASHBACK: cap in IQD
+        buyQty: a.integer(), // FREE_JARS: buy this many…
+        freeQty: a.integer(), // …get this many free
+        minJars: a.integer(),
+        startsAt: a.datetime(),
+        endsAt: a.datetime(),
+        maxUses: a.integer(), // all customers together (orders placed)
+        perCustomer: a.integer(), // per customer (default 1)
+        firstOrderOnly: a.boolean(),
+        active: a.boolean(),
+        campaignId: a.string(), // an affiliate campaign's code: orders using it count for that campaign
+      })
+      .identifier(["code"])
+      .authorization((allow) => [allow.group("ADMINS")]),
+
+    // An affiliate (influencer, partner…) who promotes ÉLUE for a commission. Team only.
+    Sponsor: a
+      .model({
+        name: a.string().required(),
+        phone: a.string(), // 9647XXXXXXXXX: their own orders earn no commission
+        instagram: a.string(),
+        note: a.string(),
+        active: a.boolean(),
+      })
+      .authorization((allow) => [allow.group("ADMINS")]),
+
+    // One promotion by a sponsor: its own link (?ref=slug), dates, coupon and commission per jar. Team only.
+    Campaign: a
+      .model({
+        sponsorId: a.string().required(),
+        name: a.string().required(),
+        slug: a.string().required(), // the link code: elue-iq.com/?ref=slug
+        startsAt: a.datetime(),
+        endsAt: a.datetime(),
+        couponCode: a.string(), // applied automatically to visitors from the link
+        commissionPerJar: a.integer(), // IQD per paid jar of a delivered order
         active: a.boolean(),
         note: a.string(),
       })
@@ -253,6 +321,9 @@ const schema = a
         deliveryDate: a.string(),
         // The customer pays now with Qi Card instead of cash to the driver.
         payOnline: a.boolean(),
+        // Discount code, and the affiliate campaign the customer came from (?ref=…).
+        couponCode: a.string(),
+        ref: a.string(),
       })
       .returns(a.ref("PlaceOrderResult"))
       .authorization((allow) => [allow.authenticated()])
@@ -268,6 +339,33 @@ const schema = a
       .handler(a.handler.function(placeOrder)),
 
     // The customer's review of a delivered order (checked on the server: their own, delivered, not reviewed yet).
+    // Prices a cart on the server: coupon, credit, delivery. Used by the checkout as the
+    // customer types a code. Signed-in customers also get their credit and personal limits.
+    quote: a
+      .query()
+      // phone: the team pricing an order for this customer (ignored for anyone else).
+      .arguments({ items: a.json().required(), couponCode: a.string(), ref: a.string(), province: a.string(), phone: a.string() })
+      .returns(a.json())
+      .authorization((allow) => [allow.publicApiKey(), allow.authenticated()])
+      .handler(a.handler.function(placeOrder)),
+
+    // A visitor arrived from an affiliate link (?ref=slug): counts the visit and returns the
+    // campaign's coupon so the checkout can apply it. Never returns commissions or sponsors.
+    campaignVisit: a
+      .mutation()
+      .arguments({ ref: a.string().required() })
+      .returns(a.json())
+      .authorization((allow) => [allow.publicApiKey(), allow.authenticated()])
+      .handler(a.handler.function(placeOrder)),
+
+    // Admin: visits per campaign link.
+    campaignStats: a
+      .query()
+      .arguments({ slugs: a.string().array().required() })
+      .returns(a.json())
+      .authorization((allow) => [allow.group("ADMINS")])
+      .handler(a.handler.function(placeOrder)),
+
     submitReview: a
       .mutation()
       .arguments({

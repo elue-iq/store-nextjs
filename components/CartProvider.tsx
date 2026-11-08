@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { MAX_QTY_PER_LINE, type CartItem } from "@/lib/order-text";
+import { dataClient } from "@/lib/data";
 
 // The cart lives in the customer's browser (localStorage). It survives page
 // reloads and failed orders, and is cleared only after an order goes through.
@@ -9,6 +10,12 @@ import { MAX_QTY_PER_LINE, type CartItem } from "@/lib/order-text";
 const CART_KEY = "elue-cart-v1";
 const SOURCE_KEY = "elue-source-v1";
 const SOURCE_PARAMS = ["ref", "utm_source", "utm_medium", "utm_campaign"];
+// Affiliate link (?ref=slug): remembered for 30 days, the latest link wins. The campaign's
+// coupon (if any) is offered at checkout.
+const REF_KEY = "elue-ref-v1";
+const COUPON_KEY = "elue-coupon-v1";
+const REF_DAYS = 30;
+type RefState = { ref: string; at: number; coupon?: { code: string; label: string } | null };
 
 type CartState = Record<string, number>;
 
@@ -21,6 +28,11 @@ type CartContextValue = {
   remove: (slug: string) => void;
   clear: () => void;
   source: string;
+  // Affiliate campaign (link) and the coupon code the customer typed.
+  ref: string;
+  refCoupon: { code: string; label: string } | null;
+  couponCode: string;
+  setCouponCode: (code: string) => void;
 };
 
 const CartContext = createContext<CartContextValue | null>(null);
@@ -46,6 +58,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [cart, setCart] = useState<CartState>({});
   const [source, setSource] = useState("");
   const [ready, setReady] = useState(false);
+  const [refState, setRefState] = useState<RefState | null>(null);
+  const [couponCode, setCoupon] = useState("");
 
   useEffect(() => {
     setCart(read<CartState>(CART_KEY, {}));
@@ -60,7 +74,39 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     } else {
       setSource(read<string>(SOURCE_KEY, ""));
     }
+
+    setCoupon(read<string>(COUPON_KEY, ""));
+    const saved = read<RefState | null>(REF_KEY, null);
+    const fresh = saved && Date.now() - saved.at < REF_DAYS * 86_400_000 ? saved : null;
+    const linkRef = (params.get("ref") ?? "").trim().toLowerCase().slice(0, 40);
+    if (linkRef) {
+      const next: RefState = { ref: linkRef, at: Date.now(), coupon: fresh?.ref === linkRef ? fresh.coupon : null };
+      write(REF_KEY, next);
+      setRefState(next);
+      // Count the visit and learn the campaign's coupon (once per visit to the link).
+      void dataClient.mutations
+        .campaignVisit({ ref: linkRef }, { authMode: "apiKey" })
+        .then(({ data }) => {
+          const r = typeof data === "string" ? (JSON.parse(data) as { ok?: boolean; coupon?: RefState["coupon"] }) : null;
+          if (!r?.ok) {
+            write(REF_KEY, null);
+            setRefState(null);
+            return;
+          }
+          const withCoupon = { ...next, coupon: r.coupon ?? null };
+          write(REF_KEY, withCoupon);
+          setRefState(withCoupon);
+        })
+        .catch((err) => console.error("campaign visit failed", err));
+    } else {
+      setRefState(fresh);
+    }
     setReady(true);
+  }, []);
+
+  const setCouponCode = useCallback((code: string) => {
+    write(COUPON_KEY, code);
+    setCoupon(code);
   }, []);
 
   const update = useCallback((fn: (prev: CartState) => CartState) => {
@@ -78,6 +124,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       count: items.reduce((n, i) => n + i.qty, 0),
       ready,
       source,
+      ref: refState?.ref ?? "",
+      refCoupon: refState?.coupon ?? null,
+      couponCode,
+      setCouponCode,
       add: (slug, qty = 1) =>
         update((prev) => ({ ...prev, [slug]: Math.min(MAX_QTY_PER_LINE, (prev[slug] ?? 0) + qty) })),
       setQty: (slug, qty) =>
@@ -95,7 +145,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         }),
       clear: () => update(() => ({})),
     };
-  }, [cart, ready, source, update]);
+  }, [cart, ready, source, update, refState, couponCode, setCouponCode]);
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }

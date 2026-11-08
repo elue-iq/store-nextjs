@@ -147,6 +147,9 @@ export function buildSubmit(cfg: EatixConfig, o: EatixOrder) {
   const f = AMOUNT_FACTOR;
   const delivery = o.freeDelivery ? 0 : o.deliveryFee;
   const resultAmount = (o.total + delivery) * f;
+  // A coupon or credit: the lines keep their price and the order carries the discount.
+  const goods = o.items.reduce((n, i) => n + i.price * i.qty, 0);
+  const discount = Math.max(0, goods - o.total) * f;
   const paid = Boolean(o.paid);
   const submit = {
     shopCode: cfg.shopCode,
@@ -168,8 +171,8 @@ export function buildSubmit(cfg: EatixConfig, o: EatixOrder) {
       endTime: 0,
       endDate: "",
       guestNum: 1,
-      originalAmount: resultAmount,
-      discountAmount: 0,
+      originalAmount: resultAmount + discount,
+      discountAmount: discount,
       resultAmount,
       receiveAmount: paid ? resultAmount : 0,
       outFee: delivery * f,

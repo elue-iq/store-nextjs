@@ -10,15 +10,18 @@ import { usePullToRefresh } from "./usePullToRefresh";
 import { ORDERS_REFRESH_EVENT } from "@/lib/ordersRefresh";
 import { AdminOrderForm } from "./AdminOrderForm";
 import { AdminEatix } from "./AdminEatix";
-import { SendOrderToCustomer, SendReviewRequest } from "./SendOrderToCustomer";
+import { ReviewPanel, ReviewPrompt, SendOrderToCustomer } from "./SendOrderToCustomer";
+import { collectAmount } from "@/lib/dispatch";
 import { AdminDelivery, callDispatch } from "./AdminDelivery";
 import { AdminCouriers } from "./AdminCouriers";
 import { AdminSettle } from "./AdminSettle";
 import { AdminBoxyFeed } from "./AdminBoxy";
 import { AdminPrep } from "./AdminPrep";
 import { AdminReviews } from "./AdminReviews";
+import { AdminCoupons } from "./AdminCoupons";
+import { AdminAffiliates } from "./AdminAffiliates";
 import { AdminDashboard } from "./AdminDashboard";
-import { OrderRow, baghdadDay, shortTime } from "./AdminOrderRow";
+import { OrderRow, REVIEW_STATE_LABELS, baghdadDay, reviewState, shortTime, type ReviewState } from "./AdminOrderRow";
 import { buildCustomers, CustomerDetail, CustomerList, CustomersSummary } from "./AdminCustomers";
 import { jarsLabel } from "./AddToCart";
 import { DeliveryTracking, OrderItemsList, StatusTrack } from "./OrderBits";
@@ -26,7 +29,7 @@ import { formatPoints, pointsFor } from "@/lib/loyalty";
 import { dataClient, newestFirst, STATUS_LABELS, STATUS_ORDER, type Order, type OrderStatus } from "@/lib/data";
 import { formatIraqiMobile, toLatinDigits } from "@/lib/phone";
 import { slotText } from "@/lib/delivery-slot";
-import { formatIQD, payKeyOf, PAY_KEY_LABELS, payMethodText, type PayKey } from "@/lib/site";
+import { formatIQD, minusIQD, payKeyOf, PAY_KEY_LABELS, payMethodText, type PayKey } from "@/lib/site";
 import { fullAddress } from "@/lib/iraq";
 import { products } from "@/lib/products";
 
@@ -47,7 +50,9 @@ function orderFromUrl(): string | null {
 // Which section the list screen shows (?view=dashboard etc.), so a refresh stays there.
 function viewFromUrl(): View {
   const v = new URLSearchParams(window.location.search).get("view");
-  return v === "dashboard" || v === "customers" || v === "products" || v === "delivery" || v === "reviews" || v === "prep" ? v : "orders";
+  return v === "dashboard" || v === "customers" || v === "products" || v === "delivery" || v === "reviews" || v === "prep" || v === "coupons" || v === "affiliates"
+    ? v
+    : "orders";
 }
 
 function screenUrl(id: string): string {
@@ -88,6 +93,9 @@ export function AdminView() {
   const [province, setProvince] = useState("");
   const [pay, setPay] = useState<"" | PayKey | "freeDelivery">("");
   const [courier, setCourier] = useState(""); // "" = all, "none", "MODON", or a local courier's id
+  const [review, setReview] = useState<"" | ReviewState>(""); // delivered orders by review state
+  const searchRef = useRef<HTMLInputElement>(null);
+  const reviewDue = useMemo(() => (allOrders ?? []).filter((o) => reviewState(o) === "notAsked").length, [allOrders]);
   const [selected, setSelected] = useState<string | null>(null);
   const [view, setView] = useState<View>("orders");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -268,6 +276,7 @@ export function AdminView() {
       if (filter !== "ALL" && o.status !== filter) return false;
       if (pay === "freeDelivery" ? !o.freeDelivery || o.deliveryPaid : pay && payKeyOf(o) !== pay) return false;
       if (province && o.province !== province) return false;
+      if (review && reviewState(o) !== review) return false;
       if (when) {
         const day = baghdadDay(o.createdAt);
         const ago = (n: number) => baghdadDay(new Date(Date.now() - n * 86_400_000).toISOString());
@@ -300,7 +309,7 @@ export function AdminView() {
         (qDigits.length >= 3 && o.phone.includes(qDigits))
       );
     },
-    [filter, pay, province, when, courier, today],
+    [filter, pay, province, when, courier, review, today],
   );
 
   const { shown, flavorCounts, jarsOfPicked } = useMemo(() => {
@@ -320,9 +329,10 @@ export function AdminView() {
     () => [...new Set((orders ?? []).map((o) => o.province).filter((p): p is string => Boolean(p)))].sort((a, b) => a.localeCompare(b, "ar")),
     [orders],
   );
-  const extraFilters = [flavors.length > 0, when !== "", province !== "", pay !== "", courier !== "", filter !== "ALL", query.trim() !== ""].filter(Boolean).length;
+  const extraFilters = [flavors.length > 0, when !== "", province !== "", pay !== "", courier !== "", review !== "", filter !== "ALL", query.trim() !== ""].filter(Boolean).length;
   const clearFilters = () => {
     setFilter("ALL");
+    setReview("");
     setFlavors([]);
     setWhen("");
     setProvince("");
@@ -560,12 +570,34 @@ export function AdminView() {
     );
   }
 
+  if (view === "coupons") {
+    return (
+      <div className="admin-screen">
+        {pullEl}
+        {listHead("الكوبونات", "أكواد الخصم وأداء كل كود")}
+        <AdminCoupons orders={orders} onOpenOrder={openOrder} />
+        {drawer}
+      </div>
+    );
+  }
+
+  if (view === "affiliates") {
+    return (
+      <div className="admin-screen">
+        {pullEl}
+        {listHead("الشركاء والعمولات", "روابط الحملات، الطلبات، والعمولة لكل علبة")}
+        <AdminAffiliates orders={orders} onOpenOrder={openOrder} />
+        {drawer}
+      </div>
+    );
+  }
+
   if (view === "reviews") {
     return (
       <div className="admin-screen">
         {pullEl}
         {listHead("التقييمات", "تقييم الطعم والتوصيل من الزبائن")}
-        <AdminReviews onOpenOrder={openOrder} />
+        <AdminReviews onOpenOrder={openOrder} orders={orders} me={auth.phone} />
         {drawer}
       </div>
     );
@@ -635,14 +667,41 @@ export function AdminView() {
         <button type="button" className="btn btn--full admin-new" onClick={() => openOrder("new")}>
           + طلب جديد لعميل
         </button>
-        <input
-          className="admin-search"
-          type="search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="ابحث برقم الطلب أو الاسم أو الهاتف أو رقم الكاشير أو مدن أو رقم العملية"
-          aria-label="بحث"
-        />
+        <form
+          className="admin-searchbox"
+          role="search"
+          onSubmit={(e) => {
+            e.preventDefault();
+            searchRef.current?.blur(); // closes the phone keyboard
+          }}
+        >
+          <input
+            ref={searchRef}
+            className="admin-search"
+            type="search"
+            inputMode="search"
+            enterKeyHint="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="ابحث برقم الطلب أو الاسم أو الهاتف"
+            aria-label="بحث برقم الطلب أو الاسم أو الهاتف أو رقم الكاشير أو مدن أو بوكسي أو رقم العملية"
+          />
+          <span className="admin-searchbox__btns">
+            {query && (
+              <button type="button" aria-label="مسح البحث" onClick={() => setQuery("")}>
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M6 6l12 12M18 6L6 18" />
+                </svg>
+              </button>
+            )}
+            <button type="submit" aria-label="بحث">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="11" cy="11" r="6.5" />
+                <path d="M16 16l4.5 4.5" />
+              </svg>
+            </button>
+          </span>
+        </form>
         <div className="admin-filters admin-flavors" role="group" aria-label="فلترة حسب النكهة">
           <button type="button" aria-pressed={flavors.length === 0} onClick={() => setFlavors([])}>
             كل النكهات
@@ -705,6 +764,14 @@ export function AdminView() {
               ))}
               <option value="none">بلا شركة توصيل</option>
             </select>
+            <select className="admin-sort" value={review} onChange={(e) => setReview(e.target.value as typeof review)} aria-label="التقييم">
+              <option value="">كل التقييمات</option>
+              {(["notAsked", "waiting", "reviewed"] as ReviewState[]).map((r) => (
+                <option key={r} value={r}>
+                  {REVIEW_STATE_LABELS[r]} ({(orders ?? []).filter((o) => reviewState(o) === r).length})
+                </option>
+              ))}
+            </select>
             <select className="admin-sort" value={sort} onChange={(e) => setSort(e.target.value as Sort)} aria-label="الترتيب">
               <option value="newest">الأحدث أولًا</option>
               <option value="oldest">الأقدم أولًا</option>
@@ -742,6 +809,13 @@ export function AdminView() {
         </p>
       )}
 
+      {orders && review !== "notAsked" && reviewDue > 0 && (
+        <button type="button" className="review-due" onClick={() => (setReview("notAsked"), setFilter("ALL"))}>
+          <span>{reviewDue === 1 ? "طلب مُسلّم ما انطلب تقييمه" : `${reviewDue} طلبات مُسلّمة ما انطلب تقييمها`}</span>
+          <strong>عرض ←</strong>
+        </button>
+      )}
+
       {orders && shown.length === 0 && <p className="hint">لا توجد طلبات هنا.</p>}
 
       <ul className="order-rows">
@@ -753,6 +827,39 @@ export function AdminView() {
       </ul>
       {drawer}
     </div>
+  );
+}
+
+// The next step for an order, as one button at the top of its screen.
+const NEXT_STEP: Partial<Record<OrderStatus, { to: OrderStatus; label: string }>> = {
+  NEW: { to: "CONFIRMED", label: "تأكيد الطلب" },
+  CONFIRMED: { to: "OUT_FOR_DELIVERY", label: "خرج للتوصيل" },
+  OUT_FOR_DELIVERY: { to: "DELIVERED", label: "تم التسليم" },
+};
+
+// ⋯ menu: actions used now and then, out of the way.
+function MoreMenu({ children, label = "المزيد" }: { children: React.ReactNode; label?: string }) {
+  const ref = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    const close = (e: MouseEvent) => {
+      if (ref.current?.open && !ref.current.contains(e.target as Node)) ref.current.open = false;
+    };
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, []);
+  return (
+    <details className="more-menu" ref={ref}>
+      <summary aria-label={label}>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="5" cy="12" r="1.8" />
+          <circle cx="12" cy="12" r="1.8" />
+          <circle cx="19" cy="12" r="1.8" />
+        </svg>
+      </summary>
+      <div className="more-menu__list" role="menu" onClick={() => ref.current && (ref.current.open = false)}>
+        {children}
+      </div>
+    </details>
   );
 }
 
@@ -792,6 +899,8 @@ function OrderDetail({
     }
   }
   const [confirmCancel, setConfirmCancel] = useState(false);
+  // Just marked delivered here: ask for the review right away (even if dismissed before).
+  const [justDelivered, setJustDelivered] = useState(false);
   const local = formatIraqiMobile(o.phone);
 
   async function setStatus(status: OrderStatus) {
@@ -814,6 +923,7 @@ function OrderDetail({
       toast({ id: "admin", tone: "attention", message: `تعذّر حفظ حالة الطلب ${o.orderNumber}. حاول مجددًا.` });
     } else {
       toast({ id: "admin", message: `${o.orderNumber}: ${STATUS_LABELS[status]}` });
+      if (status === "DELIVERED") setJustDelivered(true);
       // A cancelled order that was already sent to a local courier: tell them not to deliver it.
       if (status === "CANCELLED" && o.courierKind === "LOCAL" && o.courierStatus === "SENT") {
         const { error } = await callDispatch({ action: "cancel_notice", orderId: o.id });
@@ -848,14 +958,215 @@ function OrderDetail({
     );
   }
 
+  const next = NEXT_STEP[o.status];
+  const collect = collectAmount(o);
+  const delivered = o.status === "DELIVERED";
+
   return (
     <article className={`order-detail order-detail--${o.status.toLowerCase()}`}>
-      <section className="order-detail__block">
+      {/* Status and the next step, first thing on the screen. */}
+      <section className="order-hero">
+        <div className="order-hero__top">
+          <label className={`status-select status-select--${o.status.toLowerCase()}`}>
+            <span className="visually-hidden">حالة الطلب</span>
+            <select
+              value={confirmCancel ? "CANCELLED" : o.status}
+              disabled={saving}
+              onChange={(e) => void setStatus(e.target.value as OrderStatus)}
+              aria-label={`حالة الطلب ${o.orderNumber}`}
+            >
+              {STATUS_ORDER.map((s) => (
+                <option key={s} value={s}>
+                  {STATUS_LABELS[s]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <span className="order-hero__time" dir="ltr">
+            {shortTime(o.createdAt, today)}
+          </span>
+          <MoreMenu>
+            <button type="button" role="menuitem" onClick={() => setEditing(true)}>
+              تعديل الطلب
+            </button>
+            <button type="button" role="menuitem" onClick={() => void saveSummary()}>
+              حفظ صورة الملخص
+            </button>
+            <a role="menuitem" href={`tel:+${o.phone}`}>
+              اتصال بالعميل
+            </a>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                void navigator.clipboard?.writeText(o.orderNumber);
+                toast({ id: "admin", message: `نُسخ ${o.orderNumber}.` });
+              }}
+            >
+              نسخ رقم الطلب
+            </button>
+            {o.status !== "CANCELLED" && (
+              <button type="button" role="menuitem" className="is-danger" onClick={() => setConfirmCancel(true)}>
+                إلغاء الطلب
+              </button>
+            )}
+          </MoreMenu>
+        </div>
         <StatusTrack status={o.status} />
-        <span className="order-detail__muted" dir="ltr">
-          {shortTime(o.createdAt, today)}
-        </span>
+        <p className="order-hero__money">
+          <span>{collect > 0 ? "يستلم المندوب" : "المبلغ"}</span>
+          <strong>{collect > 0 ? formatIQD(collect) : o.paid ? "مدفوع" : formatIQD(o.total)}</strong>
+          <small>{jarsLabel(o.jars)}</small>
+        </p>
+        {confirmCancel ? (
+          <div className="order-hero__confirm" role="alert">
+            <p>إلغاء الطلب {o.orderNumber}؟</p>
+            {o.modonQr && <p className="panel-note">الطلب مُرسل إلى مدن: احذفه من مدن أيضًا أو اتصل بهم إذا استلمه المندوب.</p>}
+            {o.boxyUid && <p className="panel-note">الطلب مُرسل إلى بوكسي: ألغِه من بوكسي أيضًا.</p>}
+            <div className="order-hero__actions">
+              <button type="button" className="btn btn--danger" disabled={saving} onClick={() => void setStatus("CANCELLED")}>
+                نعم، إلغاء الطلب
+              </button>
+              <button type="button" className="btn btn--quiet" onClick={() => setConfirmCancel(false)}>
+                تراجع
+              </button>
+            </div>
+          </div>
+        ) : next ? (
+          <div className="order-hero__actions">
+            <button type="button" className="btn btn--full" disabled={saving} onClick={() => void setStatus(next.to)}>
+              {saving ? "جارٍ الحفظ…" : next.label}
+            </button>
+          </div>
+        ) : null}
       </section>
+
+      <section className="order-detail__block order-customer">
+        <button type="button" className="customer-link" onClick={onOpenCustomer}>
+          <span>
+            <span className="order-detail__name">{o.name}</span>
+            <span className="order-detail__phone" dir="ltr">
+              {local}
+              {o.phone2 ? ` · ${formatIraqiMobile(o.phone2)}` : ""}
+            </span>
+          </span>
+          <small>كل تفاصيله وطلباته</small>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M15 5l-7 7 7 7" />
+          </svg>
+        </button>
+        <div className="quick-actions">
+          <a className="btn btn--quiet btn--small" href={`https://wa.me/${o.phone}`} target="_blank" rel="noopener noreferrer">
+            واتساب
+          </a>
+          <a className="btn btn--quiet btn--small" href={`tel:+${o.phone}`}>
+            اتصال
+          </a>
+          <SendOrderToCustomer order={o} compact />
+        </div>
+      </section>
+
+      <ReviewPanel order={o} me={me} />
+      <ReviewPrompt order={o} me={me} force={justDelivered} />
+
+      <section className="order-detail__block">
+        <h2>التوصيل</h2>
+        <p>{fullAddress(o)}</p>
+        {slotText(o) && (
+          <p className="order-detail__paid">
+            موعد التوصيل: <strong>{slotText(o)}</strong>
+          </p>
+        )}
+        {o.note && <p className="order-card__note">ملاحظة: {o.note}</p>}
+      </section>
+
+      <section className="order-detail__block">
+        <h2>الطلب</h2>
+        <OrderItemsList items={o.items} />
+        {(o.discount || o.creditUsed) ? (
+          <dl className="price-lines">
+            <div>
+              <dt>قبل الخصم</dt>
+              <dd>{formatIQD(o.subtotal ?? o.total + (o.discount ?? 0) + (o.creditUsed ?? 0))}</dd>
+            </div>
+            {o.discount ? (
+              <div className="is-off">
+                <dt>
+                  {o.couponLabel ?? "خصم"} · <span dir="ltr">{o.couponCode}</span>
+                </dt>
+                <dd>{minusIQD(o.discount)}</dd>
+              </div>
+            ) : null}
+            {o.creditUsed ? (
+              <div className="is-off">
+                <dt>من رصيد العميل</dt>
+                <dd>{minusIQD(o.creditUsed)}</dd>
+              </div>
+            ) : null}
+          </dl>
+        ) : null}
+        <p className="order-card__total">
+          <span>المجموع · {jarsLabel(o.jars)}</span>
+          <strong>{formatIQD(o.total)}</strong>
+        </p>
+        {o.couponCode && !o.discount && (
+          <p className="order-detail__paid">
+            الكود <strong dir="ltr">{o.couponCode}</strong>: {o.couponLabel}
+          </p>
+        )}
+        {o.cashback ? (
+          <p className="order-detail__paid">
+            كاش باك {formatIQD(o.cashback)} {delivered ? "أُضيف لرصيد العميل." : "يُضاف لرصيد العميل بعد التسليم."}
+          </p>
+        ) : null}
+        {o.campaignSlug && (
+          <p className="order-detail__paid">
+            جاء من حملة <strong dir="ltr">{o.campaignSlug}</strong>
+            {o.commission ? ` · عمولة ${formatIQD(o.commission)}${o.commissionPaidAt ? " (مدفوعة)" : delivered ? " (مستحقة)" : " (بعد التسليم)"}` : ""}
+          </p>
+        )}
+        <div className="order-detail__pay">
+          <p className="order-detail__paid">
+            {payKeyOf(o) === "GIFT" ? "هدية من ÉLUE: العلب مجاناً" : o.paid ? "ثمن العلب مدفوع مسبقاً" : "ثمن العلب نقداً عند الاستلام"}
+          </p>
+          {o.deliveryPaid ? (
+            <p className="order-detail__paid">أجور التوصيل مدفوعة مسبقاً من العميل</p>
+          ) : (
+            o.freeDelivery && <p className="order-detail__paid">توصيل مجاني هدية (نتحمّل أجور التوصيل)</p>
+          )}
+          {(o.paid || o.deliveryPaid) && payKeyOf(o) !== "GIFT" && payKeyOf(o) !== "unknown" && (
+            <p>
+              طريقة الدفع: <strong>{payMethodText(o)}</strong>
+              {o.payRef && (
+                <>
+                  {" · رقم العملية: "}
+                  <strong dir="ltr">{o.payRef}</strong>
+                </>
+              )}
+            </p>
+          )}
+          {payKeyOf(o) === "unknown" && (
+            <p className="panel-note">لم تُسجَّل طريقة الدفع ولا رقم العملية. افتح «تعديل الطلب» من ⋯ واملأها.</p>
+          )}
+        </div>
+        {o.status !== "CANCELLED" && (
+          <p className="order-detail__points">
+            {delivered
+              ? `أُضيفت ${formatPoints(pointsFor(o.total))} نقطة إلى رصيد العميل.`
+              : `تُضاف ${formatPoints(pointsFor(o.total))} نقطة للعميل بعد التوصيل.`}
+          </p>
+        )}
+        {(o.source || o.telegramSent === false) && (
+          <p className="order-card__meta">
+            {o.source && <span dir="ltr">{o.source}</span>}
+            {o.telegramSent === false && <span className="order-card__warn">لم يُرسل إلى تيليغرام</span>}
+          </p>
+        )}
+      </section>
+
+      <AdminDelivery order={o} onOpenCouriers={onOpenCouriers} />
+
+      <DeliveryTracking order={o} />
 
       <section className="order-detail__block">
         <h2>رقم طلب الكاشير</h2>
@@ -880,120 +1191,7 @@ function OrderDetail({
         </form>
       </section>
 
-      <section className="order-detail__block">
-        <h2>العميل</h2>
-        <button type="button" className="customer-link" onClick={onOpenCustomer}>
-          <span>
-            <span className="order-detail__name">{o.name}</span>
-            <span className="order-detail__phone" dir="ltr">
-              {local}
-            </span>
-          </span>
-          <small>كل تفاصيله وطلباته</small>
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M15 5l-7 7 7 7" />
-          </svg>
-        </button>
-        <SendOrderToCustomer order={o} />
-        <SendReviewRequest order={o} />
-        <div className="order-detail__contact order-detail__contact--3">
-          <a className="btn btn--quiet btn--small" href={`https://wa.me/${o.phone}`} target="_blank" rel="noopener noreferrer">
-            واتساب
-          </a>
-          <a className="btn btn--quiet btn--small" href={`tel:+${o.phone}`}>
-            اتصال
-          </a>
-          <button type="button" className="btn btn--quiet btn--small" onClick={() => void saveSummary()}>
-            حفظ الصورة
-          </button>
-        </div>
-      </section>
-
-      <section className="order-detail__block">
-        <h2>التوصيل</h2>
-        <p>{fullAddress(o)}</p>
-        {o.note && <p className="order-card__note">ملاحظة: {o.note}</p>}
-      </section>
-
-      <section className="order-detail__block">
-        <h2>الطلب</h2>
-        {slotText(o) && <p className="order-detail__paid">موعد التوصيل: <strong>{slotText(o)}</strong></p>}
-        <OrderItemsList items={o.items} />
-        <p className="order-card__total">
-          <span>المجموع · {jarsLabel(o.jars)}</span>
-          <strong>{formatIQD(o.total)}</strong>
-        </p>
-        <div className="order-detail__pay">
-          <p className="order-detail__paid">
-            {payKeyOf(o) === "GIFT" ? "هدية من ÉLUE: العلب مجاناً" : o.paid ? "ثمن العلب مدفوع مسبقاً" : "ثمن العلب نقداً عند الاستلام"}
-          </p>
-          {o.deliveryPaid ? (
-            <p className="order-detail__paid">أجور التوصيل مدفوعة مسبقاً من العميل</p>
-          ) : (
-            o.freeDelivery && <p className="order-detail__paid">توصيل مجاني هدية (نتحمّل أجور التوصيل)</p>
-          )}
-          {(o.paid || o.deliveryPaid) && payKeyOf(o) !== "GIFT" && payKeyOf(o) !== "unknown" && (
-            <p>
-              طريقة الدفع: <strong>{payMethodText(o)}</strong>
-              {o.payRef && (
-                <>
-                  {" · رقم العملية: "}
-                  <strong dir="ltr">{o.payRef}</strong>
-                </>
-              )}
-            </p>
-          )}
-          {payKeyOf(o) === "unknown" && (
-            <p className="panel-note">لم تُسجَّل طريقة الدفع ولا رقم العملية. افتح «تعديل الطلب» واملأها.</p>
-          )}
-        </div>
-        {o.status !== "CANCELLED" && (
-          <p className="order-detail__points">
-            {o.status === "DELIVERED"
-              ? `أُضيفت ${formatPoints(pointsFor(o.total))} نقطة إلى رصيد العميل.`
-              : `تُضاف ${formatPoints(pointsFor(o.total))} نقطة للعميل بعد التوصيل.`}
-          </p>
-        )}
-        {(o.source || o.telegramSent === false) && (
-          <p className="order-card__meta">
-            {o.source && <span dir="ltr">{o.source}</span>}
-            {o.telegramSent === false && <span className="order-card__warn">لم يُرسل إلى تيليغرام</span>}
-          </p>
-        )}
-      </section>
-
-      <AdminDelivery order={o} onOpenCouriers={onOpenCouriers} />
-
       <AdminEatix order={o} />
-
-      <DeliveryTracking order={o} />
-
-      <section className="order-detail__block">
-        <h2>تغيير الحالة</h2>
-        <div className="status-grid" role="group" aria-label={`حالة الطلب ${o.orderNumber}`}>
-          {STATUS_ORDER.map((s) => (
-            <button
-              key={s}
-              type="button"
-              aria-pressed={o.status === s}
-              disabled={saving}
-              className={s === "CANCELLED" && confirmCancel ? "is-confirm" : undefined}
-              onClick={() => void setStatus(s)}
-            >
-              {s === "CANCELLED" && confirmCancel ? "تأكيد الإلغاء؟" : STATUS_LABELS[s]}
-            </button>
-          ))}
-        </div>
-        {confirmCancel && o.modonQr && (
-          <p className="panel-note">الطلب مُرسل إلى مدن: احذفه من مدن أيضًا (أعلاه) أو اتصل بهم إذا استلمه المندوب.</p>
-        )}
-      </section>
-
-      <div className="order-detail__actions">
-        <button type="button" className="btn btn--quiet btn--full" onClick={() => setEditing(true)}>
-          تعديل الطلب
-        </button>
-      </div>
 
       <p className="order-detail__audit">
         {o.createdBy ? (
@@ -1011,7 +1209,6 @@ function OrderDetail({
           </>
         )}
       </p>
-
     </article>
   );
 }
