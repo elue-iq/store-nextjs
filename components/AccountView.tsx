@@ -12,7 +12,7 @@ import { DeliveryTracking, OrderItemsList, StatusChip, StatusTrack } from "./Ord
 import { DeliveryFields } from "./DeliveryFields";
 import { baghdadTime, dataClient, newestFirst, type Order } from "@/lib/data";
 import { formatIraqiMobile } from "@/lib/phone";
-import { collectStatement, deliveryPayOf, formatIQD, site } from "@/lib/site";
+import { collectStatement, deliveryPayOf, formatIQD, minusIQD, site } from "@/lib/site";
 import { getProduct } from "@/lib/products";
 import { fullAddress } from "@/lib/iraq";
 import { reviewPath } from "@/lib/reviews";
@@ -390,10 +390,10 @@ function MyOrderDetail({ order: o }: { order: Order }) {
         <OrderItemsList items={o.items} />
         {o.discount ? (
           <p className="order-detail__muted">
-            {o.couponLabel ?? "خصم"} ({o.couponCode}): −{formatIQD(o.discount)}
+            {o.couponLabel ?? "خصم"} ({o.couponCode}): {minusIQD(o.discount)}
           </p>
         ) : null}
-        {o.creditUsed ? <p className="order-detail__muted">من رصيدكم: −{formatIQD(o.creditUsed)}</p> : null}
+        {o.creditUsed ? <p className="order-detail__muted">من رصيدكم: {minusIQD(o.creditUsed)}</p> : null}
         <p className="order-card__total">
           <span>المجموع</span>
           <strong>{formatIQD(o.total)}</strong>

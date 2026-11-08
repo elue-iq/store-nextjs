@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { dataClient } from "@/lib/data";
 import { normalizeCode } from "@/lib/coupons";
-import { formatIQD } from "@/lib/site";
+import { formatIQD, minusIQD } from "@/lib/site";
 
 // The server's price for a cart (query «quote»): coupon, credit, delivery. The checkout
 // shows exactly what placeOrder will charge.
@@ -156,13 +156,13 @@ export function PriceLines({ quote }: { quote: Quote | null }) {
       {quote.discount > 0 && (
         <div className="is-off">
           <dt>{quote.coupon?.label ?? "الخصم"}</dt>
-          <dd>−{formatIQD(quote.discount)}</dd>
+          <dd>{minusIQD(quote.discount)}</dd>
         </div>
       )}
       {quote.creditUsed > 0 && (
         <div className="is-off">
           <dt>من رصيدكم</dt>
-          <dd>−{formatIQD(quote.creditUsed)}</dd>
+          <dd>{minusIQD(quote.creditUsed)}</dd>
         </div>
       )}
       {quote.cashback > 0 && (

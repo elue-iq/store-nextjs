@@ -11,7 +11,7 @@ import {
   normalizeCode,
   type CouponKind,
 } from "@/lib/coupons";
-import { formatIQD } from "@/lib/site";
+import { formatIQD, minusIQD } from "@/lib/site";
 
 // «الكوبونات»: discount codes. Each card shows how the code is doing (orders, discount given,
 // sales), and the form covers every kind with its limits. Rules: lib/coupons.ts.
@@ -415,7 +415,7 @@ export function AdminCoupons({ orders, onOpenOrder }: { orders: Order[] | null; 
                         <span dir="ltr">{o.orderNumber}</span>
                       </button>
                       <span>{o.name}</span>
-                      <span>−{formatIQD(o.discount ?? 0)}</span>
+                      <span>{minusIQD(o.discount ?? 0)}</span>
                     </li>
                   ))}
                 </ul>

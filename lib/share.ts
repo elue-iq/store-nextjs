@@ -5,7 +5,7 @@
 // (Works for orders the customer made and for orders the team made for them.)
 
 import { formatIraqiMobile } from "./phone";
-import { deliveryPayOf, formatIQD, site } from "./site";
+import { deliveryPayOf, formatIQD, minusIQD, site } from "./site";
 import { slotText } from "./delivery-slot";
 
 type Who = { name: string; phone: string; orderNumber: string };
@@ -46,8 +46,8 @@ function summary(o: OrderInfo): string[] {
   const collect = (o.paid ? 0 : o.total) + (delivery === "driver" ? site.deliveryFee : 0);
   return [
     `• ${items.map((i) => `${i.nameAr} × ${i.qty}`).join("، ")}`,
-    o.discount ? `🎁 ${o.couponLabel ?? "خصم"}: −${formatIQD(o.discount)}` : null,
-    o.creditUsed ? `🎁 من رصيدكم: −${formatIQD(o.creditUsed)}` : null,
+    o.discount ? `🎁 ${o.couponLabel ?? "خصم"}: ${minusIQD(o.discount)}` : null,
+    o.creditUsed ? `🎁 من رصيدكم: ${minusIQD(o.creditUsed)}` : null,
     o.cashback ? `🎁 تنضاف لرصيدكم ${formatIQD(o.cashback)} بعد التسليم` : null,
     collect > 0 ? `💵 عند الاستلام: ${formatIQD(collect)}${delivery === "driver" ? " (شامل التوصيل)" : ""}` : "✅ مدفوع، ولا يُطلب شي عند الاستلام",
     o.province === site.baghdadWindow.province ? `🕐 التوصيل: ${slotText(o) ?? site.baghdadWindow.short}` : null,

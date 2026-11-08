@@ -29,7 +29,7 @@ import { formatPoints, pointsFor } from "@/lib/loyalty";
 import { dataClient, newestFirst, STATUS_LABELS, STATUS_ORDER, type Order, type OrderStatus } from "@/lib/data";
 import { formatIraqiMobile, toLatinDigits } from "@/lib/phone";
 import { slotText } from "@/lib/delivery-slot";
-import { formatIQD, payKeyOf, PAY_KEY_LABELS, payMethodText, type PayKey } from "@/lib/site";
+import { formatIQD, minusIQD, payKeyOf, PAY_KEY_LABELS, payMethodText, type PayKey } from "@/lib/site";
 import { fullAddress } from "@/lib/iraq";
 import { products } from "@/lib/products";
 
@@ -1043,13 +1043,13 @@ function OrderDetail({
                 <dt>
                   {o.couponLabel ?? "خصم"} · <span dir="ltr">{o.couponCode}</span>
                 </dt>
-                <dd>−{formatIQD(o.discount)}</dd>
+                <dd>{minusIQD(o.discount)}</dd>
               </div>
             ) : null}
             {o.creditUsed ? (
               <div className="is-off">
                 <dt>من رصيد العميل</dt>
-                <dd>−{formatIQD(o.creditUsed)}</dd>
+                <dd>{minusIQD(o.creditUsed)}</dd>
               </div>
             ) : null}
           </dl>

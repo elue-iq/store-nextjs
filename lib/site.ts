@@ -87,6 +87,12 @@ export function formatIQD(amount: number): string {
   return `${amount.toLocaleString("en-US")} ${site.currency}`;
 }
 
+// A discount amount: «−4,500 د.ع». The minus and the number are kept together left-to-right,
+// so in Arabic text the minus stays next to the number (not at the far end of the line).
+export function minusIQD(amount: number): string {
+  return `\u2066−${amount.toLocaleString("en-US")}\u2069 ${site.currency}`;
+}
+
 // How an order's delivery fee is settled (set by the team; customers always pay the driver):
 // - "driver":  the customer pays it to the driver on delivery (normal)
 // - "prepaid": the customer already paid it (card, Qi transfer…). Not a cost to ÉLUE.

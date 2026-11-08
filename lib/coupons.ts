@@ -11,7 +11,7 @@
 // CASHBACK coupons give no discount now: they add credit once the order is delivered.
 // One coupon per order.
 
-import { freeDeliveryFor } from "./site";
+import { freeDeliveryFor, minusIQD } from "./site";
 
 export type CouponKind = "PERCENT" | "FIXED" | "FREE_DELIVERY" | "FREE_JARS" | "CASHBACK";
 export const COUPON_KINDS: CouponKind[] = ["PERCENT", "FIXED", "FREE_DELIVERY", "FREE_JARS", "CASHBACK"];
@@ -259,7 +259,7 @@ export type PricedOrder = {
 // «خصم كود NOOR10 (خصم 10%): −1,500 د.ع» lines for messages; [] when there's no discount.
 export function discountLines(o: PricedOrder, fmt: (n: number) => string): string[] {
   const out: string[] = [];
-  if (o.discount) out.push(`خصم ${o.couponCode ?? ""}${o.couponLabel ? ` (${o.couponLabel})` : ""}: −${fmt(o.discount)}`.replace("خصم  ", "خصم "));
-  if (o.creditUsed) out.push(`من رصيدكم: −${fmt(o.creditUsed)}`);
+  if (o.discount) out.push(`خصم ${o.couponCode ?? ""}${o.couponLabel ? ` (${o.couponLabel})` : ""}: ${minusIQD(o.discount)}`.replace("خصم  ", "خصم "));
+  if (o.creditUsed) out.push(`من رصيدكم: ${minusIQD(o.creditUsed)}`);
   return out;
 }
