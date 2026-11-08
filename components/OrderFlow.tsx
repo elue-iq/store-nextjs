@@ -12,6 +12,7 @@ import { useStock } from "./StockProvider";
 import { jarsLabel } from "./AddToCart";
 import { LoginPanel } from "./LoginPanel";
 import { SlotPicker } from "./SlotPicker";
+import { CouponBox, PriceLines, useQuote } from "./CouponBox";
 import { DEFAULT_SLOT, type SlotKey } from "@/lib/delivery-slot";
 import { DeliveryFields, type DeliveryFieldsHandle } from "./DeliveryFields";
 import { buildWhatsAppText, priceCart, type CartItem } from "@/lib/order-text";
@@ -39,10 +40,21 @@ export function OrderFlow() {
   const toast = useToast();
   const auth = useAuth();
   const stock = useStock();
-  const { lines, total } = priceCart(cart.items);
+  const { lines, total: listTotal } = priceCart(cart.items);
   const jarCount = lines.reduce((n, l) => n + l.qty, 0);
-  const freeDelivery = freeDeliveryFor(jarCount);
   const signedIn = auth.status === "signedIn";
+  // Coupon: the one typed, else the affiliate link's own coupon ("-" = the customer removed it).
+  const couponCode = cart.couponCode === "-" ? "" : cart.couponCode || cart.refCoupon?.code || "";
+  const { quote, loading: quoting } = useQuote({
+    items: cart.items,
+    couponCode,
+    refCode: cart.ref,
+    signedIn: signedIn && !auth.isAdmin,
+    enabled: cart.ready && auth.status !== "loading",
+  });
+  // The server's price when we have it (coupon, credit); the list price until then.
+  const total = quote?.total ?? listTotal;
+  const freeDelivery = quote?.freeDelivery ?? freeDeliveryFor(jarCount);
   const soldOutLines = lines.filter((l) => !stock.isAvailable(l.product.slug));
   // The shop's own (admin) login is for the orders page, not for ordering as a customer.
   const teamDevice = signedIn && auth.isAdmin;
@@ -216,6 +228,8 @@ export function OrderFlow() {
         deliverySlot: inBaghdad ? slot : undefined,
         deliveryDate: inBaghdad && slotDate ? slotDate : undefined,
         payOnline: onlineOk && payOnline ? true : undefined,
+        couponCode: quote?.coupon?.ok ? quote.coupon.code : undefined,
+        ref: cart.ref || undefined,
       });
       if (data?.orderNumber && data.payUrl) {
         // Paying now: the order is kept until Qi confirms it; the cart is cleared on return.
@@ -227,6 +241,7 @@ export function OrderFlow() {
         pixelPurchase(cart.items, total, data.orderNumber);
         setStep("sent");
         cart.clear();
+        if (cart.couponCode) cart.setCouponCode("");
         toast({ id: "checkout", message: `استلمنا طلبك رقم ${ltr(data.orderNumber)}.` });
         window.scrollTo({ top: 0 });
         return;
@@ -247,6 +262,8 @@ export function OrderFlow() {
       } else if (code === "open_order") {
         setOpenOrder(errorDetail(gqlErrors) || "—");
         window.scrollTo({ top: 0 });
+      } else if (code === "coupon") {
+        toast({ id: "checkout", tone: "attention", message: `${errorDetail(gqlErrors)} أزيلوا الكود أو جرّبوا كود ثاني.` });
       } else if (code === "too_many_orders") {
         toast({ id: "checkout", tone: "attention", message: "وصلت إلى الحد اليومي للطلبات. لطلب إضافي راسلنا عبر واتساب." });
       } else if (code === "too_many_jars") {
@@ -393,10 +410,18 @@ export function OrderFlow() {
             </li>
           ))}
         </ul>
+        <PriceLines quote={quote} />
         <p className="order-total">
           <span>المجموع</span>
           <strong>{formatIQD(total)}</strong>
         </p>
+        <CouponBox
+          code={couponCode}
+          quote={quote}
+          loading={quoting}
+          onApply={(c) => cart.setCouponCode(c)}
+          onRemove={() => cart.setCouponCode("-")}
+        />
         <p className="order-pay">{collectStatement(total, false, freeDelivery ? "gift" : "driver")}</p>
         {!freeDelivery && <p className="order-pay order-pay--free">{freeDeliveryHint(jarCount)}</p>}
         <p className="order-pay">{site.paymentNote}</p>

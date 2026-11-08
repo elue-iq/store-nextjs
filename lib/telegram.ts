@@ -6,6 +6,7 @@ import { collectStatement, deliveryPayOf, formatIQD, payMethodText, site } from 
 import type { OrderLine } from "./order-text";
 import { fullAddress } from "./iraq";
 import { slotText } from "./delivery-slot";
+import { discountLines } from "./coupons";
 
 export function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -39,6 +40,14 @@ export function buildOrderMessage(o: {
   payRef?: string | null; // transaction / transfer number
   freeDelivery?: boolean | null; // ÉLUE covers the delivery fee (gift)
   deliveryPaid?: boolean | null; // customer already paid the delivery fee
+  // Coupon / credit / affiliate (lib/coupons.ts).
+  subtotal?: number | null;
+  discount?: number | null;
+  creditUsed?: number | null;
+  couponCode?: string | null;
+  couponLabel?: string | null;
+  cashback?: number | null;
+  campaignSlug?: string | null;
 }): string {
   const jars = o.lines.reduce((n, l) => n + l.qty, 0);
   const delivery = deliveryPayOf(o);
@@ -58,7 +67,16 @@ export function buildOrderMessage(o: {
     "",
     ...o.lines.map((l) => `• ${ltr(`${l.qty} × ${escapeHtml(l.product.nameEn)}`)} — ${formatIQD(l.subtotal)}`),
     `عدد العلب: ${jars}`,
+    ...(o.discount || o.creditUsed
+      ? [
+          `قبل الخصم: ${formatIQD(o.subtotal ?? o.total)}`,
+          ...discountLines(o, formatIQD).map((l) => escapeHtml(l)),
+        ]
+      : []),
     `<b>المجموع: ${formatIQD(o.total)}</b>`,
+    o.cashback ? `كاش باك للعميل بعد التسليم: ${formatIQD(o.cashback)}` : null,
+    o.couponCode && !o.discount ? `الكود: ${ltr(escapeHtml(o.couponCode))}${o.couponLabel ? ` (${escapeHtml(o.couponLabel)})` : ""}` : null,
+    o.campaignSlug ? `الحملة: ${ltr(escapeHtml(o.campaignSlug))}` : null,
     special.length ? `<b>${special.join(" · ")}</b>` : null,
     `<b>يستلم المندوب من العميل: ${formatIQD(collect)}</b>`,
     collectStatement(o.total, Boolean(o.paid), delivery),

@@ -8,6 +8,9 @@ export const dataClient = generateClient<Schema>({ authMode: "userPool" });
 
 export type Order = Schema["Order"]["type"];
 export type Courier = Schema["Courier"]["type"];
+export type CouponRecord = Schema["Coupon"]["type"];
+export type Sponsor = Schema["Sponsor"]["type"];
+export type Campaign = Schema["Campaign"]["type"];
 export type OrderStatus = NonNullable<Order["status"]>;
 
 export const STATUS_LABELS: Record<OrderStatus, string> = {

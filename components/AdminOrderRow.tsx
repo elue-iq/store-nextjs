@@ -50,8 +50,13 @@ export function OrderRow({
           )}
           {pay === "unknown" && <span className="order-row__paid order-row__warn">بلا طريقة دفع</span>}
           {o.status === "DELIVERED" && (
-            <span className={o.reviewed ? "order-row__paid order-row__free" : "order-row__paid"}>
-              {o.reviewed ? "★ مُقيَّم" : "بانتظار التقييم"}
+            <span className={o.reviewed ? "order-row__paid order-row__free" : o.reviewRequestedAt ? "order-row__paid" : "order-row__paid order-row__warn"}>
+              {o.reviewed ? "★ مُقيَّم" : o.reviewRequestedAt ? "طُلب التقييم" : "اطلب التقييم"}
+            </span>
+          )}
+          {o.couponCode && (
+            <span className="order-row__paid" dir="ltr">
+              {o.couponCode}
             </span>
           )}
           {slotText(o) && <span className="order-row__paid">{slotText(o)}</span>}

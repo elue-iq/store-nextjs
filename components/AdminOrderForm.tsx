@@ -5,10 +5,12 @@ import { useAuth } from "./AuthProvider";
 import { useToast } from "./Toast";
 import { DeliveryFields, type DeliveryFieldsHandle } from "./DeliveryFields";
 import { SlotPicker } from "./SlotPicker";
+import { CouponBox, PriceLines, useQuote } from "./CouponBox";
+import { commissionFor, couponEffect, priceOrder, type CouponRule } from "@/lib/coupons";
 import { DEFAULT_SLOT, isSlotKey, type SlotKey } from "@/lib/delivery-slot";
 import { callModon } from "./AdminModon";
 import { callBoxy } from "./AdminBoxy";
-import { dataClient, errorCode, errorFields, type Order } from "@/lib/data";
+import { dataClient, errorCode, errorDetail, errorFields, type Order } from "@/lib/data";
 import { products } from "@/lib/products";
 import { MAX_QTY_PER_LINE } from "@/lib/order-text";
 import { collectBreakdown, modonCollect } from "@/lib/modon";
@@ -87,10 +89,35 @@ export function AdminOrderForm({
   const lines = products
     .filter((p) => (qty[p.slug] ?? 0) > 0)
     .map((p) => ({ product: p, qty: qty[p.slug], price: oldPrice[p.slug] ?? p.price }));
-  const total = lines.reduce((n, l) => n + l.qty * l.price, 0);
   const jars = lines.reduce((n, l) => n + l.qty, 0);
-  // Orders of site.freeDeliveryMinJars jars or more: delivery is free automatically.
-  const autoFreeDelivery = deliveryPay === "driver" && freeDeliveryFor(jars);
+  // Coupon: an existing order keeps its own (re-priced if the jars change); a new order is
+  // priced by the server for this customer (their credit and limits).
+  const savedRule: CouponRule | null = (() => {
+    try {
+      return order?.coupon ? (JSON.parse(String(order.coupon)) as CouponRule) : null;
+    } catch {
+      return null;
+    }
+  })();
+  const [couponCode, setCouponCode] = useState("");
+  const customerForQuote = normalizeIraqiMobile(phone) ?? "";
+  const { quote, loading: quoting } = useQuote({
+    items: lines.map((l) => ({ slug: l.product.slug, qty: l.qty })),
+    couponCode,
+    refCode: "",
+    signedIn: true,
+    phone: customerForQuote,
+    enabled: !editing && Boolean(customerForQuote) && jarsPay === "cash",
+  });
+  const edited = priceOrder(
+    lines.map((l) => ({ price: l.price, qty: l.qty })),
+    savedRule,
+    order?.creditUsed ?? 0,
+  );
+  const total = editing ? edited.total : jarsPay === "cash" && quote ? quote.total : lines.reduce((n, l) => n + l.qty * l.price, 0);
+  // Orders of site.freeDeliveryMinJars jars or more (or a free-delivery code): delivery is free automatically.
+  const autoFreeDelivery =
+    deliveryPay === "driver" && (freeDeliveryFor(jars) || (editing ? edited.freeDelivery : Boolean(quote?.freeDelivery)));
   const driverCollects = modonCollect(total, paid, deliveryPay);
 
   function step(slug: string, by: number) {
@@ -183,7 +210,24 @@ export function AdminOrderForm({
       const sameItems =
         JSON.stringify(items.map((i) => [i.slug, i.qty])) ===
         JSON.stringify(products.filter((p) => oldQty[p.slug]).map((p) => [p.slug, oldQty[p.slug]]));
-      if (!sameItems) Object.assign(changes, { items, jars, total });
+      if (!sameItems) {
+        Object.assign(changes, { items, jars, total });
+        // A coupon / credit on the order: the discount follows the new jars.
+        if (savedRule || order.creditUsed || order.discount) {
+          const oldLines = (order.items ?? []).filter(Boolean).map((i) => ({ price: i!.price, qty: i!.qty }));
+          const oldFree = couponEffect(savedRule, oldLines).freeJars;
+          const perJar = order.commission ? order.commission / Math.max(1, order.jars - oldFree) : 0;
+          Object.assign(changes, {
+            subtotal: edited.subtotal,
+            discount: edited.discount || null,
+            creditUsed: edited.creditUsed || null,
+            cashback: edited.cashback || null,
+            ...(order.commission != null ? { commission: Math.round(commissionFor(jars, edited.freeJars, perJar)) } : {}),
+          });
+        } else {
+          changes.subtotal = total;
+        }
+      }
       if (inBaghdad && !order.slotAccepted) changes.slotAccepted = true;
       if (!Object.keys(changes).length) {
         setBusy(false);
@@ -242,6 +286,7 @@ export function AdminOrderForm({
       deliveryDate: inBaghdad && slotDate ? slotDate : undefined,
       freeDelivery: deliveryPay === "gift",
       deliveryPaid: deliveryPay === "prepaid",
+      couponCode: jarsPay === "cash" && quote?.coupon?.ok ? quote.coupon.code : undefined,
     });
     setBusy(false);
     if (data?.orderNumber) {
@@ -257,6 +302,7 @@ export function AdminOrderForm({
       if (fields.payMethod || fields.payRef) setPayErrors({ method: fields.payMethod, payRef: fields.payRef });
       setErrors(fields);
     }
+    if (code === "coupon") return toast({ id: "admin", tone: "attention", message: errorDetail(gqlErrors) });
     toast({ id: "admin", tone: "attention", message: "تعذّر إنشاء الطلب. راجع الحقول وحاول مجددًا." });
   }
 
@@ -340,10 +386,35 @@ export function AdminOrderForm({
             </li>
           ))}
         </ul>
+        {editing ? (
+          (order?.discount || order?.creditUsed) && (
+            <PriceLines
+              quote={{
+                subtotal: edited.subtotal,
+                discount: edited.discount,
+                creditUsed: edited.creditUsed,
+                cashback: edited.cashback,
+                coupon: order?.couponCode ? { code: order.couponCode, ok: true, label: order.couponLabel ?? undefined } : null,
+              } as Parameters<typeof PriceLines>[0]["quote"]}
+            />
+          )
+        ) : (
+          jarsPay === "cash" && <PriceLines quote={quote} />
+        )}
         <p className="order-card__total">
           <span>المجموع · {jars} علبة</span>
           <strong>{formatIQD(total)}</strong>
         </p>
+        {editing ? (
+          order?.couponCode && (
+            <p className="hint">
+              الطلب عليه الكود <strong dir="ltr">{order.couponCode}</strong>
+              {order.couponLabel ? ` (${order.couponLabel})` : ""}. يتعدّل الخصم تلقائياً إذا غيّرت العلب.
+            </p>
+          )
+        ) : jarsPay === "cash" ? (
+          <CouponBox code={couponCode} quote={quote} loading={quoting} onApply={setCouponCode} onRemove={() => setCouponCode("")} />
+        ) : null}
       </section>
 
       <section className="order-detail__block" id="order-pay">

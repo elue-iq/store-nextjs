@@ -20,6 +20,11 @@ type OrderInfo = Who & {
   province?: string | null;
   deliverySlot?: string | null;
   deliveryDate?: string | null;
+  discount?: number | null;
+  creditUsed?: number | null;
+  couponCode?: string | null;
+  couponLabel?: string | null;
+  cashback?: number | null;
 };
 
 function origin(): string {
@@ -41,6 +46,9 @@ function summary(o: OrderInfo): string[] {
   const collect = (o.paid ? 0 : o.total) + (delivery === "driver" ? site.deliveryFee : 0);
   return [
     `• ${items.map((i) => `${i.nameAr} × ${i.qty}`).join("، ")}`,
+    o.discount ? `🎁 ${o.couponLabel ?? "خصم"}: −${formatIQD(o.discount)}` : null,
+    o.creditUsed ? `🎁 من رصيدكم: −${formatIQD(o.creditUsed)}` : null,
+    o.cashback ? `🎁 تنضاف لرصيدكم ${formatIQD(o.cashback)} بعد التسليم` : null,
     collect > 0 ? `💵 عند الاستلام: ${formatIQD(collect)}${delivery === "driver" ? " (شامل التوصيل)" : ""}` : "✅ مدفوع، ولا يُطلب شي عند الاستلام",
     o.province === site.baghdadWindow.province ? `🕐 التوصيل: ${slotText(o) ?? site.baghdadWindow.short}` : null,
     `🔖 ${o.orderNumber}`,
@@ -89,6 +97,19 @@ export function reviewRequestMessage(o: { name: string; orderNumber: string }, o
     `${origin}/review?order=${encodeURIComponent(o.orderNumber)}`,
     "",
     "شكراً لاختياركم ÉLUE",
+  ].join("\n");
+}
+
+// A gentle second ask, when the first request got no review.
+export function reviewReminderMessage(o: { name: string; orderNumber: string }, origin: string): string {
+  return [
+    `مرحباً ${o.name.trim().split(/\s+/)[0]} 🧡`,
+    "",
+    "نتمنى عجبكم طلبكم من ÉLUE. إذا عندكم 20 ثانية، رأيكم يفرق ويانا كلش:",
+    "",
+    `${origin}/review?order=${encodeURIComponent(o.orderNumber)}`,
+    "",
+    "وإذا صار أي شي ما عجبكم، گولولنا هنا ونصلحه 🙏",
   ].join("\n");
 }
 

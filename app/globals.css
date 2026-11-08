@@ -5164,3 +5164,327 @@ button.dash-bars__row:focus-visible {
 .settle__amount { font-weight: 600; white-space: nowrap; }
 .settle__sum { margin: 0; font-weight: 600; }
 .settle__actions, .settle__confirm { display: grid; gap: 8px; }
+
+/* ---- Order screen: status and next step at the top ------------------------------ */
+.btn--danger {
+  background: var(--error);
+  border-color: var(--error);
+  color: var(--cream);
+}
+.order-hero {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1rem 1.1rem 1.1rem;
+  border: 1px solid var(--sand-deep);
+  border-radius: var(--radius-label);
+  background: var(--paper);
+}
+.order-hero__top {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.order-hero__time {
+  margin-inline-start: auto;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.order-hero__money {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin: 0;
+  color: var(--muted);
+}
+.order-hero__money strong {
+  color: var(--cocoa);
+  font-size: 1.35rem;
+}
+.order-hero__money small {
+  margin-inline-start: auto;
+}
+.order-hero__actions {
+  display: flex;
+  gap: 0.6rem;
+}
+.order-hero__actions .btn {
+  flex: 1;
+}
+.order-hero__confirm {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.8rem;
+  border-radius: var(--radius-panel);
+  background: #f6e3dc;
+}
+.order-hero__confirm p {
+  margin: 0;
+  font-weight: 600;
+  color: var(--error);
+}
+.order-hero .status-track {
+  font-size: 0.78rem;
+}
+
+/* The status as one tap-to-change pill (native picker on phones). */
+.status-select {
+  position: relative;
+  display: inline-flex;
+}
+.status-select select {
+  appearance: none;
+  -webkit-appearance: none;
+  min-height: 2.6rem;
+  padding: 0.35rem 1rem 0.35rem 2.2rem;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--sand);
+  color: var(--cocoa);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.status-select::after {
+  content: "";
+  position: absolute;
+  inset-inline-end: 0.9rem;
+  top: 50%;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-inline-end: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: translateY(-70%) rotate(45deg);
+  pointer-events: none;
+  color: inherit;
+}
+.status-select--new { color: var(--cream); }
+.status-select--new select { background: var(--terracotta-deep); color: var(--cream); }
+.status-select--confirmed { color: var(--sage-deep); }
+.status-select--confirmed select { background: var(--sage); color: var(--sage-deep); }
+.status-select--out_for_delivery { color: var(--terracotta-deep); }
+.status-select--out_for_delivery select { background: #f1dccf; color: var(--terracotta-deep); }
+.status-select--delivered { color: var(--terracotta); }
+.status-select--delivered select { background: var(--cream); color: var(--terracotta); box-shadow: inset 0 0 0 1.5px var(--terracotta); }
+.status-select--cancelled { color: var(--muted); }
+.status-select--cancelled select { background: transparent; color: var(--muted); box-shadow: inset 0 0 0 1px var(--sand-deep); }
+
+/* ⋯ menu */
+.more-menu {
+  position: relative;
+}
+.more-menu > summary {
+  display: grid;
+  place-items: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  border: 1px solid var(--sand-deep);
+  border-radius: 50%;
+  list-style: none;
+  cursor: pointer;
+  color: var(--cocoa);
+}
+.more-menu > summary::-webkit-details-marker { display: none; }
+.more-menu > summary svg { width: 1.3rem; height: 1.3rem; fill: currentColor; }
+.more-menu[open] > summary { background: var(--sand); }
+.more-menu__list {
+  position: absolute;
+  z-index: 30;
+  inset-inline-end: 0;
+  top: calc(100% + 0.4rem);
+  display: grid;
+  min-width: 13rem;
+  padding: 0.35rem;
+  border: 1px solid var(--sand-deep);
+  border-radius: var(--radius-panel);
+  background: var(--paper);
+  box-shadow: 0 10px 30px rgb(59 42 35 / 0.14);
+}
+.more-menu__list > * {
+  display: block;
+  padding: 0.75rem 0.85rem;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: start;
+  text-decoration: none;
+  cursor: pointer;
+}
+.more-menu__list > *:hover { background: var(--sand); }
+.more-menu__list .is-danger { color: var(--error); }
+
+.quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.quick-actions .btn,
+.quick-actions .send-order--compact {
+  flex: 1 1 0;
+}
+.quick-actions .send-order--compact .btn { width: 100%; }
+.send-order--compact { display: block; }
+
+/* Reviews on the order screen and the to-do list */
+.review-panel blockquote {
+  margin: 0;
+  padding: 0.6rem 0.8rem;
+  border-inline-start: 3px solid var(--terracotta);
+  background: var(--cream);
+  border-radius: 0 6px 6px 0;
+}
+.review-panel__stars { display: grid; gap: 0.25rem; }
+.review-ask { display: grid; gap: 0.5rem; }
+.review-ask__state { margin: 0; color: var(--muted); font-size: 0.92rem; }
+.review-ask__state.is-asked { color: var(--terracotta-deep); }
+.review-ask--compact .btn { min-height: 2.4rem; padding: 0.35rem 0.9rem; font-size: 0.9rem; width: auto; }
+.review-todo__list {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.review-todo__list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid var(--sand);
+}
+.review-todo__list .link-button { text-align: start; }
+
+/* Small numbers row (settlement, affiliates, reviews) */
+.settle-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin: 0 0 0.8rem;
+}
+.settle-summary > div {
+  padding: 0.6rem 0.7rem;
+  border-radius: var(--radius-panel);
+  background: var(--paper);
+  border: 1px solid var(--sand);
+}
+.settle-summary dt { font-size: 0.78rem; color: var(--muted); }
+.settle-summary dd { margin: 0; font-weight: 700; color: var(--cocoa); }
+.is-warn { color: var(--error) !important; }
+
+/* ---- Coupons (checkout + admin) ------------------------------------------------- */
+.price-lines {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0.4rem 0 0;
+}
+.price-lines > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  color: var(--muted);
+}
+.price-lines dd { margin: 0; }
+.price-lines .is-off { color: var(--sage-deep); font-weight: 600; }
+.coupon-box { display: grid; gap: 0.35rem; margin-top: 0.6rem; }
+.coupon-box__open { justify-self: start; margin-top: 0.4rem; }
+.coupon-box__form { display: flex; gap: 0.5rem; align-items: stretch; }
+.coupon-box__form label { flex: 1; }
+.coupon-box__form input {
+  width: 100%;
+  min-height: 2.6rem;
+  padding: 0.4rem 0.8rem;
+  border: 1px solid var(--sand-deep);
+  border-radius: var(--radius-control);
+  background: var(--paper);
+  font: inherit;
+  text-transform: uppercase;
+}
+.coupon-box__chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.5rem 0.9rem;
+  border: 1.5px dashed var(--sage-deep);
+  border-radius: var(--radius-panel);
+  background: var(--sage);
+  color: var(--sage-deep);
+}
+.coupon-box.is-bad .coupon-box__chip { border-color: var(--error); background: #f6e3dc; color: var(--error); }
+.coupon-box__hint { margin: 0; font-size: 0.9rem; color: var(--terracotta-deep); }
+
+.chip-row { display: flex; flex-wrap: wrap; gap: 0.45rem; }
+.chip {
+  padding: 0.4rem 0.85rem;
+  border: 1px solid var(--sand-deep);
+  border-radius: var(--radius-control);
+  background: var(--paper);
+  color: var(--cocoa);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.chip:hover { background: var(--sand); }
+.form-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; }
+.coupon-preview { margin: 0; padding: 0.5rem 0.8rem; border-radius: var(--radius-panel); background: var(--cream); }
+
+.coupon-list { display: grid; gap: 0.7rem; margin: 1rem 0 0; padding: 0; list-style: none; }
+.coupon-card,
+.campaign-card {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--sand);
+  border-radius: var(--radius-label);
+  background: var(--paper);
+}
+.campaign-card { background: var(--cream); }
+.coupon-card.is-off,
+.campaign-card.is-off { opacity: 0.7; }
+.coupon-card__head { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; }
+.coupon-card__head strong { font-size: 1.1rem; letter-spacing: 0.04em; }
+.coupon-card__state { padding: 0.15rem 0.6rem; border-radius: var(--radius-control); font-size: 0.8rem; background: var(--sand); color: var(--muted); }
+.coupon-card__state.is-on { background: var(--sage); color: var(--sage-deep); }
+.coupon-card__state.is-wait { background: #f1dccf; color: var(--terracotta-deep); }
+.coupon-card__label { margin: 0; font-weight: 600; color: var(--cocoa); }
+.coupon-card__rules { margin: 0; font-size: 0.88rem; color: var(--muted); }
+.coupon-card__stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(6.5rem, 1fr));
+  gap: 0.4rem;
+  margin: 0;
+}
+.coupon-card__stats > div { padding: 0.4rem 0.5rem; border-radius: 6px; background: var(--cream); }
+.campaign-card .coupon-card__stats > div { background: var(--paper); }
+.coupon-card__stats dt { font-size: 0.75rem; color: var(--muted); }
+.coupon-card__stats dd { margin: 0; font-weight: 700; color: var(--cocoa); }
+.coupon-card__orders { display: grid; gap: 0.3rem; margin: 0; padding: 0; list-style: none; font-size: 0.9rem; }
+.coupon-card__orders li { display: flex; justify-content: space-between; gap: 0.6rem; border-bottom: 1px solid var(--sand); padding: 0.3rem 0; }
+.sponsor-card { gap: 0.8rem; }
+.sponsor-card__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.8rem; flex-wrap: wrap; }
+.sponsor-card__head h2 { font-size: 1.05rem; color: var(--cocoa); }
+.sponsor-card__head small { color: var(--muted); }
+.campaign-card__link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.5rem 0.8rem;
+  border: 1px dashed var(--sand-deep);
+  border-radius: var(--radius-panel);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+  text-align: left;
+  cursor: pointer;
+}
+.campaign-card__link small { color: var(--terracotta-deep); font-weight: 600; }
+@media (max-width: 420px) {
+  .form-row { grid-template-columns: 1fr; }
+  .settle-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}

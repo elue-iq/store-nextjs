@@ -33,6 +33,20 @@ import { sendOrderConfirmation } from "../../../lib/orderConfirmation";
 import { pendingReview } from "../../../lib/reviews";
 import { createPayment, getPaymentStatus, qiConfig, verifyNotification, type QiPayment } from "../../../lib/qi";
 import { GetFunctionUrlConfigCommand, LambdaClient } from "@aws-sdk/client-lambda";
+import { BatchGetItemCommand } from "@aws-sdk/client-dynamodb";
+import {
+  commissionFor,
+  couponHint,
+  couponLabel,
+  couponProblem,
+  couponProblemText,
+  creditBalance,
+  normalizeCode,
+  priceOrder,
+  type Coupon,
+  type CouponKind,
+  type CouponRule,
+} from "../../../lib/coupons";
 
 // placeOrder: the only way an order is created.
 // 1. Checks the customer is logged in (their WhatsApp number comes from the login, not the form).
@@ -217,6 +231,115 @@ function baghdadTime(d: Date): string {
   return new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Baghdad", dateStyle: "short", timeStyle: "short" }).format(d);
 }
 
+// ---- Coupons, credit and affiliate campaigns (rules in lib/coupons.ts) ----------
+
+type CampaignRecord = Schema["Campaign"]["type"];
+
+const asCoupon = (c: Schema["Coupon"]["type"]): Coupon => ({ ...c, kind: c.kind as CouponKind });
+const ruleOf = (c: Coupon): CouponRule => ({
+  code: c.code,
+  kind: c.kind,
+  value: c.value ?? null,
+  maxDiscount: c.maxDiscount ?? null,
+  buyQty: c.buyQty ?? null,
+  freeQty: c.freeQty ?? null,
+  minJars: c.minJars ?? null,
+});
+
+async function getCoupon(code: string): Promise<Coupon | null> {
+  if (!code) return null;
+  const { data } = await client.models.Coupon.get({ code });
+  return data ? asCoupon(data) : null;
+}
+
+const liveCampaign = (c: CampaignRecord | null | undefined, now = new Date()) =>
+  Boolean(c && c.active !== false && (!c.startsAt || now >= new Date(c.startsAt)) && (!c.endsAt || now <= new Date(c.endsAt)));
+
+async function campaignBySlug(slug: string): Promise<CampaignRecord | null> {
+  const clean = slug.trim().toLowerCase().slice(0, 40);
+  if (!clean) return null;
+  const { data } = await client.models.Campaign.list({ filter: { slug: { eq: clean } }, limit: 1000 });
+  return (data ?? []).find((c) => liveCampaign(c)) ?? null;
+}
+
+async function campaignById(id: string | null | undefined): Promise<CampaignRecord | null> {
+  if (!id) return null;
+  const { data } = await client.models.Campaign.get({ id });
+  return data ?? null;
+}
+
+type History = { status: string; couponCode?: string | null; cashback?: number | null; creditUsed?: number | null }[];
+
+// A customer's earlier orders (by WhatsApp number), for coupon limits and credit.
+async function historyFor(phone: string): Promise<History> {
+  const { data } = await client.models.Order.listOrderByPhone(
+    { phone },
+    { limit: 500, selectionSet: ["status", "couponCode", "cashback", "creditUsed"] },
+  );
+  return (data ?? []) as History;
+}
+
+// Uses of a coupon by everyone: an atomic counter, refused once maxUses is reached.
+async function takeCouponUse(code: string, maxUses: number | null | undefined): Promise<boolean> {
+  try {
+    await dynamo.send(
+      new UpdateItemCommand({
+        TableName: process.env.COUNTERS_TABLE,
+        Key: { id: { S: `coupon#${code}` } },
+        UpdateExpression: "ADD #n :one",
+        ...(maxUses ? { ConditionExpression: "attribute_not_exists(#n) OR #n < :max" } : {}),
+        ExpressionAttributeNames: { "#n": "value" },
+        ExpressionAttributeValues: { ":one": { N: "1" }, ...(maxUses ? { ":max": { N: String(maxUses) } } : {}) },
+      }),
+    );
+    return true;
+  } catch (err) {
+    if (err instanceof ConditionalCheckFailedException) return false;
+    throw err;
+  }
+}
+
+type Deal = {
+  coupon: Coupon | null;
+  couponError: string | null;
+  hint: string | null;
+  campaign: CampaignRecord | null;
+  credit: number;
+};
+
+// Works out which coupon and campaign apply. A typed code wins; otherwise the campaign's
+// own coupon (visitor from its link). history = null for a visitor who isn't signed in.
+async function findDeal(o: {
+  couponCode: string;
+  ref: string;
+  jars: number;
+  phone: string | null;
+  history: History | null;
+  useCredit: boolean;
+}): Promise<Deal> {
+  const linkCampaign = o.ref ? await campaignBySlug(o.ref) : null;
+  const code = normalizeCode(o.couponCode) || normalizeCode(linkCampaign?.couponCode);
+  const coupon = await getCoupon(code);
+  const now = new Date();
+  let problem = code ? couponProblem(coupon, { now, jars: o.jars }) : null;
+  if (!problem && coupon && o.history) {
+    const uses = o.history.filter((h) => h.status !== "CANCELLED" && h.couponCode === coupon.code).length;
+    const previous = o.history.filter((h) => h.status !== "CANCELLED").length;
+    problem = couponProblem(coupon, { now, jars: o.jars, customerUses: uses, previousOrders: previous });
+  }
+  const usable = coupon && !problem ? coupon : null;
+  // The coupon's campaign (code shared by an influencer) counts first; else the link's.
+  const couponCampaign = usable?.campaignId ? await campaignById(usable.campaignId) : null;
+  const campaign = liveCampaign(couponCampaign) ? couponCampaign : linkCampaign;
+  return {
+    coupon: usable,
+    couponError: code && problem ? couponProblemText(problem, coupon) : null,
+    hint: coupon && (!problem || problem === "min_jars") ? couponHint(ruleOf(coupon), o.jars) : null,
+    campaign,
+    credit: o.useCredit && o.history ? creditBalance(o.history) : 0,
+  };
+}
+
 type PlaceOrderEvent = Parameters<Schema["placeOrder"]["functionHandler"]>[0];
 
 async function placeOrderHandler(event: PlaceOrderEvent) {
@@ -281,7 +404,7 @@ async function placeOrderHandler(event: PlaceOrderEvent) {
     }
   }
   const items = Array.isArray(rawItems) ? (rawItems.slice(0, 10) as CartItem[]) : [];
-  const { lines, total } = priceCart(items);
+  const { lines } = priceCart(items);
 
   const fields = checkDelivery({ name, province, area, address });
   if (Object.keys(fields).length) throw new Error(`invalid_fields:${JSON.stringify(fields)}`);
@@ -290,6 +413,29 @@ async function placeOrderHandler(event: PlaceOrderEvent) {
   if (!isTeam && jars > ORDER_RULES.maxJarsPerOrder) throw new Error(`too_many_jars:${ORDER_RULES.maxJarsPerOrder}`);
   // Free delivery for larger orders (site.freeDeliveryMinJars jars or more), unless the fee was prepaid.
   if (!deliveryPaid && freeDeliveryFor(jars)) freeDelivery = true;
+
+  // Coupon, credit and affiliate campaign. A code that can't be used stops the order with
+  // the reason (the checkout already showed it), so nobody pays more than they expected.
+  const history = await historyFor(phone);
+  const deal = await findDeal({
+    couponCode: String(args.couponCode ?? ""),
+    ref: String(args.ref ?? ""),
+    jars,
+    phone,
+    history,
+    useCredit: !paid,
+  });
+  if (deal.couponError && normalizeCode(args.couponCode)) throw new Error(`coupon:${deal.couponError}`);
+  const rule = deal.coupon ? ruleOf(deal.coupon) : null;
+  const pricing = priceOrder(
+    lines.map((l) => ({ price: l.product.price, qty: l.qty })),
+    rule,
+    deal.credit,
+  );
+  if (!deliveryPaid && pricing.freeDelivery) freeDelivery = true;
+  const sponsor = deal.campaign ? (await client.models.Sponsor.get({ id: deal.campaign.sponsorId })).data : null;
+  const selfReferral = Boolean(sponsor?.phone && sponsor.phone === phone);
+  const commission = deal.campaign && !selfReferral ? commissionFor(jars, pricing.freeJars, deal.campaign.commissionPerJar) : 0;
 
   // The team may still take an order for a flavor marked sold out (e.g. stock on the way).
   const soldOut = forCustomer ? new Set<string>() : await unavailableSlugs();
@@ -300,7 +446,11 @@ async function placeOrderHandler(event: PlaceOrderEvent) {
   const owner = customer ? customer.owner : `${identity.sub}::${identity.username}`;
 
   const saveAndNotify = async () => {
+    if (deal.coupon && !(await takeCouponUse(deal.coupon.code, deal.coupon.maxUses))) {
+      throw new Error(`coupon:${couponProblemText("used_up")}`);
+    }
     const number = await nextOrderNumber();
+    const total = pricing.total;
     const payAmount = total + (freeDelivery ? 0 : site.deliveryFee);
     const { data: order, errors } = await client.models.Order.create({
       orderNumber: number,
@@ -321,6 +471,17 @@ async function placeOrderHandler(event: PlaceOrderEvent) {
       })),
       jars,
       total,
+      subtotal: pricing.subtotal,
+      discount: pricing.discount || null,
+      couponCode: deal.coupon?.code ?? null,
+      couponLabel: rule ? couponLabel(rule) : null,
+      coupon: rule ? JSON.stringify(rule) : null,
+      cashback: pricing.cashback || null,
+      creditUsed: pricing.creditUsed || null,
+      campaignId: deal.campaign?.id ?? null,
+      campaignSlug: deal.campaign?.slug ?? null,
+      sponsorId: deal.campaign?.sponsorId ?? null,
+      commission: deal.campaign ? commission : null,
       status: "NEW",
       telegramSent: false,
       cashierOrderId,
@@ -422,6 +583,13 @@ async function notifyTeam(order: OrderRecord): Promise<boolean> {
     payRef: order.payRef ?? null,
     freeDelivery: Boolean(order.freeDelivery),
     deliveryPaid: Boolean(order.deliveryPaid),
+    subtotal: order.subtotal ?? null,
+    discount: order.discount ?? null,
+    creditUsed: order.creditUsed ?? null,
+    couponCode: order.couponCode ?? null,
+    couponLabel: order.couponLabel ?? null,
+    cashback: order.cashback ?? null,
+    campaignSlug: order.campaignSlug ?? null,
   });
   // The dev copy never messages the team's Telegram group.
   const telegramSent = PRODUCTION ? await sendToTelegram(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_CHAT_ID, message) : false;
@@ -576,11 +744,105 @@ async function qiConfirm(event: { identity: unknown; arguments: { orderNumber: s
   return { orderNumber, ...result };
 }
 
+// ---- Checkout price, affiliate visits ---------------------------------------------
+
+type QuoteArgs = { items: unknown; couponCode?: string | null; ref?: string | null; province?: string | null; phone?: string | null };
+
+async function quote(event: { identity: unknown; arguments: QuoteArgs }) {
+  const identity = event.identity as AppSyncIdentityCognito | null;
+  const isTeam = Boolean(identity && (identity.groups ?? []).includes("ADMINS"));
+  const phone =
+    isTeam && event.arguments.phone
+      ? normalizeIraqiMobile(String(event.arguments.phone))
+      : isTeam
+        ? null
+        : identity && "sub" in identity
+          ? await customerPhone(identity)
+          : null;
+  let rawItems: unknown = event.arguments.items;
+  if (typeof rawItems === "string") {
+    try {
+      rawItems = JSON.parse(rawItems);
+    } catch {
+      rawItems = [];
+    }
+  }
+  const { lines } = priceCart(Array.isArray(rawItems) ? (rawItems.slice(0, 10) as CartItem[]) : []);
+  const jars = lines.reduce((n, l) => n + l.qty, 0);
+  const history = phone ? await historyFor(phone) : null;
+  const deal = await findDeal({
+    couponCode: String(event.arguments.couponCode ?? ""),
+    ref: String(event.arguments.ref ?? ""),
+    jars,
+    phone,
+    history,
+    useCredit: true,
+  });
+  const rule = deal.coupon ? ruleOf(deal.coupon) : null;
+  const p = priceOrder(lines.map((l) => ({ price: l.product.price, qty: l.qty })), rule, deal.credit);
+  return JSON.stringify({
+    ...p,
+    deliveryFee: p.freeDelivery ? 0 : site.deliveryFee,
+    pay: p.total + (p.freeDelivery ? 0 : site.deliveryFee),
+    credit: deal.credit,
+    coupon: deal.coupon
+      ? { code: deal.coupon.code, label: couponLabel(rule!), ok: true, hint: deal.hint }
+      : normalizeCode(event.arguments.couponCode) || deal.couponError
+        ? { code: normalizeCode(event.arguments.couponCode), ok: false, error: deal.couponError, hint: deal.hint }
+        : null,
+    campaign: deal.campaign ? { slug: deal.campaign.slug } : null,
+  });
+}
+
+async function campaignVisit(event: { arguments: { ref: string } }) {
+  const c = await campaignBySlug(String(event.arguments.ref ?? ""));
+  if (!c) return JSON.stringify({ ok: false });
+  await dynamo
+    .send(
+      new UpdateItemCommand({
+        TableName: process.env.COUNTERS_TABLE,
+        Key: { id: { S: `visit#${c.slug}` } },
+        UpdateExpression: "ADD #n :one",
+        ExpressionAttributeNames: { "#n": "value" },
+        ExpressionAttributeValues: { ":one": { N: "1" } },
+      }),
+    )
+    .catch((err) => console.error("counting the visit failed", err));
+  const coupon = await getCoupon(normalizeCode(c.couponCode));
+  const usable = coupon && !couponProblem(coupon, { now: new Date(), jars: 99 }) ? coupon : null;
+  return JSON.stringify({
+    ok: true,
+    slug: c.slug,
+    endsAt: c.endsAt ?? null,
+    coupon: usable ? { code: usable.code, label: couponLabel(ruleOf(usable)) } : null,
+  });
+}
+
+async function campaignStats(event: { arguments: { slugs: (string | null)[] } }) {
+  const slugs = [...new Set((event.arguments.slugs ?? []).filter((s): s is string => Boolean(s)))].slice(0, 100);
+  const visits: Record<string, number> = {};
+  for (let i = 0; i < slugs.length; i += 100) {
+    const chunk = slugs.slice(i, i + 100);
+    const r = await dynamo.send(
+      new BatchGetItemCommand({
+        RequestItems: { [process.env.COUNTERS_TABLE!]: { Keys: chunk.map((s) => ({ id: { S: `visit#${s}` } })) } },
+      }),
+    );
+    for (const item of r.Responses?.[process.env.COUNTERS_TABLE!] ?? []) {
+      visits[String(item.id?.S ?? "").replace(/^visit#/, "")] = Number(item.value?.N ?? 0);
+    }
+  }
+  return JSON.stringify({ visits });
+}
+
 // ---- Entry ----------------------------------------------------------------------
 
 export const handler = async (event: unknown) => {
   if ((event as UrlEvent)?.requestContext?.http) return qiNotification(event as UrlEvent);
   const field = (event as { info?: { fieldName?: string } })?.info?.fieldName;
   if (field === "qiConfirm") return qiConfirm(event as Parameters<typeof qiConfirm>[0]);
+  if (field === "quote") return quote(event as Parameters<typeof quote>[0]);
+  if (field === "campaignVisit") return campaignVisit(event as Parameters<typeof campaignVisit>[0]);
+  if (field === "campaignStats") return campaignStats(event as Parameters<typeof campaignStats>[0]);
   return placeOrderHandler(event as PlaceOrderEvent);
 };

@@ -17,6 +17,7 @@ import { getProduct } from "@/lib/products";
 import { fullAddress } from "@/lib/iraq";
 import { reviewPath } from "@/lib/reviews";
 import { formatPoints, pointsFor, pointsSummary } from "@/lib/loyalty";
+import { creditBalance } from "@/lib/coupons";
 import { checkDelivery, type DeliveryInfo, type FieldErrors } from "@/lib/validate";
 import { EMPTY_DELIVERY, loadProfile, saveProfile, type Profile } from "@/lib/profile";
 
@@ -43,6 +44,13 @@ const CUSTOMER_FIELDS = [
   "deliveryPaid",
   // Reviewed by the customer already?
   "reviewed",
+  // Coupon, credit (cashback) and the price before the discount.
+  "subtotal",
+  "discount",
+  "couponCode",
+  "couponLabel",
+  "cashback",
+  "creditUsed",
   // Delivery tracking (from the courier's updates).
   "trackStatus",
   "trackEta",
@@ -184,6 +192,7 @@ export function AccountView() {
   }
 
   const points = pointsSummary(orders ?? []);
+  const credit = creditBalance(orders ?? []);
 
   return (
     <div className="account">
@@ -218,6 +227,16 @@ export function AccountView() {
           تحصل على 10 نقاط عن كل 1,000 د.ع، وتُضاف بعد توصيل الطلب.
         </p>
       </section>
+
+      {credit > 0 && (
+        <section className="points-card points-card--credit" aria-label="رصيدي">
+          <div>
+            <span className="points-card__label">رصيدي</span>
+            <strong className="points-card__value">{formatIQD(credit)}</strong>
+          </div>
+          <p className="points-card__note">كاش باك من طلباتكم السابقة، يُخصم تلقائياً من طلبكم الجاي.</p>
+        </section>
+      )}
 
       <div className="tabs" role="tablist" aria-label="أقسام الحساب">
         <button type="button" role="tab" aria-selected={tab === "orders"} onClick={() => setTab("orders")}>
@@ -369,10 +388,21 @@ function MyOrderDetail({ order: o }: { order: Order }) {
       <section className="order-detail__block">
         <h2>الطلب</h2>
         <OrderItemsList items={o.items} />
+        {o.discount ? (
+          <p className="order-detail__muted">
+            {o.couponLabel ?? "خصم"} ({o.couponCode}): −{formatIQD(o.discount)}
+          </p>
+        ) : null}
+        {o.creditUsed ? <p className="order-detail__muted">من رصيدكم: −{formatIQD(o.creditUsed)}</p> : null}
         <p className="order-card__total">
           <span>المجموع</span>
           <strong>{formatIQD(o.total)}</strong>
         </p>
+        {o.cashback ? (
+          <p className="order-detail__muted">
+            {o.status === "DELIVERED" ? `أضفنا ${formatIQD(o.cashback)} لرصيدكم.` : `تنضاف ${formatIQD(o.cashback)} لرصيدكم بعد التسليم.`}
+          </p>
+        ) : null}
         <p className="order-detail__muted">
           {collectStatement(o.total, Boolean(o.paid), deliveryPayOf(o))}
         </p>

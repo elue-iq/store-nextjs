@@ -3,6 +3,7 @@
 
 import { deliveryPayOf, site } from "./site";
 import { modonCollect } from "./modon";
+import { spreadDiscount } from "./coupons";
 
 // Boxy's province codes (docs: Provinces & Regions). Halabja is served from Sulaymaniyah.
 export const BOXY_PROVINCE: Record<string, string> = {
@@ -79,9 +80,12 @@ export function boxyProducts(o: {
   deliveryPaid?: boolean | null;
 }): { title: string; price: number; quantity: number }[] {
   const paid = Boolean(o.paid);
-  const lines = (o.items ?? [])
+  const jars = (o.items ?? [])
     .filter((i): i is NonNullable<typeof i> => Boolean(i))
     .map((i) => ({ title: String(i.nameAr ?? "ترافل ÉLUE"), price: paid ? 0 : i.price, quantity: i.qty }));
+  // A coupon or credit: the jars' prices are lowered so they add up to the order's total.
+  const goods = jars.reduce((n, l) => n + l.price * l.quantity, 0);
+  const lines = paid ? jars : spreadDiscount(jars, goods - o.total);
   if (deliveryPayOf(o) === "driver") lines.push({ title: "رسوم التوصيل", price: site.deliveryFee, quantity: 1 });
   return lines;
 }

@@ -29,6 +29,7 @@ backend.boxy.addEnvironment("STAGE", stage);
 backend.eatix.addEnvironment("STAGE", stage);
 backend.dispatch.addEnvironment("STAGE", stage);
 backend.igOrder.addEnvironment("STAGE", stage);
+backend.submitReview.addEnvironment("STAGE", stage);
 
 // Login settings for the website's Cognito app client:
 // - only the WhatsApp-code sign-in (custom auth) plus token refresh

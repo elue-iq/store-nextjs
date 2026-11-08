@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ReviewSummary, Stars, type ReviewRow } from "./ReviewStats";
-import { dataClient } from "@/lib/data";
+import { dataClient, type Order } from "@/lib/data";
+import { ReviewRequestButton } from "./SendOrderToCustomer";
 import { average, fmtAvg } from "@/lib/reviews";
 import { getProduct } from "@/lib/products";
 import { chatUrl } from "@/lib/share";
@@ -11,7 +12,66 @@ const dateOf = (iso: string) => new Intl.DateTimeFormat("sv-SE", { timeZone: "As
 
 // The team's view of the reviews: the same text customers see (nothing is editable or
 // removable), plus who delivered each order, to compare the delivery companies.
-export function AdminReviews({ onOpenOrder }: { onOpenOrder: (orderNumber: string) => void }) {
+// Delivered orders still waiting for a review: never asked first (oldest first), then asked.
+function ReviewTodo({ orders, me, onOpenOrder }: { orders: Order[]; me: string; onOpenOrder: (n: string) => void }) {
+  const [all, setAll] = useState(false);
+  const delivered = orders.filter((o) => o.status === "DELIVERED");
+  const waiting = delivered
+    .filter((o) => !o.reviewed)
+    .sort((a, b) => Number(Boolean(a.reviewRequestedAt)) - Number(Boolean(b.reviewRequestedAt)) || a.createdAt.localeCompare(b.createdAt));
+  const reviewed = delivered.length - waiting.length;
+  const notAsked = waiting.filter((o) => !o.reviewRequestedAt).length;
+  if (!delivered.length) return null;
+  const shown = all ? waiting : waiting.slice(0, 5);
+  return (
+    <section className="order-detail__block review-todo">
+      <h2>بانتظار التقييم</h2>
+      <dl className="settle-summary">
+        <div>
+          <dt>نسبة التقييم</dt>
+          <dd>{Math.round((reviewed / delivered.length) * 100)}%</dd>
+        </div>
+        <div>
+          <dt>لم يُطلب</dt>
+          <dd className={notAsked ? "is-warn" : undefined}>{notAsked}</dd>
+        </div>
+        <div>
+          <dt>طُلب ولم يقيّم</dt>
+          <dd>{waiting.length - notAsked}</dd>
+        </div>
+      </dl>
+      {waiting.length === 0 ? (
+        <p className="hint">كل الطلبات المُسلّمة مقيّمة. 👏</p>
+      ) : (
+        <ul className="review-todo__list">
+          {shown.map((o) => (
+            <li key={o.id}>
+              <button type="button" className="link-button" onClick={() => onOpenOrder(o.orderNumber)}>
+                <span dir="ltr">{o.orderNumber}</span> · {o.name}
+              </button>
+              <ReviewRequestButton order={o} me={me} compact />
+            </li>
+          ))}
+        </ul>
+      )}
+      {waiting.length > 5 && (
+        <button type="button" className="link-button" onClick={() => setAll(!all)}>
+          {all ? "عرض أقل" : `عرض الكل (${waiting.length})`}
+        </button>
+      )}
+    </section>
+  );
+}
+
+export function AdminReviews({
+  onOpenOrder,
+  orders,
+  me,
+}: {
+  onOpenOrder: (orderNumber: string) => void;
+  orders: Order[] | null;
+  me: string;
+}) {
   const [rows, setRows] = useState<ReviewRow[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [low, setLow] = useState(false);
@@ -45,15 +105,23 @@ export function AdminReviews({ onOpenOrder }: { onOpenOrder: (orderNumber: strin
     return [...m.entries()].map(([name, v]) => ({ name, n: v.length, avg: average(v) })).sort((a, b) => b.n - a.n);
   }, [rows]);
 
+  const todo = orders ? <ReviewTodo orders={orders} me={me} onOpenOrder={onOpenOrder} /> : null;
   if (failed) return <p className="panel-note">تعذّر تحميل التقييمات.</p>;
   if (rows === null) return <p className="panel-loading">جارٍ التحميل…</p>;
-  if (rows.length === 0) return <p className="reviews__empty">لسا ما وصلت تقييمات. بعد التوصيل، أرسل للعميل «اطلب من العميل تقييم الطلب» من شاشة الطلب.</p>;
+  if (rows.length === 0)
+    return (
+      <>
+        {todo}
+        <p className="reviews__empty">لسا ما وصلت تقييمات. اطلبوا التقييم من القائمة أعلاه بعد كل تسليم.</p>
+      </>
+    );
 
   const shown = low ? rows.filter((r) => r.taste <= 2 || r.delivery <= 2) : rows;
   const lowCount = rows.filter((r) => r.taste <= 2 || r.delivery <= 2).length;
 
   return (
     <div className="reviews reviews--admin">
+      {todo}
       <p className="hint">التقييمات تظهر للزبائن في /reviews كما هي. لا يمكن تعديلها أو حذفها من التطبيق، هذا جزء من وعد الشفافية.</p>
       <ReviewSummary rows={rows} />
 

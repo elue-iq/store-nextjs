@@ -26,6 +26,7 @@ export type ReceiptData = {
   paid?: boolean; // customer already paid for the jars
   freeDelivery?: boolean; // ÉLUE covers the delivery fee (gift)
   deliveryPaid?: boolean; // customer already paid the delivery fee
+  discounts?: { label: string; amount: number }[]; // coupon / credit, already taken off total
 };
 
 const W = 1240;
@@ -115,6 +116,18 @@ function draw(ctx: CanvasRenderingContext2D, d: ReceiptData): number {
   }
   y -= 20;
   rule(y);
+
+  // Coupon / credit lines.
+  if (d.discounts?.length) {
+    y += 64;
+    for (const x of d.discounts) {
+      text(x.label, R, y, { size: 30, color: C.cocoa });
+      text(`−${formatIQD(x.amount)}`, M, y, { size: 30, weight: 600, color: C.terracotta, align: "left" });
+      y += 48;
+    }
+    y -= 30;
+    rule(y);
+  }
 
   // Total, and what the driver collects.
   const paid = Boolean(d.paid);
@@ -271,6 +284,10 @@ export function receiptFromOrder(o: {
   paid?: boolean | null;
   freeDelivery?: boolean | null;
   deliveryPaid?: boolean | null;
+  discount?: number | null;
+  creditUsed?: number | null;
+  couponCode?: string | null;
+  couponLabel?: string | null;
 }): ReceiptData {
   const time = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Baghdad", dateStyle: "short", timeStyle: "short" }).format(
     new Date(o.createdAt),
@@ -296,6 +313,10 @@ export function receiptFromOrder(o: {
     paid: Boolean(o.paid),
     freeDelivery: Boolean(o.freeDelivery),
     deliveryPaid: Boolean(o.deliveryPaid),
+    discounts: [
+      ...(o.discount ? [{ label: `${o.couponLabel ?? "خصم"}${o.couponCode ? ` · ${o.couponCode}` : ""}`, amount: o.discount }] : []),
+      ...(o.creditUsed ? [{ label: "من رصيدكم", amount: o.creditUsed }] : []),
+    ],
   };
 }
 
