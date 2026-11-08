@@ -6,6 +6,8 @@ import { slotText } from "@/lib/delivery-slot";
 import { baghdadTime, type Order } from "@/lib/data";
 import { fullAddress } from "@/lib/iraq";
 import { formatIQD, PAY_KEY_LABELS, payKeyOf } from "@/lib/site";
+import { formatIraqiMobile } from "@/lib/phone";
+import { useToast } from "./Toast";
 
 export const baghdadDay = (iso: string) =>
   new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Baghdad", year: "numeric", month: "2-digit", day: "2-digit" }).format(
@@ -18,7 +20,72 @@ export function shortTime(iso: string, today: string): string {
   return baghdadDay(iso) === today ? full.slice(11) : full.slice(5);
 }
 
-// One order in a list (the orders screen and the dashboard). Tapping opens it.
+// Where an order is with delivery: one short tag. Problems at Boxy show in red.
+function deliveryTag(o: Order): { text: string; warn?: boolean } | null {
+  if (o.modonQr || o.courierKind === "MODON") return { text: "مدن" };
+  if (o.boxyUid || o.courierKind === "BOXY") {
+    const live = o.status !== "DELIVERED" && o.status !== "CANCELLED";
+    if (o.boxyCooled === false && live) return { text: "بوكسي · بدون تبريد", warn: true };
+    if (live && o.boxyStatusTitle && boxyNeedsAttention(o.boxyStatus)) return { text: `بوكسي · ${o.boxyStatusTitle}`, warn: true };
+    return { text: "بوكسي" };
+  }
+  if (o.courierKind === "LOCAL" && o.courierName) return { text: o.courierName };
+  if (o.status === "CONFIRMED") return { text: "بلا شركة توصيل", warn: true };
+  return null;
+}
+
+// Paid, gift, free delivery: one short word (the details are on the order screen).
+function payNote(o: Order): { text: string; warn?: boolean } | null {
+  const pay = payKeyOf(o);
+  if (pay === "GIFT") return { text: "هدية" };
+  if (pay === "unknown") return { text: "بلا طريقة دفع", warn: true };
+  if (o.paid) return { text: `مدفوع · ${PAY_KEY_LABELS[pay]}` };
+  if (o.deliveryPaid) return { text: "التوصيل مدفوع" };
+  if (o.freeDelivery) return { text: "توصيل مجاني" };
+  return null;
+}
+
+// Review state of a delivered order. «لم يُطلب» is the one to act on.
+export type ReviewState = "notAsked" | "waiting" | "reviewed";
+export function reviewState(o: Pick<Order, "status" | "reviewed" | "reviewRequestedAt">): ReviewState | null {
+  if (o.status !== "DELIVERED") return null;
+  return o.reviewed ? "reviewed" : o.reviewRequestedAt ? "waiting" : "notAsked";
+}
+export const REVIEW_STATE_LABELS: Record<ReviewState, string> = {
+  notAsked: "لم يُطلب التقييم",
+  waiting: "بانتظار التقييم",
+  reviewed: "مُقيَّم",
+};
+
+// A value with a small copy button (order number, name, phone).
+function Copyable({ text, value, label, ltr = false, className }: { text: string; value?: string; label: string; ltr?: boolean; className?: string }) {
+  const toast = useToast();
+  return (
+    <span className={`copyable ${className ?? ""}`}>
+      <span dir={ltr ? "ltr" : undefined}>{text}</span>
+      <button
+        type="button"
+        className="copyable__btn"
+        aria-label={`نسخ ${label}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          void navigator.clipboard
+            ?.writeText(value ?? text)
+            .then(() => toast({ id: "copy", message: `نُسخ ${label}: ${value ?? text}` }))
+            .catch(() => toast({ id: "copy", tone: "attention", message: "تعذّر النسخ." }));
+        }}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="8" y="8" width="12" height="12" rx="2.5" />
+          <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
+        </svg>
+      </button>
+    </span>
+  );
+}
+
+// One order in a list (the orders screen and the dashboard). Tapping the card opens it;
+// the order number, name and phone each have a copy button.
 export function OrderRow({
   order: o,
   today,
@@ -31,86 +98,53 @@ export function OrderRow({
   flavors?: string[]; // flavors being filtered: their lines are shown on the row
 }) {
   const picked = flavors.length ? o.items.filter((i): i is NonNullable<typeof i> => Boolean(i) && flavors.includes(i!.slug)) : [];
-  const pay = payKeyOf(o);
+  const delivery = deliveryTag(o);
+  const money = payNote(o);
+  const review = reviewState(o);
+  const slot = o.status !== "DELIVERED" && o.status !== "CANCELLED" ? slotText(o) : null;
+  const place = [o.province, o.area].filter(Boolean).join("، ") || fullAddress(o);
+  const meta: { text: string; warn?: boolean; key: string }[] = [
+    ...(slot ? [{ key: "slot", text: slot }] : []),
+    ...(money ? [{ key: "pay", ...money }] : []),
+    ...(o.couponCode ? [{ key: "coupon", text: o.couponCode }] : []),
+  ];
   return (
-    <button type="button" className={`order-row order-row--${o.status.toLowerCase()}`} onClick={() => onOpen(o.orderNumber)}>
-      <span className="order-row__main">
-        <span className="order-row__top">
-          <strong dir="ltr">{o.orderNumber}</strong>
-          <StatusChip status={o.status} />
-          {pay === "GIFT" ? (
-            <span className="order-row__paid order-row__free">هدية</span>
-          ) : (
-            o.paid && <span className="order-row__paid">مدفوع{pay !== "unknown" ? ` · ${PAY_KEY_LABELS[pay]}` : ""}</span>
-          )}
-          {o.deliveryPaid ? (
-            <span className="order-row__paid">التوصيل مدفوع{!o.paid && pay !== "unknown" ? ` · ${PAY_KEY_LABELS[pay]}` : ""}</span>
-          ) : (
-            o.freeDelivery && <span className="order-row__paid order-row__free">توصيل مجاني</span>
-          )}
-          {pay === "unknown" && <span className="order-row__paid order-row__warn">بلا طريقة دفع</span>}
-          {o.status === "DELIVERED" && (
-            <span className={o.reviewed ? "order-row__paid order-row__free" : o.reviewRequestedAt ? "order-row__paid" : "order-row__paid order-row__warn"}>
-              {o.reviewed ? "★ مُقيَّم" : o.reviewRequestedAt ? "طُلب التقييم" : "اطلب التقييم"}
+    <article className={`ocard ocard--${o.status.toLowerCase()}`}>
+      <button type="button" className="ocard__open" onClick={() => onOpen(o.orderNumber)} aria-label={`فتح الطلب ${o.orderNumber}`} />
+      <div className="ocard__line">
+        <Copyable className="ocard__num" text={o.orderNumber} label="رقم الطلب" ltr />
+        <StatusChip status={o.status} />
+        <strong className="ocard__amount">{formatIQD(o.total)}</strong>
+      </div>
+      <div className="ocard__line">
+        <Copyable className="ocard__name" text={o.name} label="الاسم" />
+        <span className="ocard__time" dir="ltr">
+          {shortTime(o.createdAt, today)}
+        </span>
+      </div>
+      <div className="ocard__line">
+        <Copyable className="ocard__phone" text={formatIraqiMobile(o.phone)} value={`0${o.phone.slice(3)}`} label="الرقم" ltr />
+        <span className="ocard__place">{place}</span>
+      </div>
+      {(delivery || review || meta.length > 0) && (
+        <div className="ocard__tags">
+          {delivery && <span className={delivery.warn ? "ocard__tag is-warn" : "ocard__tag"}>{delivery.text}</span>}
+          {review && (
+            <span className={`ocard__tag ocard__review is-${review}`}>
+              {review === "reviewed" ? "★ " : ""}
+              {REVIEW_STATE_LABELS[review]}
             </span>
           )}
-          {o.boxyCooled === false && o.status !== "DELIVERED" && o.status !== "CANCELLED" && (
-            <span className="order-row__paid order-row__warn">بدون تبريد</span>
-          )}
-          {o.couponCode && (
-            <span className="order-row__paid" dir="ltr">
-              {o.couponCode}
+          {meta.map((m) => (
+            <span key={m.key} className={m.warn ? "ocard__meta is-warn" : "ocard__meta"} dir={m.key === "coupon" ? "ltr" : undefined}>
+              {m.text}
             </span>
-          )}
-          {slotText(o) && <span className="order-row__paid">{slotText(o)}</span>}
-          {o.courierKind === "LOCAL" && o.courierName && (
-            <span className="order-row__paid order-row__free">{o.courierName}</span>
-          )}
-        </span>
-        <span className="order-row__name">{o.name}</span>
-        {picked.length > 0 && (
-          <span className="order-row__flavors">
-            {picked.map((i) => (
-              <span key={i.slug} className="order-row__paid">
-                {i.nameAr} × {i.qty}
-              </span>
-            ))}
-          </span>
-        )}
-        <span className={o.cashierOrderId ? "order-row__cashier" : "order-row__cashier is-missing"}>
-          {o.cashierOrderId ? (
-            <>
-              كاشير: <span dir="ltr">{o.cashierOrderId}</span>
-            </>
-          ) : (
-            "بلا رقم كاشير"
-          )}
-          {o.createdBy && " · أنشأه الفريق"}
-          {o.modonQr && (
-            <>
-              {" · "}مدن: <span dir="ltr">{o.modonQr}</span>
-            </>
-          )}
-          {o.boxyCode && (
-            <>
-              {" · "}بوكسي: <span dir="ltr">{o.boxyCode}</span>
-            </>
-          )}
-        </span>
-        {o.boxyUid && o.boxyStatusTitle && o.status !== "DELIVERED" && o.status !== "CANCELLED" && (
-          <span className={boxyNeedsAttention(o.boxyStatus) ? "order-row__courier is-problem" : "order-row__courier"}>
-            لدى بوكسي: {o.boxyStatusTitle}
-          </span>
-        )}
-        <span className="order-row__sub">{[o.province, o.area].filter(Boolean).join("، ") || fullAddress(o)}</span>
-      </span>
-      <span className="order-row__side">
-        <strong>{formatIQD(o.total)}</strong>
-        <span dir="ltr">{shortTime(o.createdAt, today)}</span>
-      </span>
-      <svg className="order-row__chevron" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M15 5l-7 7 7 7" />
-      </svg>
-    </button>
+          ))}
+        </div>
+      )}
+      {picked.length > 0 && (
+        <p className="ocard__flavors">{picked.map((i) => `${i.nameAr} × ${i.qty}`).join(" · ")}</p>
+      )}
+    </article>
   );
 }

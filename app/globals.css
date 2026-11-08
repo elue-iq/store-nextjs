@@ -5493,3 +5493,162 @@ button.dash-bars__row:focus-visible {
   .form-row { grid-template-columns: 1fr; }
   .settle-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
+
+/* ---- Order card (orders list, dashboard) --------------------------------------- */
+.order-rows { display: grid; gap: 0.6rem; border-top: 0; }
+.order-rows li { border-bottom: 0; }
+.ocard {
+  position: relative;
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.8rem 0.95rem 0.75rem;
+  border: 1px solid var(--sand);
+  border-radius: var(--radius-label);
+  background: var(--paper);
+}
+.ocard--new { border-color: var(--terracotta); border-inline-start-width: 4px; }
+.ocard--cancelled { opacity: 0.6; }
+.ocard__open {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  border-radius: inherit;
+  background: none;
+  cursor: pointer;
+}
+.ocard__open:active { background: color-mix(in srgb, var(--sand) 45%, transparent); }
+.ocard__open:focus-visible { outline: 2px solid var(--terracotta-deep); outline-offset: 2px; }
+/* Everything above the card's tap area lets taps through, except the copy buttons. */
+.ocard > :not(.ocard__open) { position: relative; pointer-events: none; }
+.ocard .copyable__btn { pointer-events: auto; }
+.ocard__line { display: flex; align-items: center; gap: 0.5rem; min-width: 0; }
+.ocard__num { font-weight: 700; color: var(--cocoa); }
+.ocard .status-chip { white-space: nowrap; font-size: 0.78rem; padding: 0.15rem 0.6rem; }
+.ocard__amount { margin-inline-start: auto; font-weight: 700; color: var(--cocoa); white-space: nowrap; }
+.ocard__name { font-weight: 600; font-size: 1.05rem; color: var(--ink); }
+.ocard__time { margin-inline-start: auto; color: var(--muted); font-size: 0.85rem; white-space: nowrap; }
+.ocard__phone { color: var(--muted); font-size: 0.92rem; }
+.ocard__place {
+  min-width: 0;
+  margin-inline-start: auto;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.88rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.copyable { display: inline-flex; align-items: center; gap: 0.1rem; min-width: 0; }
+.copyable > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.copyable__btn {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  margin: -0.45rem 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: #b59d84;
+  cursor: pointer;
+}
+.copyable__btn:active { background: var(--sand); color: var(--cocoa); }
+.copyable__btn svg { width: 0.95rem; height: 0.95rem; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.ocard__tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+  margin-top: 0.25rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed var(--sand);
+}
+.ocard__tag {
+  padding: 0.08rem 0.5rem;
+  border: 1px solid var(--sand-deep);
+  border-radius: 6px;
+  color: var(--cocoa);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.ocard__tag.is-warn { border-color: var(--error); background: #f6e3dc; color: var(--error); }
+.ocard__review.is-notAsked { border-color: var(--terracotta); background: #f1dccf; color: var(--terracotta-deep); }
+.ocard__review.is-waiting { border-style: dashed; color: var(--muted); }
+.ocard__review.is-reviewed { border-color: var(--sage); background: var(--sage); color: var(--sage-deep); }
+.ocard__meta { color: var(--muted); font-size: 0.82rem; white-space: nowrap; }
+.ocard__meta.is-warn { color: var(--error); }
+.ocard__flavors { margin: 0; color: var(--terracotta-deep); font-size: 0.85rem; }
+
+/* Search with a keyboard «Search» key and a 🔎 button (both close the keyboard). */
+.admin-searchbox { position: relative; display: block; }
+.admin-searchbox .admin-search { padding-inline-end: 5.4rem; }
+.admin-searchbox .admin-search::-webkit-search-cancel-button { display: none; }
+.admin-searchbox__btns {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 0.3rem;
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+}
+.admin-searchbox__btns button {
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--cocoa);
+  cursor: pointer;
+}
+.admin-searchbox__btns button[type="submit"] { background: var(--terracotta-deep); color: var(--cream); width: 2.3rem; height: 2.3rem; }
+.admin-searchbox__btns svg { width: 1.15rem; height: 1.15rem; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+
+/* «Ask for the review» dialog */
+.ask-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  align-items: end;
+  background: rgb(59 42 35 / 0.38);
+}
+.ask-dialog__panel {
+  display: grid;
+  gap: 0.7rem;
+  margin: 0 auto;
+  width: min(100%, 520px);
+  padding: 1.3rem 1.2rem calc(1.2rem + env(safe-area-inset-bottom, 0px));
+  border-radius: 18px 18px 0 0;
+  background: var(--paper);
+  box-shadow: 0 -10px 40px rgb(59 42 35 / 0.18);
+}
+.ask-dialog__panel h2 { margin: 0; font-size: 1.15rem; color: var(--cocoa); }
+.ask-dialog__panel p { margin: 0; color: var(--muted); }
+@media (min-width: 700px) {
+  .ask-dialog { align-items: center; }
+  .ask-dialog__panel { border-radius: 18px; }
+}
+.ask-dialog .review-ask--compact .btn { width: 100%; min-height: 3rem; font-size: 1rem; }
+.review-due {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  width: 100%;
+  margin: 0 0 0.6rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--terracotta);
+  border-radius: var(--radius-panel);
+  background: #f1dccf;
+  color: var(--terracotta-deep);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.review-due strong { white-space: nowrap; }
+.ocard__line { justify-content: space-between; }
+.ocard__line .status-chip { margin-inline-end: auto; }
+.ocard__meta + .ocard__meta::before { content: "·"; margin-inline-end: 0.5rem; }
+.ocard__time { margin: 0; }

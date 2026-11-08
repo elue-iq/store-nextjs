@@ -169,6 +169,44 @@ export function ReviewPanel({ order: o, me }: { order: Order; me: string }) {
   );
 }
 
+// Delivered and nobody asked for the review yet: a prompt with the same «ask» action.
+// «لاحقاً» hides it for this order until the app is reopened.
+const promptDismissed = new Set<string>();
+export function ReviewPrompt({ order: o, me, force = false }: { order: Order; me: string; force?: boolean }) {
+  const due = o.status === "DELIVERED" && !o.reviewed && !o.reviewRequestedAt;
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (due && (force || !promptDismissed.has(o.id))) setOpen(true);
+    if (!due) setOpen(false);
+  }, [due, force, o.id]);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+  function close() {
+    promptDismissed.add(o.id);
+    setOpen(false);
+  }
+  if (!open) return null;
+  return (
+    <div className="ask-dialog" role="presentation" onClick={close}>
+      <div className="ask-dialog__panel" role="dialog" aria-modal="true" aria-labelledby="ask-title" onClick={(e) => e.stopPropagation()}>
+        <h2 id="ask-title">اطلب تقييم العميل</h2>
+        <p>
+          الطلب <strong dir="ltr">{o.orderNumber}</strong> وصل إلى {o.name.trim().split(/\s+/)[0]}، وما انطلب منه التقييم بعد. أرسلوا له رابط
+          التقييم على واتساب الآن.
+        </p>
+        <ReviewRequestButton order={o} me={me} compact onSent={close} />
+        <button type="button" className="btn btn--quiet btn--full" onClick={close}>
+          لاحقاً
+        </button>
+      </div>
+    </div>
+  );
+}
+
 const ago = (iso: string) => {
   const m = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
   if (m < 60) return `قبل ${m} دقيقة`;
@@ -179,11 +217,22 @@ const ago = (iso: string) => {
 };
 
 // The ask (first time) or a gentle reminder; recorded on the order so the team sees it.
-export function ReviewRequestButton({ order: o, me, compact = false }: { order: Order; me: string; compact?: boolean }) {
+export function ReviewRequestButton({
+  order: o,
+  me,
+  compact = false,
+  onSent,
+}: {
+  order: Order;
+  me: string;
+  compact?: boolean;
+  onSent?: () => void;
+}) {
   const toast = useToast();
   const asked = Boolean(o.reviewRequestedAt);
   const text = asked ? reviewReminderMessage(o, window.location.origin) : reviewRequestMessage(o, window.location.origin);
   function record() {
+    onSent?.();
     void dataClient.models.Order.update({
       id: o.id,
       reviewRequestedAt: new Date().toISOString(),
