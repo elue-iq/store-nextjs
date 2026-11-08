@@ -989,9 +989,6 @@ function OrderDetail({
             <button type="button" role="menuitem" onClick={() => setEditing(true)}>
               تعديل الطلب
             </button>
-            <button type="button" role="menuitem" onClick={() => void saveSummary()}>
-              حفظ صورة الملخص
-            </button>
             <a role="menuitem" href={`tel:+${o.phone}`}>
               اتصال بالعميل
             </a>
@@ -1063,6 +1060,9 @@ function OrderDetail({
             اتصال
           </a>
           <SendOrderToCustomer order={o} compact />
+          <button type="button" className="btn btn--quiet btn--small" onClick={() => void saveSummary()}>
+            حفظ الصورة
+          </button>
         </div>
       </section>
 
