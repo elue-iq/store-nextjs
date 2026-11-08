@@ -54,6 +54,9 @@ export function OrderRow({
               {o.reviewed ? "★ مُقيَّم" : o.reviewRequestedAt ? "طُلب التقييم" : "اطلب التقييم"}
             </span>
           )}
+          {o.boxyCooled === false && o.status !== "DELIVERED" && o.status !== "CANCELLED" && (
+            <span className="order-row__paid order-row__warn">بدون تبريد</span>
+          )}
           {o.couponCode && (
             <span className="order-row__paid" dir="ltr">
               {o.couponCode}
