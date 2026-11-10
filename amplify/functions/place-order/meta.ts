@@ -135,8 +135,13 @@ export async function sendPurchase(o: CapiOrder, t: Tracking, opts: { production
       console.log("meta capi: no access token set, purchase not sent", o.orderNumber);
       return;
     }
-    const body: Record<string, unknown> = { data: [purchaseEvent(o, t, opts.atMs ?? Date.now())], access_token: token };
-    if (t.testCode) body.test_event_code = t.testCode;
+    const event = purchaseEvent(o, t, opts.atMs ?? Date.now());
+    const body: Record<string, unknown> = { data: [event], access_token: token };
+    if (t.testCode) {
+      body.test_event_code = t.testCode;
+      // Test events only: the exact payload (hashes included, never the token) for the marketer to check.
+      console.log("meta capi: payload", o.orderNumber, JSON.stringify({ data: [event], test_event_code: t.testCode }));
+    }
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
     try {

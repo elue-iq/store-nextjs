@@ -125,6 +125,8 @@ async function placeIgOrder(body: Record<string, unknown>): Promise<Record<strin
       address: String(body.address ?? ""),
       note: String(body.note ?? "").slice(0, 380),
       source: "Instagram DM",
+      // Optional first-contact value from the ManyChat flow (ig_ad, ig_page, creator, friend, whatsapp, other).
+      heardFrom: ["ig_ad", "ig_page", "creator", "friend", "whatsapp", "other"].includes(String(body.heard ?? "")) ? String(body.heard) : undefined,
       items: JSON.stringify(items),
       customerPhone: phone,
     },
