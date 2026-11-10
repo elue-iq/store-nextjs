@@ -1,6 +1,7 @@
 "use client";
 
-import { pixelInitiateCheckout, pixelPurchase } from "@/lib/pixel";
+import { pixelInitiateCheckout, pixelPurchase, rememberPendingPurchase } from "@/lib/pixel";
+import { HEARD_OPTIONS, readAttribution, trackingNow, type HeardKey } from "@/lib/attribution";
 import { ReviewForm } from "./ReviewForm";
 import { pendingReview } from "@/lib/reviews";
 import Link from "next/link";
@@ -69,6 +70,9 @@ export function OrderFlow() {
   const [note, setNote] = useState("");
   const [phone2, setPhone2] = useState("");
   const [phone2Err, setPhone2Err] = useState("");
+  // «How did you hear about us?» (optional).
+  const [heard, setHeard] = useState<"" | HeardKey>("");
+  const [heardNote, setHeardNote] = useState("");
   const [busy, setBusy] = useState(false);
   // Pay now with Qi Card.
   const [payOnline, setPayOnline] = useState(false);
@@ -230,15 +234,22 @@ export function OrderFlow() {
         payOnline: onlineOk && payOnline ? true : undefined,
         couponCode: quote?.coupon?.ok ? quote.coupon.code : undefined,
         ref: cart.ref || undefined,
+        attribution: JSON.stringify(readAttribution() ?? {}),
+        heardFrom: heard || undefined,
+        heardNote: heard === "creator" || heard === "other" ? heardNote.trim().slice(0, 100) || undefined : undefined,
+        tracking: JSON.stringify(trackingNow()),
       });
+      // What the customer is charged: jars (after any discount) + the delivery fee unless it is free.
+      const charged = total + (freeDelivery ? 0 : site.deliveryFee);
       if (data?.orderNumber && data.payUrl) {
+        rememberPendingPurchase(data.orderNumber, cart.items, charged);
         // Paying now: the order is kept until Qi confirms it; the cart is cleared on return.
         window.location.href = data.payUrl;
         return;
       }
       if (data?.orderNumber) {
         setPlaced({ ...snapshot, orderNumber: data.orderNumber, createdAt: data.createdAt });
-        pixelPurchase(cart.items, total, data.orderNumber);
+        pixelPurchase(cart.items, charged, data.orderNumber);
         setStep("sent");
         cart.clear();
         if (cart.couponCode) cart.setCouponCode("");
@@ -545,6 +556,28 @@ export function OrderFlow() {
               </span>
               <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={400} />
             </label>
+
+            <label>
+              <span>
+                كيف سمعتم عنا؟ <span className="optional">(اختياري)</span>
+              </span>
+              <select value={heard} onChange={(e) => setHeard(e.target.value as "" | HeardKey)}>
+                <option value="">اختاروا</option>
+                {HEARD_OPTIONS.map((o) => (
+                  <option key={o.key} value={o.key}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {(heard === "creator" || heard === "other") && (
+              <label>
+                <span>
+                  {heard === "creator" ? "اسم المؤثر" : "تفاصيل"} <span className="optional">(اختياري)</span>
+                </span>
+                <input value={heardNote} onChange={(e) => setHeardNote(e.target.value)} maxLength={100} />
+              </label>
+            )}
 
             {inBaghdad && <SlotPicker id="slot-accept" slot={slot} date={slotDate} onSlot={setSlot} onDate={setSlotDate} />}
             {onlineOk && (

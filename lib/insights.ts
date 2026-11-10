@@ -14,7 +14,8 @@
 import type { Order, OrderStatus } from "./data";
 import { products } from "./products";
 import { formatIraqiMobile } from "./phone";
-import { PAY_KEY_LABELS, payKeyOf, type PayKey } from "./site";
+import { PAY_KEY_LABELS, payKeyOf, site, type PayKey } from "./site";
+import { heardLabel } from "./attribution";
 
 // ---- Days ----------------------------------------------------------------------
 
@@ -153,10 +154,25 @@ export function resolveRange(f: Filters, today: string, firstDay: string): { cur
 
 export const isTest = (o: Order) => /(^|\s|&)test=/.test(o.source ?? "");
 
+// The campaign details saved with a website order (utm_*, fbclid, referrer, landing page).
+export type OrderAttribution = Partial<Record<"utm_source" | "utm_medium" | "utm_campaign" | "utm_content" | "fbclid" | "ref" | "referrer" | "landing", string>>;
+export function attributionOf(o: Order): OrderAttribution {
+  try {
+    return o.attribution ? (JSON.parse(o.attribution) as OrderAttribution) : {};
+  } catch {
+    return {};
+  }
+}
+
 // Where the customer came from (the link they opened, kept with the order).
 export function sourceLabel(o: Order): string {
   const s = (o.source ?? "").toLowerCase();
-  if (!s) return o.createdBy ? "أنشأه الفريق" : "مباشر / غير معروف";
+  if (!s) {
+    if (o.createdBy) return "أنشأه الفريق";
+    // No campaign link: an ad click (fbclid) or the customer's own answer is the best clue.
+    if (attributionOf(o).fbclid) return "ميتا (إعلان)";
+    return heardLabel(o.heardFrom) || "مباشر / غير معروف";
+  }
   if (isTest(o)) return "تجريبي";
   if (/utm_source=(ig|instagram)/.test(s)) return "إنستغرام";
   if (/utm_source=(fb|facebook)/.test(s)) return "فيسبوك";
@@ -502,6 +518,7 @@ export function ordersCsv(orders: Order[], types: Map<string, "new" | "returning
     ...products.map((p) => p.nameAr),
     "العلب",
     "المجموع (د.ع)",
+    "رسوم التوصيل (د.ع)",
     "العلب مدفوعة مسبقاً",
     "طريقة الدفع",
     "رقم العملية",
@@ -512,12 +529,22 @@ export function ordersCsv(orders: Order[], types: Map<string, "new" | "returning
     "رقم الكاشير",
     "القناة",
     "المصدر",
+    "utm_source",
+    "utm_medium",
+    "utm_campaign",
+    "utm_content",
+    "fbclid",
+    "الموقع المحيل",
+    "صفحة الدخول",
+    "كيف سمع عنا",
+    "تفصيل (كيف سمع)",
     "العميل",
     "ملاحظة",
   ];
   const rows = orders.map((o) => {
     const qty = (slug: string) => lines(o).filter((l) => l.slug === slug).reduce((n, l) => n + l.qty, 0);
     const at = new Date(Date.parse(o.createdAt) + BAGHDAD_MS).toISOString().slice(0, 16).replace("T", " ");
+    const attr = attributionOf(o);
     return [
       o.orderNumber,
       at,
@@ -530,6 +557,7 @@ export function ordersCsv(orders: Order[], types: Map<string, "new" | "returning
       ...products.map((p) => qty(p.slug) || ""),
       o.jars,
       o.total,
+      o.freeDelivery ? 0 : site.deliveryFee,
       o.paid ? "نعم" : "",
       PAY_KEY_LABELS[payKeyOf(o)],
       o.payRef,
@@ -540,6 +568,15 @@ export function ordersCsv(orders: Order[], types: Map<string, "new" | "returning
       o.cashierOrderId,
       o.createdBy ? "الفريق" : "الموقع",
       sourceLabel(o),
+      attr.utm_source,
+      attr.utm_medium,
+      attr.utm_campaign,
+      attr.utm_content,
+      attr.fbclid,
+      attr.referrer,
+      attr.landing,
+      heardLabel(o.heardFrom),
+      o.heardNote,
       types.get(o.id) === "returning" ? "عائد" : "جديد",
       o.note,
     ]

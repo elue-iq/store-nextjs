@@ -101,6 +101,14 @@ const schema = a
         boxyRegionName: a.string().authorization((allow) => [allow.group("ADMINS")]),
         // false = Boxy refused cooled delivery to this area, so it went without cooling. Team only.
         boxyCooled: a.boolean().authorization((allow) => [allow.group("ADMINS")]),
+        // Where the customer came from (utm_*, fbclid, referrer, landing page) as JSON, and their
+        // answer to «how did you hear about us?». Team only.
+        attribution: a.string().authorization((allow) => [allow.group("ADMINS")]),
+        heardFrom: a.string().authorization((allow) => [allow.group("ADMINS")]),
+        heardNote: a.string().authorization((allow) => [allow.group("ADMINS")]),
+        // For Meta's Conversions API (JSON: fbp, fbc, ip, user agent, page): kept so the purchase
+        // can also be reported when a Qi Card payment is confirmed later. Team only.
+        capi: a.string().authorization((allow) => [allow.group("ADMINS")]),
         boxySentAt: a.datetime().authorization((allow) => [allow.group("ADMINS")]),
         boxyUpdatedAt: a.datetime().authorization((allow) => [allow.group("ADMINS")]),
         boxyEvents: a.json().authorization((allow) => [allow.group("ADMINS")]), // webhook notifications for this order
@@ -324,6 +332,12 @@ const schema = a
         // Discount code, and the affiliate campaign the customer came from (?ref=…).
         couponCode: a.string(),
         ref: a.string(),
+        // Marketing: the saved campaign details (JSON), «how did you hear about us?», and
+        // the browser's Meta cookies (JSON) for the Conversions API.
+        attribution: a.string(),
+        heardFrom: a.string(),
+        heardNote: a.string(),
+        tracking: a.string(),
       })
       .returns(a.ref("PlaceOrderResult"))
       .authorization((allow) => [allow.authenticated()])

@@ -6,6 +6,7 @@ import { useAuth } from "./AuthProvider";
 import { LoginPanel } from "./LoginPanel";
 import { useCart } from "./CartProvider";
 import { dataClient } from "@/lib/data";
+import { reportPendingPurchase } from "@/lib/pixel";
 
 type State = "checking" | "paid" | "failed" | "waiting";
 
@@ -31,6 +32,7 @@ export function PaidView() {
           if (!alive) return;
           if (data?.paid) {
             setState("paid");
+            reportPendingPurchase(orderNumber); // only now, with the payment confirmed
             cart.clear();
             return;
           }

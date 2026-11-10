@@ -3,13 +3,14 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { MAX_QTY_PER_LINE, type CartItem } from "@/lib/order-text";
 import { dataClient } from "@/lib/data";
+import { captureAttribution } from "@/lib/attribution";
 
 // The cart lives in the customer's browser (localStorage). It survives page
 // reloads and failed orders, and is cleared only after an order goes through.
 
 const CART_KEY = "elue-cart-v1";
 const SOURCE_KEY = "elue-source-v1";
-const SOURCE_PARAMS = ["ref", "utm_source", "utm_medium", "utm_campaign"];
+const SOURCE_PARAMS = ["ref", "utm_source", "utm_medium", "utm_campaign", "utm_content"];
 // Affiliate link (?ref=slug): remembered for 30 days, the latest link wins. The campaign's
 // coupon (if any) is offered at checkout.
 const REF_KEY = "elue-ref-v1";
@@ -63,6 +64,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setCart(read<CartState>(CART_KEY, {}));
+    captureAttribution(); // the full campaign details (utm_*, fbclid, referrer, landing), saved with the order
 
     // Remember where the visitor came from (ad, creator link...) so it shows on the order.
     const params = new URLSearchParams(window.location.search);
