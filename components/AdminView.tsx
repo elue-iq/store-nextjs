@@ -26,6 +26,8 @@ import { buildCustomers, CustomerDetail, CustomerList, CustomersSummary } from "
 import { jarsLabel } from "./AddToCart";
 import { DeliveryTracking, OrderItemsList, StatusTrack } from "./OrderBits";
 import { formatPoints, pointsFor } from "@/lib/loyalty";
+import { attributionOf } from "@/lib/insights";
+import { heardLabel } from "@/lib/attribution";
 import { dataClient, newestFirst, STATUS_LABELS, STATUS_ORDER, type Order, type OrderStatus } from "@/lib/data";
 import { formatIraqiMobile, toLatinDigits } from "@/lib/phone";
 import { slotText } from "@/lib/delivery-slot";
@@ -1156,6 +1158,7 @@ function OrderDetail({
               : `تُضاف ${formatPoints(pointsFor(o.total))} نقطة للعميل بعد التوصيل.`}
           </p>
         )}
+        <OrderSource order={o} />
         {(o.source || o.telegramSent === false) && (
           <p className="order-card__meta">
             {o.source && <span dir="ltr">{o.source}</span>}
@@ -1210,5 +1213,43 @@ function OrderDetail({
         )}
       </p>
     </article>
+  );
+}
+
+
+// Where the order came from: the campaign details saved from the customer's browser, and what
+// they answered to «how did you hear about us?» (website orders).
+function OrderSource({ order: o }: { order: Order }) {
+  const a = attributionOf(o);
+  const rows: [string, string][] = [
+    ["utm_source", a.utm_source ?? ""],
+    ["utm_medium", a.utm_medium ?? ""],
+    ["utm_campaign", a.utm_campaign ?? ""],
+    ["utm_content", a.utm_content ?? ""],
+    ["fbclid", a.fbclid ? `${a.fbclid.slice(0, 14)}…` : ""],
+    ["الموقع المحيل", a.referrer ?? ""],
+    ["صفحة الدخول", a.landing ?? ""],
+  ].filter((r): r is [string, string] => Boolean(r[1]));
+  const heard = heardLabel(o.heardFrom);
+  if (!rows.length && !heard) return null;
+  return (
+    <div className="order-source">
+      {heard && (
+        <p>
+          كيف سمع عنا: <strong>{heard}</strong>
+          {o.heardNote ? ` (${o.heardNote})` : ""}
+        </p>
+      )}
+      {rows.length > 0 && (
+        <dl>
+          {rows.map(([k, v]) => (
+            <div key={k}>
+              <dt>{k}</dt>
+              <dd dir="ltr">{v}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+    </div>
   );
 }

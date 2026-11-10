@@ -12,6 +12,7 @@ import { callModon } from "./AdminModon";
 import { callBoxy } from "./AdminBoxy";
 import { dataClient, errorCode, errorDetail, errorFields, type Order } from "@/lib/data";
 import { products } from "@/lib/products";
+import { HEARD_OPTIONS, type HeardKey } from "@/lib/attribution";
 import { MAX_QTY_PER_LINE } from "@/lib/order-text";
 import { collectBreakdown, modonCollect } from "@/lib/modon";
 import { formatIraqiMobile, normalizeIraqiMobile } from "@/lib/phone";
@@ -56,6 +57,10 @@ export function AdminOrderForm({
   });
   const [errors, setErrors] = useState<FieldErrors>({});
   const [note, setNote] = useState(order?.note ?? "");
+  // «How did the customer hear about us?»: asked in the chat, recorded here for ad attribution.
+  const [heard, setHeard] = useState<"" | HeardKey>((order?.heardFrom as HeardKey | null | undefined) ?? "");
+  const [heardNote, setHeardNote] = useState(order?.heardNote ?? "");
+  const [heardErr, setHeardErr] = useState("");
   const [cashier, setCashier] = useState(order?.cashierOrderId ?? "");
   // The jars: cash to the driver, paid in advance (Qi Card, ZainCash…), or a free gift from ÉLUE.
   const [jarsPay, setJarsPay] = useState<JarsPay>(
@@ -137,6 +142,12 @@ export function AdminOrderForm({
     if (Object.keys(found).length) return fieldsRef.current?.focusFirstError(found);
     if (!lines.length) {
       toast({ id: "admin", tone: "attention", message: "أضف نكهة واحدة على الأقل." });
+      return;
+    }
+    // A new order must say how the customer heard of ÉLUE (edits of old orders may leave it empty).
+    if (!order && !heard) {
+      setHeardErr("اختر كيف سمع الزبون عنا.");
+      document.getElementById("order-heard")?.scrollIntoView({ block: "center", behavior: "smooth" });
       return;
     }
     // Paid in advance: the method and the transaction number are required.
@@ -229,6 +240,10 @@ export function AdminOrderForm({
         }
       }
       if (inBaghdad && !order.slotAccepted) changes.slotAccepted = true;
+      const heardNew = heard || null;
+      const heardNoteNew = heard === "creator" || heard === "other" ? heardNote.trim().slice(0, 100) || null : null;
+      if (heardNew !== (order.heardFrom ?? null)) changes.heardFrom = heardNew;
+      if (heardNoteNew !== (order.heardNote ?? null)) changes.heardNote = heardNoteNew;
       if (!Object.keys(changes).length) {
         setBusy(false);
         onDone(order.orderNumber);
@@ -287,6 +302,8 @@ export function AdminOrderForm({
       freeDelivery: deliveryPay === "gift",
       deliveryPaid: deliveryPay === "prepaid",
       couponCode: jarsPay === "cash" && quote?.coupon?.ok ? quote.coupon.code : undefined,
+      heardFrom: heard || undefined,
+      heardNote: heard === "creator" || heard === "other" ? heardNote.trim().slice(0, 100) || undefined : undefined,
     });
     setBusy(false);
     if (data?.orderNumber) {
@@ -363,6 +380,30 @@ export function AdminOrderForm({
           ملاحظة (اختياري)
           <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={400} />
         </label>
+        <label id="order-heard">
+          كيف سمع عنا؟{order ? " (اختياري)" : ""}
+          <select
+            value={heard}
+            onChange={(e) => {
+              setHeard(e.target.value as "" | HeardKey);
+              setHeardErr("");
+            }}
+          >
+            <option value="">{order ? "غير معروف" : "اختر..."}</option>
+            {HEARD_OPTIONS.map((o) => (
+              <option key={o.key} value={o.key}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          {heardErr && <span className="field-error">{heardErr}</span>}
+        </label>
+        {(heard === "creator" || heard === "other") && (
+          <label>
+            {heard === "creator" ? "اسم المؤثر" : "تفاصيل"} (اختياري)
+            <input value={heardNote} onChange={(e) => setHeardNote(e.target.value)} maxLength={100} />
+          </label>
+        )}
       </section>
 
       <section className="order-detail__block">

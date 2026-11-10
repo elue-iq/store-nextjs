@@ -29,6 +29,7 @@ import { eatixConfig, eatixFields, sendOrder, toEatixOrder } from "../../../lib/
 import { OPEN_STATUSES, ORDER_RULES } from "../../../lib/order-rules";
 import { freeDeliveryFor, needsPayRef, site } from "../../../lib/site";
 import { cleanSlotDate, DEFAULT_SLOT, isSlotKey, SLOT_PROVINCE } from "../../../lib/delivery-slot";
+import { clientIp, cleanTracking, sendPurchase, type Tracking } from "./meta";
 import { sendOrderConfirmation } from "../../../lib/orderConfirmation";
 import { pendingReview } from "../../../lib/reviews";
 import { createPayment, getPaymentStatus, qiConfig, verifyNotification, type QiPayment } from "../../../lib/qi";
@@ -394,6 +395,11 @@ async function placeOrderHandler(event: PlaceOrderEvent) {
   const deliverySlot = inBaghdad ? (isSlotKey(args.deliverySlot) ? args.deliverySlot : DEFAULT_SLOT) : null;
   const deliveryDate = inBaghdad ? cleanSlotDate(args.deliveryDate) : null;
   const source = String(args.source ?? "").trim().slice(0, 200) || null;
+  // Marketing details from the customer's browser (cleaned: never trusted as is).
+  const attribution = cleanAttribution(args.attribution);
+  const heardFrom = HEARD_KEYS.has(String(args.heardFrom ?? "")) ? String(args.heardFrom) : null;
+  const heardNote = heardFrom ? String(args.heardNote ?? "").trim().slice(0, 100) || null : null;
+  const tracking = cleanTracking(args.tracking, (event as unknown as { request?: { headers?: Record<string, string> } }).request?.headers, PRODUCTION);
 
   let rawItems: unknown = args.items;
   if (typeof rawItems === "string") {
@@ -462,6 +468,13 @@ async function placeOrderHandler(event: PlaceOrderEvent) {
       note,
       phone2: phone2 && phone2 !== phone ? phone2 : null,
       source,
+      attribution: attribution ? JSON.stringify(attribution) : null,
+      creatorRef: creatorRefOf(attribution),
+      // From the Instagram DM flow (ManyChat): the ad id or ref the conversation started from.
+      sourceRef: isTeam ? String(args.sourceRef ?? "").trim().slice(0, 100) || null : null,
+      heardFrom,
+      heardNote,
+      capi: isTeam ? null : JSON.stringify(tracking),
       items: lines.map((l) => ({
         slug: l.product.slug,
         nameAr: l.product.nameAr,
@@ -533,6 +546,8 @@ async function placeOrderHandler(event: PlaceOrderEvent) {
     }
 
     const telegramSent = await notifyTeam(order);
+    // Report the purchase to Meta (website orders only; never blocks the order).
+    if (!isTeam) await reportPurchase(order, tracking, Date.parse(order.createdAt) || Date.now());
     return { id: order.id, orderNumber: number, createdAt: order.createdAt, telegramSent, payUrl: null };
   };
 
@@ -545,6 +560,83 @@ async function placeOrderHandler(event: PlaceOrderEvent) {
   } finally {
     if (lockedOwner) await unlockCustomer(lockedOwner);
   }
+}
+
+// ---- Marketing: where the order came from, and the Meta purchase -----------------
+
+const HEARD_KEYS = new Set(["ig_ad", "ig_page", "creator", "friend", "whatsapp", "other"]);
+
+// The saved campaign details (utm_*, fbclid, referrer, landing page): plain short strings only.
+type CleanTouch = Record<string, string | number | Record<string, string | number>>;
+
+function cleanTouch(a: Record<string, unknown>): Record<string, string | number> {
+  const out: Record<string, string | number> = {};
+  for (const [k, max] of [["utm_source", 80], ["utm_medium", 80], ["utm_campaign", 80], ["utm_content", 80], ["utm_term", 80], ["fbclid", 300], ["ref", 80], ["referrer", 200], ["landing", 300]] as const) {
+    const v = a[k];
+    if (typeof v === "string" && v.trim()) out[k] = v.trim().slice(0, max);
+  }
+  if (typeof a.at === "number" && Number.isFinite(a.at)) out.at = a.at;
+  return out;
+}
+
+function cleanAttribution(raw: unknown): CleanTouch | null {
+  let a: Record<string, unknown> = {};
+  try {
+    a = typeof raw === "string" ? (JSON.parse(raw) as Record<string, unknown>) : {};
+  } catch {
+    return null;
+  }
+  const out: CleanTouch = cleanTouch(a);
+  if (a.first && typeof a.first === "object") {
+    const first = cleanTouch(a.first as Record<string, unknown>);
+    if (Object.keys(first).length) out.first = first;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+// The creator behind a ?ref=<creator> link (latest touch, else first touch): a short lowercase slug.
+function creatorRefOf(attribution: CleanTouch | null): string | null {
+  const first = attribution?.first as Record<string, string> | undefined;
+  const raw = String(attribution?.ref ?? first?.ref ?? "").toLowerCase().replace(/[^a-z0-9_.-]/g, "").slice(0, 60);
+  return raw || null;
+}
+
+// IPv4 -> a.b.c.0, IPv6 -> first three groups: enough to tell networks apart, not people.
+function ipPrefix(ip: string | undefined): string {
+  if (!ip) return "";
+  if (ip.includes(":")) return ip.split(":").slice(0, 3).join(":") + "::";
+  const p = ip.split(".");
+  return p.length === 4 ? `${p[0]}.${p[1]}.${p[2]}.0` : "";
+}
+
+function parseTracking(raw: string | null | undefined): Tracking {
+  try {
+    return raw ? (JSON.parse(raw) as Tracking) : {};
+  } catch {
+    return {};
+  }
+}
+
+// A test order (source has "test=") is never reported to Meta.
+const isTestOrder = (o: { source?: string | null }) => /(^|\s|&)test=/.test(o.source ?? "");
+
+// Purchase → Meta Conversions API, with a time limit (the order is already saved).
+async function reportPurchase(order: OrderRecord, tracking: Tracking, atMs: number): Promise<void> {
+  if (isTestOrder(order)) return;
+  await sendPurchase(
+    {
+      orderNumber: order.orderNumber,
+      phone: order.phone,
+      name: order.name,
+      province: order.province,
+      items: (order.items ?? []) as { slug: string; qty: number; price: number }[],
+      jars: order.jars,
+      total: order.total,
+      freeDelivery: order.freeDelivery,
+    },
+    tracking,
+    { production: PRODUCTION, atMs },
+  );
 }
 
 // ---- Telling the team about an order ------------------------------------------
@@ -679,6 +771,8 @@ async function finishPayment(order: OrderRecord, p: QiPayment): Promise<{ status
       throw new Error("save_failed");
     }
     await notifyTeam(updated);
+    // The payment is confirmed: this is the purchase (once, thanks to claimPayment).
+    if (updated.capi) await reportPurchase(updated, parseTracking(updated.capi), Date.now());
     return { status: "SUCCESS", paid: true };
   }
   if (p.status === "FAILED" || p.status === "AUTHENTICATION_FAILED" || p.canceled) {
@@ -844,5 +938,31 @@ export const handler = async (event: unknown) => {
   if (field === "quote") return quote(event as Parameters<typeof quote>[0]);
   if (field === "campaignVisit") return campaignVisit(event as Parameters<typeof campaignVisit>[0]);
   if (field === "campaignStats") return campaignStats(event as Parameters<typeof campaignStats>[0]);
-  return placeOrderHandler(event as PlaceOrderEvent);
+  try {
+    return await placeOrderHandler(event as PlaceOrderEvent);
+  } catch (err) {
+    // Rejected requests: who sent them (browser name and network only, no personal data).
+    const msg = err instanceof Error ? err.message : "";
+    if (msg.startsWith("invalid_fields") || msg === "not_signed_in") {
+      const headers = (event as { request?: { headers?: Record<string, string> } })?.request?.headers;
+      let fields = "";
+      if (msg.startsWith("invalid_fields:")) {
+        try {
+          fields = Object.keys(JSON.parse(msg.slice("invalid_fields:".length))).join(",");
+        } catch {}
+      }
+      console.warn(
+        "place-order rejected",
+        JSON.stringify({
+          code: msg.split(":")[0],
+          fields,
+          ip: ipPrefix(clientIp(headers)),
+          ua: String(headers?.["user-agent"] ?? "").slice(0, 200),
+          origin: String(headers?.origin ?? headers?.referer ?? "").slice(0, 120),
+          signedIn: Boolean((event as { identity?: unknown })?.identity),
+        }),
+      );
+    }
+    throw err;
+  }
 };

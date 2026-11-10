@@ -22,7 +22,7 @@ export const site = {
   // The meta tag content from Business Settings > Brand safety > Domains (domain verification). Empty = no tag.
   metaDomainVerification: "",
   // Meta does not take Iraqi dinar for the pixel, so values go as US dollars at this fixed rate.
-  pixelIqdPerUsd: 1310,
+  pixelIqdPerUsd: 1600,
   // Orders placed before this hour are delivered the next day (shown to customers).
   deliveryCutoff: "8 مساءً",
   // Delivery inside Baghdad happens in this window; the customer must accept it

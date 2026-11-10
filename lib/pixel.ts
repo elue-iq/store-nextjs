@@ -128,7 +128,36 @@ export function pixelInitiateCheckout(items: Item[], totalIqd: number) {
   trackPixel("InitiateCheckout", baseOf(items, totalIqd));
 }
 
-// eventId = the order number: the same id will be used by the server-side copy later, so Meta counts it once.
-export function pixelPurchase(items: Item[], totalIqd: number, orderNumber: string) {
-  trackPixel("Purchase", baseOf(items, totalIqd), orderNumber);
+// Purchase: once per real order. eventId = the order number, the same id the server sends
+// to the Conversions API, so Meta counts the two as one. `totalIqd` = what the customer is
+// charged (jars after any discount + delivery fee, 0 when delivery is free).
+// A flag in the browser stops a second report (reload, back button, a second render).
+export function pixelPurchase(items: Item[], totalIqd: number, orderNumber: string): boolean {
+  const flag = `purchase_tracked_${orderNumber}`;
+  try {
+    if (localStorage.getItem(flag)) return false;
+  } catch {}
+  if (!pixelEnabled()) return false;
+  trackPixel("Purchase", { ...baseOf(items, totalIqd), order_id: orderNumber }, orderNumber);
+  try {
+    localStorage.setItem(flag, "1");
+  } catch {}
+  return true;
+}
+
+// Paying with Qi Card: the customer leaves for Qi's page, so the details are kept until they
+// are back on /order/paid and the payment is confirmed (then the purchase is reported).
+const PENDING_KEY = "elue-pending-purchase-v1";
+export function rememberPendingPurchase(orderNumber: string, items: Item[], totalIqd: number) {
+  try {
+    localStorage.setItem(PENDING_KEY, JSON.stringify({ orderNumber, items, totalIqd, at: Date.now() }));
+  } catch {}
+}
+export function reportPendingPurchase(orderNumber: string) {
+  try {
+    const p = JSON.parse(localStorage.getItem(PENDING_KEY) ?? "null") as { orderNumber: string; items: Item[]; totalIqd: number } | null;
+    if (!p || p.orderNumber !== orderNumber) return;
+    pixelPurchase(p.items, p.totalIqd, orderNumber);
+    localStorage.removeItem(PENDING_KEY);
+  } catch {}
 }
