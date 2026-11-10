@@ -340,6 +340,7 @@ const schema = a
         attribution: a.string(),
         heardFrom: a.string(),
         heardNote: a.string(),
+        sourceRef: a.string(), // Instagram DM flow only (honored for team callers)
         tracking: a.string(),
       })
       .returns(a.ref("PlaceOrderResult"))
