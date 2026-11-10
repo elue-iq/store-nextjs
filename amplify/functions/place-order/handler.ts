@@ -29,7 +29,7 @@ import { eatixConfig, eatixFields, sendOrder, toEatixOrder } from "../../../lib/
 import { OPEN_STATUSES, ORDER_RULES } from "../../../lib/order-rules";
 import { freeDeliveryFor, needsPayRef, site } from "../../../lib/site";
 import { cleanSlotDate, DEFAULT_SLOT, isSlotKey, SLOT_PROVINCE } from "../../../lib/delivery-slot";
-import { cleanTracking, sendPurchase, type Tracking } from "./meta";
+import { clientIp, cleanTracking, sendPurchase, type Tracking } from "./meta";
 import { sendOrderConfirmation } from "../../../lib/orderConfirmation";
 import { pendingReview } from "../../../lib/reviews";
 import { createPayment, getPaymentStatus, qiConfig, verifyNotification, type QiPayment } from "../../../lib/qi";
@@ -469,6 +469,9 @@ async function placeOrderHandler(event: PlaceOrderEvent) {
       phone2: phone2 && phone2 !== phone ? phone2 : null,
       source,
       attribution: attribution ? JSON.stringify(attribution) : null,
+      creatorRef: creatorRefOf(attribution),
+      // From the Instagram DM flow (ManyChat): the ad id or ref the conversation started from.
+      sourceRef: isTeam ? String(args.sourceRef ?? "").trim().slice(0, 100) || null : null,
       heardFrom,
       heardNote,
       capi: isTeam ? null : JSON.stringify(tracking),
@@ -564,20 +567,46 @@ async function placeOrderHandler(event: PlaceOrderEvent) {
 const HEARD_KEYS = new Set(["ig_ad", "ig_page", "creator", "friend", "whatsapp", "other"]);
 
 // The saved campaign details (utm_*, fbclid, referrer, landing page): plain short strings only.
-function cleanAttribution(raw: unknown): Record<string, string | number> | null {
+type CleanTouch = Record<string, string | number | Record<string, string | number>>;
+
+function cleanTouch(a: Record<string, unknown>): Record<string, string | number> {
+  const out: Record<string, string | number> = {};
+  for (const [k, max] of [["utm_source", 80], ["utm_medium", 80], ["utm_campaign", 80], ["utm_content", 80], ["utm_term", 80], ["fbclid", 300], ["ref", 80], ["referrer", 200], ["landing", 300]] as const) {
+    const v = a[k];
+    if (typeof v === "string" && v.trim()) out[k] = v.trim().slice(0, max);
+  }
+  if (typeof a.at === "number" && Number.isFinite(a.at)) out.at = a.at;
+  return out;
+}
+
+function cleanAttribution(raw: unknown): CleanTouch | null {
   let a: Record<string, unknown> = {};
   try {
     a = typeof raw === "string" ? (JSON.parse(raw) as Record<string, unknown>) : {};
   } catch {
     return null;
   }
-  const out: Record<string, string | number> = {};
-  for (const [k, max] of [["utm_source", 80], ["utm_medium", 80], ["utm_campaign", 80], ["utm_content", 80], ["fbclid", 300], ["ref", 80], ["referrer", 200], ["landing", 300]] as const) {
-    const v = a[k];
-    if (typeof v === "string" && v.trim()) out[k] = v.trim().slice(0, max);
+  const out: CleanTouch = cleanTouch(a);
+  if (a.first && typeof a.first === "object") {
+    const first = cleanTouch(a.first as Record<string, unknown>);
+    if (Object.keys(first).length) out.first = first;
   }
-  if (typeof a.at === "number" && Number.isFinite(a.at)) out.at = a.at;
   return Object.keys(out).length ? out : null;
+}
+
+// The creator behind a ?ref=<creator> link (latest touch, else first touch): a short lowercase slug.
+function creatorRefOf(attribution: CleanTouch | null): string | null {
+  const first = attribution?.first as Record<string, string> | undefined;
+  const raw = String(attribution?.ref ?? first?.ref ?? "").toLowerCase().replace(/[^a-z0-9_.-]/g, "").slice(0, 60);
+  return raw || null;
+}
+
+// IPv4 -> a.b.c.0, IPv6 -> first three groups: enough to tell networks apart, not people.
+function ipPrefix(ip: string | undefined): string {
+  if (!ip) return "";
+  if (ip.includes(":")) return ip.split(":").slice(0, 3).join(":") + "::";
+  const p = ip.split(".");
+  return p.length === 4 ? `${p[0]}.${p[1]}.${p[2]}.0` : "";
 }
 
 function parseTracking(raw: string | null | undefined): Tracking {
@@ -909,5 +938,31 @@ export const handler = async (event: unknown) => {
   if (field === "quote") return quote(event as Parameters<typeof quote>[0]);
   if (field === "campaignVisit") return campaignVisit(event as Parameters<typeof campaignVisit>[0]);
   if (field === "campaignStats") return campaignStats(event as Parameters<typeof campaignStats>[0]);
-  return placeOrderHandler(event as PlaceOrderEvent);
+  try {
+    return await placeOrderHandler(event as PlaceOrderEvent);
+  } catch (err) {
+    // Rejected requests: who sent them (browser name and network only, no personal data).
+    const msg = err instanceof Error ? err.message : "";
+    if (msg.startsWith("invalid_fields") || msg === "not_signed_in") {
+      const headers = (event as { request?: { headers?: Record<string, string> } })?.request?.headers;
+      let fields = "";
+      if (msg.startsWith("invalid_fields:")) {
+        try {
+          fields = Object.keys(JSON.parse(msg.slice("invalid_fields:".length))).join(",");
+        } catch {}
+      }
+      console.warn(
+        "place-order rejected",
+        JSON.stringify({
+          code: msg.split(":")[0],
+          fields,
+          ip: ipPrefix(clientIp(headers)),
+          ua: String(headers?.["user-agent"] ?? "").slice(0, 200),
+          origin: String(headers?.origin ?? headers?.referer ?? "").slice(0, 120),
+          signedIn: Boolean((event as { identity?: unknown })?.identity),
+        }),
+      );
+    }
+    throw err;
+  }
 };

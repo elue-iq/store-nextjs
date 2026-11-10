@@ -155,13 +155,36 @@ export function resolveRange(f: Filters, today: string, firstDay: string): { cur
 export const isTest = (o: Order) => /(^|\s|&)test=/.test(o.source ?? "");
 
 // The campaign details saved with a website order (utm_*, fbclid, referrer, landing page).
-export type OrderAttribution = Partial<Record<"utm_source" | "utm_medium" | "utm_campaign" | "utm_content" | "fbclid" | "ref" | "referrer" | "landing", string>>;
+export type OrderAttribution = Partial<Record<"utm_source" | "utm_medium" | "utm_campaign" | "utm_content" | "utm_term" | "fbclid" | "ref" | "referrer" | "landing", string>> & {
+  first?: Partial<Record<"utm_source" | "utm_medium" | "utm_campaign" | "utm_content" | "utm_term" | "fbclid" | "ref" | "referrer" | "landing", string>>;
+};
 export function attributionOf(o: Order): OrderAttribution {
   try {
     return o.attribution ? (JSON.parse(o.attribution) as OrderAttribution) : {};
   } catch {
     return {};
   }
+}
+
+export type AttributionBucket = "paid_ad" | "creator" | "organic_ig" | "other" | "unknown";
+
+// Paid ad / creator / organic Instagram / other / unknown, from the saved link details and the
+// customer's (or team's) «how did you hear». Order of the rules matters: a paid medium first,
+// then a creator link, then an ad click id, then an ad id from the DM flow, then the answer.
+export function attributionBucket(o: Order): AttributionBucket {
+  const a = attributionOf(o);
+  const touches = [a, a.first ?? {}];
+  const any = (f: (t: OrderAttribution) => boolean) => touches.some(f);
+  if (any((t) => /^(paid|cpc|ppc|paid[_-]?social|ads?)$/i.test(t.utm_medium ?? ""))) return "paid_ad";
+  if (o.creatorRef || any((t) => Boolean(t.ref)) || o.heardFrom === "creator") return "creator";
+  if (any((t) => Boolean(t.fbclid))) return "paid_ad";
+  if (/^(ad[_-]?)?\d{6,}$/i.test(o.sourceRef ?? "")) return "paid_ad";
+  if (o.heardFrom === "ig_ad") return "paid_ad";
+  if (o.heardFrom === "ig_page") return "organic_ig";
+  if (o.heardFrom) return "other";
+  if (any((t) => /^(ig|instagram)$/i.test(t.utm_source ?? ""))) return "organic_ig";
+  if (any((t) => Boolean(t.referrer))) return "other";
+  return "unknown";
 }
 
 // Where the customer came from (the link they opened, kept with the order).
@@ -533,11 +556,18 @@ export function ordersCsv(orders: Order[], types: Map<string, "new" | "returning
     "utm_medium",
     "utm_campaign",
     "utm_content",
+    "utm_term",
     "fbclid",
     "الموقع المحيل",
     "صفحة الدخول",
     "كيف سمع عنا",
     "تفصيل (كيف سمع)",
+    "creator_ref",
+    "source_ref",
+    "first_touch_utm_source",
+    "first_touch_utm_medium",
+    "first_touch_utm_campaign",
+    "attribution_bucket",
     "العميل",
     "ملاحظة",
   ];
@@ -572,11 +602,18 @@ export function ordersCsv(orders: Order[], types: Map<string, "new" | "returning
       attr.utm_medium,
       attr.utm_campaign,
       attr.utm_content,
+      attr.utm_term,
       attr.fbclid,
       attr.referrer,
       attr.landing,
       heardLabel(o.heardFrom),
       o.heardNote,
+      o.creatorRef,
+      o.sourceRef,
+      attr.first?.utm_source,
+      attr.first?.utm_medium,
+      attr.first?.utm_campaign,
+      attributionBucket(o),
       types.get(o.id) === "returning" ? "عائد" : "جديد",
       o.note,
     ]

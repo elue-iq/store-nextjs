@@ -7,16 +7,18 @@ export type Attribution = {
   utm_medium?: string;
   utm_campaign?: string;
   utm_content?: string;
+  utm_term?: string;
   fbclid?: string;
   ref?: string;
   referrer?: string; // another site's address (no query), "" = direct
-  landing?: string; // the first page: path and the campaign parameters only
+  landing?: string; // the page of this touch: path and the campaign parameters only
   at: number;
+  first?: Omit<Attribution, "first">; // the very first touch in the 30 days; never replaced
 };
 
 const KEY = "elue-attr-v1";
 const DAYS = 30;
-const PARAMS = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "fbclid", "ref"] as const;
+const PARAMS = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "fbclid", "ref"] as const;
 
 function read(): Attribution | null {
   try {
@@ -52,7 +54,11 @@ export function captureAttribution(): Attribution | null {
     const keep = new URLSearchParams();
     for (const [k, v] of Object.entries(found)) keep.set(k, v);
     const landing = `${window.location.pathname}${keep.size ? `?${keep}` : ""}`.slice(0, 300);
-    const next: Attribution = { ...found, referrer, landing, at: Date.now() };
+    const touch = { ...found, referrer, landing, at: Date.now() };
+    // First touch: kept from the first visit (a saved record without it is itself that first touch).
+    const first = saved?.first ?? (saved ? { ...saved, first: undefined } : touch);
+    delete (first as { first?: unknown }).first;
+    const next: Attribution = { ...touch, first };
     localStorage.setItem(KEY, JSON.stringify(next));
     return next;
   } catch {

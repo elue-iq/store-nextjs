@@ -106,6 +106,9 @@ const schema = a
         attribution: a.string().authorization((allow) => [allow.group("ADMINS")]),
         heardFrom: a.string().authorization((allow) => [allow.group("ADMINS")]),
         heardNote: a.string().authorization((allow) => [allow.group("ADMINS")]),
+        // The creator of a ?ref=<creator> link, and (Instagram DM orders) the ad id / ref the chat started from.
+        creatorRef: a.string().authorization((allow) => [allow.group("ADMINS")]),
+        sourceRef: a.string().authorization((allow) => [allow.group("ADMINS")]),
         // For Meta's Conversions API (JSON: fbp, fbc, ip, user agent, page): kept so the purchase
         // can also be reported when a Qi Card payment is confirmed later. Team only.
         capi: a.string().authorization((allow) => [allow.group("ADMINS")]),
