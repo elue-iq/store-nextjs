@@ -52,10 +52,9 @@ backend.placeOrder.resources.lambda.addToRolePolicy(
 );
 
 // Meta Conversions API: the access token is a secret kept in Amplify's secret store
-// (Hosting > Secrets > META_CAPI_TOKEN). placeOrder reads it at runtime, so a missing token
+// (Hosting > Secrets > META_CAPI_TOKEN). placeOrder reads it at runtime (its name comes from AMPLIFY_SSM_ENV_CONFIG: one more environment variable would exceed Lambda's 4 KB limit on live), so a missing token
 // never breaks a deploy or an order: purchases are simply not sent to Meta until it is set.
 const capiTokenParam = `/amplify/shared/${process.env.AWS_APP_ID ?? "unknown"}/META_CAPI_TOKEN`;
-backend.placeOrder.addEnvironment("META_CAPI_TOKEN_PARAM", capiTokenParam);
 backend.placeOrder.resources.lambda.addToRolePolicy(
   new PolicyStatement({ actions: ["ssm:GetParameter"], resources: [`arn:aws:ssm:${Stack.of(backend.placeOrder.resources.lambda).region}:${Stack.of(backend.placeOrder.resources.lambda).account}:parameter${capiTokenParam}`] }),
 );

@@ -109,7 +109,11 @@ let tokenCache: { value: string | null; at: number } | null = null;
 
 async function accessToken(): Promise<string | null> {
   if (tokenCache && Date.now() - tokenCache.at < 5 * 60_000) return tokenCache.value;
-  const name = process.env.META_CAPI_TOKEN_PARAM;
+  // The secret's name: Amplify already hands this function the shared secret path
+  // (/amplify/shared/<app id>/...) in AMPLIFY_SSM_ENV_CONFIG. A dedicated env var would push the
+  // function past Lambda's 4 KB limit on the live branch.
+  const prefix = (process.env.AMPLIFY_SSM_ENV_CONFIG ?? "").match(/\/amplify\/shared\/[A-Za-z0-9]+\//)?.[0];
+  const name = prefix ? `${prefix}META_CAPI_TOKEN` : undefined;
   let value: string | null = null;
   if (name) {
     try {
