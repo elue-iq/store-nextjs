@@ -1,5 +1,6 @@
 "use client";
 
+import { itemNameAr } from "@/lib/gifts";
 import { useMemo, useState } from "react";
 import { useStock } from "./StockProvider";
 import { products } from "@/lib/products";
@@ -101,7 +102,7 @@ export function AdminPrep({ orders, onOpenOrder }: { orders: Order[] | null; onO
                   <small>
                     {(o.items ?? [])
                       .filter((i): i is NonNullable<typeof i> => Boolean(i))
-                      .map((i) => `${i.nameAr} × ${i.qty}`)
+                      .map((i) => `${itemNameAr(i)} × ${i.qty}`)
                       .join("، ")}
                   </small>
                 </button>

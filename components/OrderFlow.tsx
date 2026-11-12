@@ -23,6 +23,8 @@ import { fullAddress } from "@/lib/iraq";
 import { checkDelivery, cleanDelivery, ltr, phone2Error, type DeliveryInfo, type FieldErrors } from "@/lib/validate";
 import { dataClient, errorCode, errorDetail, errorFields } from "@/lib/data";
 import { OPEN_STATUSES } from "@/lib/order-rules";
+import { getProduct } from "@/lib/products";
+import { GIFT_DROP_TEXT, GIFT_TAG, type GiftDrop } from "@/lib/gifts";
 import { EMPTY_DELIVERY, loadProfile, saveProfile, type Profile } from "@/lib/profile";
 
 type Step = "checkout" | "sent" | "failed";
@@ -31,6 +33,9 @@ type Placed = DeliveryInfo & {
   orderNumber: string;
   createdAt: string;
   items: CartItem[];
+  // Gift jars that went on the order, and (when the gift could not be given) why not.
+  gifts: CartItem[];
+  giftNote?: GiftDrop | null;
   total: number;
   phone: string;
   note: string;
@@ -74,6 +79,19 @@ export function OrderFlow() {
   const [heard, setHeard] = useState<"" | HeardKey>("");
   const [heardNote, setHeardNote] = useState("");
   const [busy, setBusy] = useState(false);
+  // «أوافق أستلم عروض ELUE على واتساب»: optional, off until the customer ticks it.
+  const [consent, setConsent] = useState(false);
+  // The gift campaign (from the server's quote): one flavor to choose per gift jar.
+  const offer = !teamDevice && quote?.gift ? quote.gift : null;
+  const giftFlavors = (offer?.products ?? []).filter((slug) => getProduct(slug) && stock.isAvailable(slug));
+  const giftOn = Boolean(offer?.eligible) && giftFlavors.length > 0 && lines.length > 0;
+  const giftSlots = giftOn ? Math.max(1, offer!.perOrder) : 0;
+  const [giftChoice, setGiftChoice] = useState<string[]>([]);
+  const [giftErr, setGiftErr] = useState(false);
+  const giftPicked = Array.from({ length: giftSlots }, (_, k) => (giftFlavors.includes(giftChoice[k]) ? giftChoice[k] : ""));
+  const giftReady = giftPicked.every(Boolean);
+  // [{slug, qty}] for the order: the same flavor twice becomes one line of two.
+  const giftItems: CartItem[] = [...new Set(giftPicked.filter(Boolean))].map((slug) => ({ slug, qty: giftPicked.filter((s) => s === slug).length }));
   // Pay now with Qi Card.
   const [payOnline, setPayOnline] = useState(false);
   const onlineOk = true;
@@ -163,7 +181,10 @@ export function OrderFlow() {
         const saved = await saveOrderImage(
           {
             ...p,
-            items: priced.map((l) => ({ slug: l.product.slug, nameAr: l.product.nameAr, nameEn: l.product.nameEn, qty: l.qty, price: l.product.price })),
+            items: [
+              ...priced.map((l) => ({ slug: l.product.slug, nameAr: l.product.nameAr, nameEn: l.product.nameEn, qty: l.qty, price: l.product.price })),
+              ...priceCart(p.gifts).lines.map((l) => ({ slug: l.product.slug, nameAr: l.product.nameAr, nameEn: l.product.nameEn, qty: l.qty, price: 0, gift: true })),
+            ],
           },
           !automatic,
         );
@@ -208,6 +229,14 @@ export function OrderFlow() {
     setPhone2Err(p2 ?? "");
     if (Object.keys(found).length) return showErrors(found);
     if (p2) return;
+    // The gift flavor must be chosen before the order goes.
+    if (giftOn && !giftReady) {
+      setGiftErr(true);
+      document.getElementById("gift-pick")?.scrollIntoView({ block: "center", behavior: "smooth" });
+      toast({ id: "checkout", tone: "attention", message: "اختاروا نكهة الهدية قبل تأكيد الطلب." });
+      return;
+    }
+    const gifts = giftOn ? giftItems : [];
     const info = cleanDelivery(delivery);
 
     setBusy(true);
@@ -220,7 +249,7 @@ export function OrderFlow() {
       }
     }
 
-    const snapshot = { ...info, items: cart.items, total, phone: auth.phone, note: note.trim() };
+    const snapshot = { ...info, items: cart.items, gifts, total, phone: auth.phone, note: note.trim() };
     try {
       const { data, errors: gqlErrors } = await dataClient.mutations.placeOrder({
         ...info,
@@ -238,18 +267,29 @@ export function OrderFlow() {
         heardFrom: heard || undefined,
         heardNote: heard === "creator" || heard === "other" ? heardNote.trim().slice(0, 100) || undefined : undefined,
         tracking: JSON.stringify(trackingNow()),
+        gifts: gifts.length ? JSON.stringify(gifts) : undefined,
+        giftCampaignId: gifts.length ? offer?.id : undefined,
+        marketingConsent: consent,
       });
+      // Gift jars are reported to Meta at price 0: they never add to the purchase value.
+      const given = data?.giftNote ? [] : gifts;
+      const tracked = [...cart.items, ...given.map((g) => ({ ...g, gift: true }))];
       // What the customer is charged: jars (after any discount) + the delivery fee unless it is free.
       const charged = total + (freeDelivery ? 0 : site.deliveryFee);
       if (data?.orderNumber && data.payUrl) {
-        rememberPendingPurchase(data.orderNumber, cart.items, charged);
+        rememberPendingPurchase(data.orderNumber, tracked, charged);
+        if (data.giftNote) {
+          try {
+            sessionStorage.setItem("elue-gift-note", JSON.stringify({ orderNumber: data.orderNumber, note: data.giftNote }));
+          } catch {}
+        }
         // Paying now: the order is kept until Qi confirms it; the cart is cleared on return.
         window.location.href = data.payUrl;
         return;
       }
       if (data?.orderNumber) {
-        setPlaced({ ...snapshot, orderNumber: data.orderNumber, createdAt: data.createdAt });
-        pixelPurchase(cart.items, charged, data.orderNumber);
+        setPlaced({ ...snapshot, gifts: given, giftNote: (data.giftNote as GiftDrop | null) ?? null, orderNumber: data.orderNumber, createdAt: data.createdAt });
+        pixelPurchase(tracked, charged, data.orderNumber);
         setStep("sent");
         cart.clear();
         if (cart.couponCode) cart.setCouponCode("");
@@ -320,6 +360,7 @@ export function OrderFlow() {
         { name: placed.name, phoneDisplay: formatIraqiMobile(placed.phone), address: fullAddress(placed), note: placed.note },
         placed.items,
         placed.orderNumber,
+        placed.gifts,
       ),
     )}`;
     return (
@@ -328,6 +369,18 @@ export function OrderFlow() {
         <p className="order-result__id">
           رقم الطلب <strong dir="ltr">{placed.orderNumber}</strong>
         </p>
+        {placed.giftNote ? (
+          <p className="order-result__gift is-dropped" role="alert">
+            {GIFT_DROP_TEXT[placed.giftNote] ?? GIFT_DROP_TEXT.changed}
+          </p>
+        ) : placed.gifts.length > 0 ? (
+          <p className="order-result__gift">
+            هديتكم ويّا الطلب:{" "}
+            {priceCart(placed.gifts)
+              .lines.map((l) => `${l.product.nameAr} × ${l.qty}`)
+              .join("، ")}
+          </p>
+        ) : null}
         <p>
           سيتواصل فريقنا معك عبر واتساب على الرقم <span dir="ltr">{formatIraqiMobile(placed.phone)}</span> لتأكيد موعد
           التوصيل. ويمكنك متابعة حالة الطلب من صفحة «حسابي».
@@ -391,6 +444,8 @@ export function OrderFlow() {
             note: placed.note,
           },
           placed.items,
+          undefined,
+          placed.gifts,
         ),
       )}`
     : `https://wa.me/${site.whatsappNumber}`;
@@ -420,7 +475,57 @@ export function OrderFlow() {
               <span className="order-lines__price">{formatIQD(l.subtotal)}</span>
             </li>
           ))}
+          {giftItems.map((g) => {
+            const p = getProduct(g.slug)!;
+            return (
+              <li key={`gift-${g.slug}`} className="order-lines__gift" style={{ "--band": p.band } as React.CSSProperties}>
+                <span className="order-lines__swatch" aria-hidden="true" />
+                <span className="order-lines__name">
+                  {p.nameAr}
+                  <small>
+                    {GIFT_TAG} من ÉLUE × {g.qty}
+                  </small>
+                </span>
+                <span className="gift-tag">{GIFT_TAG}</span>
+                <span className="order-lines__price">{formatIQD(0)}</span>
+              </li>
+            );
+          })}
         </ul>
+        {giftOn && (
+          <section className={`gift-pick${giftErr && !giftReady ? " has-error" : ""}`} id="gift-pick" aria-label="هدية ÉLUE">
+            <h3>هديتكم من ÉLUE</h3>
+            <p>{giftSlots === 1 ? "اختاروا نكهة العلبة الهدية:" : `اختاروا نكهات ${giftSlots} علب هدية:`}</p>
+            {giftPicked.map((picked, k) => (
+              <div key={k} className="gift-pick__row" role="radiogroup" aria-label={giftSlots === 1 ? "نكهة الهدية" : `نكهة الهدية ${k + 1}`}>
+                {giftSlots > 1 && <span className="gift-pick__n">{k + 1}</span>}
+                {giftFlavors.map((slug) => (
+                  <button
+                    key={slug}
+                    type="button"
+                    role="radio"
+                    aria-checked={picked === slug}
+                    className={`gift-pick__chip${picked === slug ? " is-on" : ""}`}
+                    onClick={() => {
+                      setGiftChoice((c) => Array.from({ length: giftSlots }, (_, i) => (i === k ? slug : (c[i] ?? ""))));
+                      setGiftErr(false);
+                    }}
+                  >
+                    {getProduct(slug)!.nameAr}
+                  </button>
+                ))}
+              </div>
+            ))}
+            {giftErr && !giftReady && <p className="field-error">اختاروا نكهة الهدية قبل تأكيد الطلب.</p>}
+          </section>
+        )}
+        {offer && !offer.eligible && lines.length > 0 && (
+          <p className="gift-pick__note">
+            {offer.reason === "limit"
+              ? "هدية هذا العرض مرة وحدة لكل رقم، وهذا الرقم استلمها من قبل."
+              : `الهدية تنضاف مع ${offer.minPaidJars} علب أو أكثر.`}
+          </p>
+        )}
         <PriceLines quote={quote} />
         <p className="order-total">
           <span>المجموع</span>
@@ -593,6 +698,10 @@ export function OrderFlow() {
                 </label>
               </fieldset>
             )}
+            <label className="check">
+              <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
+              أوافق أستلم عروض ELUE على واتساب
+            </label>
             {openOrder && (
               <div className="field-note open-order" role="alert">
                 <p>

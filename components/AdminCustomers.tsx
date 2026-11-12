@@ -1,5 +1,6 @@
 "use client";
 
+import { itemNameAr } from "@/lib/gifts";
 import { useMemo, useState } from "react";
 import { StatusChip } from "./OrderBits";
 import { formatPoints, pointsSummary } from "@/lib/loyalty";
@@ -276,7 +277,7 @@ export function CustomerDetail({
                   <span className="order-row__sub">
                     {o.items
                       .filter((i): i is NonNullable<typeof i> => Boolean(i))
-                      .map((i) => `${getProduct(i.slug)?.nameAr ?? i.nameAr} × ${i.qty}`)
+                      .map((i) => `${itemNameAr(i)} × ${i.qty}`)
                       .join("، ")}
                   </span>
                 </span>

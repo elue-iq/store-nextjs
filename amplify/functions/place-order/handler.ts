@@ -8,7 +8,7 @@ import {
   ListUsersCommand,
   UsernameExistsException,
 } from "@aws-sdk/client-cognito-identity-provider";
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import {
   ConditionalCheckFailedException,
   DeleteItemCommand,
@@ -34,6 +34,9 @@ import { sendOrderConfirmation } from "../../../lib/orderConfirmation";
 import { pendingReview } from "../../../lib/reviews";
 import { createPayment, getPaymentStatus, qiConfig, verifyNotification, type QiPayment } from "../../../lib/qi";
 import { GetFunctionUrlConfigCommand, LambdaClient } from "@aws-sdk/client-lambda";
+import { getProduct } from "../../../lib/products";
+import { cleanGiftPicks, giftCampaignLive, giftLines, MANUAL_GIFT, paidLines, type GiftDrop, type GiftPick, type GiftQuote } from "../../../lib/gifts";
+import { countsAgainstCap, giftProblem, giftsUsed, offerOf, pickLive, reconcileGifts, rulesOf, setGiftUnits, type GiftProblem, type GiftRules } from "./gifts";
 import { BatchGetItemCommand } from "@aws-sdk/client-dynamodb";
 import {
   commissionFor,
@@ -178,7 +181,7 @@ async function unlockCustomer(owner: string) {
 async function checkCustomerLimits(owner: string, isTeam: boolean) {
   const { data } = await client.models.Order.listOrderByOwner(
     { owner },
-    { limit: 200, selectionSet: ["id", "orderNumber", "status", "createdAt", "reviewed", "qiStatus", "paid"] },
+    { limit: 200, selectionSet: ["id", "orderNumber", "status", "createdAt", "reviewed", "qiStatus", "paid", "giftCampaignId"] },
   );
   let orders = data ?? [];
   // An order still waiting for a Qi payment the customer walked away from: they are starting
@@ -188,6 +191,7 @@ async function checkCustomerLimits(owner: string, isTeam: boolean) {
     await client.models.Order.update({ id: o.id, status: "CANCELLED", qiStatus: "FAILED" }).catch((err) =>
       console.error("cancelling an abandoned payment order failed", err),
     );
+    await releaseGift(o);
   }
   if (abandoned.length) orders = orders.filter((o) => !abandoned.includes(o));
   const open = orders.filter((o) => (OPEN_STATUSES as readonly string[]).includes(o.status));
@@ -269,13 +273,13 @@ async function campaignById(id: string | null | undefined): Promise<CampaignReco
   return data ?? null;
 }
 
-type History = { status: string; couponCode?: string | null; cashback?: number | null; creditUsed?: number | null }[];
+type History = { id: string; status: string; couponCode?: string | null; cashback?: number | null; creditUsed?: number | null; giftCampaignId?: string | null }[];
 
 // A customer's earlier orders (by WhatsApp number), for coupon limits and credit.
 async function historyFor(phone: string): Promise<History> {
   const { data } = await client.models.Order.listOrderByPhone(
     { phone },
-    { limit: 500, selectionSet: ["status", "couponCode", "cashback", "creditUsed"] },
+    { limit: 500, selectionSet: ["id", "status", "couponCode", "cashback", "creditUsed", "giftCampaignId"] },
   );
   return (data ?? []) as History;
 }
@@ -341,6 +345,56 @@ async function findDeal(o: {
   };
 }
 
+// ---- Gift campaigns (rules in ./gifts.ts and lib/gifts.ts) --------------------------
+
+async function liveGift(): Promise<GiftRules | null> {
+  const { data } = await client.models.GiftCampaign.list({ limit: 200 });
+  const c = pickLive(data ?? []);
+  return c ? rulesOf(c) : null;
+}
+
+const loadGiftOrder = async (id: string) =>
+  (await client.models.Order.get({ id }, { selectionSet: ["status", "giftCampaignId", "giftUnits"] })).data ?? null;
+
+// This phone's live (not cancelled) orders that already carry the campaign's gift.
+const giftUses = (history: History, campaignId: string, exceptOrderId?: string) =>
+  history.filter((h) => h.id !== exceptOrderId && h.status !== "CANCELLED" && h.giftCampaignId === campaignId).length;
+
+// The offer the shop shows, with the jars left. Kept for a few seconds: the banner and the
+// checkout ask often. placeOrder itself never uses this copy.
+let giftCache: { at: number; rules: GiftRules | null; left: number | null } | null = null;
+let lastGiftReconcile = 0;
+async function giftNow(): Promise<{ rules: GiftRules; left: number | null } | null> {
+  if (!giftCache || Date.now() - giftCache.at > 15_000) {
+    const rules = await liveGift();
+    let left: number | null = null;
+    if (rules && rules.cap != null) {
+      let used = await giftsUsed(dynamo, rules.id);
+      // Looks used up: first give back the jars of cancelled orders nobody told us about.
+      if (used >= rules.cap && Date.now() - lastGiftReconcile > 60_000) {
+        lastGiftReconcile = Date.now();
+        if (await reconcileGifts(dynamo, rules.id, loadGiftOrder)) used = await giftsUsed(dynamo, rules.id);
+      }
+      left = Math.max(0, rules.cap - used);
+    }
+    giftCache = { at: Date.now(), rules, left };
+  }
+  return giftCache.rules ? { rules: giftCache.rules, left: giftCache.left } : null;
+}
+
+// A cancelled order gives its gift jars back to the campaign.
+async function releaseGift(o: { id: string; giftCampaignId?: string | null }) {
+  if (!countsAgainstCap(o.giftCampaignId)) return;
+  giftCache = null;
+  await setGiftUnits(dynamo, o.giftCampaignId, o.id, 0, null).catch((err) => console.error("giving the gift back failed", o.id, err));
+}
+
+const giftItems = (picks: GiftPick[], campaignId: string) =>
+  picks.map((p) => {
+    const product = getProduct(p.slug)!;
+    return { slug: product.slug, nameAr: product.nameAr, nameEn: product.nameEn, qty: p.qty, price: 0, gift: true, campaignId };
+  });
+
 type PlaceOrderEvent = Parameters<Schema["placeOrder"]["functionHandler"]>[0];
 
 async function placeOrderHandler(event: PlaceOrderEvent) {
@@ -400,6 +454,10 @@ async function placeOrderHandler(event: PlaceOrderEvent) {
   const heardFrom = HEARD_KEYS.has(String(args.heardFrom ?? "")) ? String(args.heardFrom) : null;
   const heardNote = heardFrom ? String(args.heardNote ?? "").trim().slice(0, 100) || null : null;
   const tracking = cleanTracking(args.tracking, (event as unknown as { request?: { headers?: Record<string, string> } }).request?.headers, PRODUCTION);
+  // Gift jars the customer chose (or the team added), and the campaign they saw.
+  const giftPicks = cleanGiftPicks(args.gifts);
+  const giftWanted = String(args.giftCampaignId ?? "").trim().slice(0, 80);
+  const marketingConsent = isTeam ? null : Boolean(args.marketingConsent);
 
   let rawItems: unknown = args.items;
   if (typeof rawItems === "string") {
@@ -445,20 +503,47 @@ async function placeOrderHandler(event: PlaceOrderEvent) {
 
   // The team may still take an order for a flavor marked sold out (e.g. stock on the way).
   const soldOut = forCustomer ? new Set<string>() : await unavailableSlugs();
-  const missing = lines.filter((l) => soldOut.has(l.product.slug)).map((l) => l.product.slug);
+  const missing = [...new Set([...lines.map((l) => l.product.slug), ...giftPicks.map((g) => g.slug)])].filter((slug) => soldOut.has(slug));
   if (missing.length) throw new Error(`out_of_stock:${missing.join(",")}`);
 
   const customer = forCustomer ? await ensureCustomer(phone) : null;
   const owner = customer ? customer.owner : `${identity.sub}::${identity.username}`;
 
   const saveAndNotify = async () => {
-    if (deal.coupon && !(await takeCouponUse(deal.coupon.code, deal.coupon.maxUses))) {
-      throw new Error(`coupon:${couponProblemText("used_up")}`);
+    // The gift: every rule is checked again here, and the campaign's jars are taken in one
+    // atomic step. A customer's order never fails because of the gift: it is placed without
+    // it and they are told why (giftNote). The team gets the reason as an error instead.
+    const orderId = randomUUID();
+    let gift: { campaignId: string; picks: GiftPick[] } | null = null;
+    let giftNote: GiftDrop | null = null;
+    if (giftPicks.length) {
+      if (isTeam && giftWanted === MANUAL_GIFT) {
+        gift = { campaignId: MANUAL_GIFT, picks: giftPicks };
+      } else {
+        const rules = await liveGift();
+        let problem: GiftProblem | "cap" | null = !rules ? "ended" : giftWanted && giftWanted !== rules.id ? "changed" : null;
+        if (rules && !problem) {
+          problem = giftProblem(rules, { picks: giftPicks, paidJars: jars, phoneUses: giftUses(await historyFor(phone), rules.id) });
+        }
+        if (rules && !problem) {
+          const units = giftPicks.reduce((n, g) => n + g.qty, 0);
+          let taken = await setGiftUnits(dynamo, rules.id, orderId, units, rules.cap);
+          if (!taken && (await reconcileGifts(dynamo, rules.id, loadGiftOrder))) taken = await setGiftUnits(dynamo, rules.id, orderId, units, rules.cap);
+          if (taken) gift = { campaignId: rules.id, picks: giftPicks };
+          else problem = "cap";
+        }
+        giftCache = null;
+        if (problem) {
+          if (isTeam) throw new Error(`gift:${problem}`);
+          giftNote = problem === "product" || problem === "qty" ? "changed" : problem;
+          console.log("order placed without its gift:", problem);
+        }
+      }
     }
-    const number = await nextOrderNumber();
-    const total = pricing.total;
-    const payAmount = total + (freeDelivery ? 0 : site.deliveryFee);
-    const { data: order, errors } = await client.models.Order.create({
+    const giftUnits = gift ? gift.picks.reduce((n, g) => n + g.qty, 0) : 0;
+    const createOrder = (number: string) =>
+      client.models.Order.create({
+      id: orderId,
       orderNumber: number,
       phone,
       name,
@@ -475,15 +560,21 @@ async function placeOrderHandler(event: PlaceOrderEvent) {
       heardFrom,
       heardNote,
       capi: isTeam ? null : JSON.stringify(tracking),
-      items: lines.map((l) => ({
-        slug: l.product.slug,
-        nameAr: l.product.nameAr,
-        nameEn: l.product.nameEn,
-        qty: l.qty,
-        price: l.product.price,
-      })),
+      items: [
+        ...lines.map((l) => ({
+          slug: l.product.slug,
+          nameAr: l.product.nameAr,
+          nameEn: l.product.nameEn,
+          qty: l.qty,
+          price: l.product.price,
+        })),
+        ...(gift ? giftItems(gift.picks, gift.campaignId) : []),
+      ],
       jars,
-      total,
+      giftUnits: giftUnits || null,
+      giftCampaignId: gift?.campaignId ?? null,
+      marketingConsent,
+      total: pricing.total,
       subtotal: pricing.subtotal,
       discount: pricing.discount || null,
       couponCode: deal.coupon?.code ?? null,
@@ -510,12 +601,30 @@ async function placeOrderHandler(event: PlaceOrderEvent) {
       createdBy: forCustomer ? callerPhone : null,
       owner,
       ...(online ? { qiStatus: "CREATED" } : {}),
+      });
+    const created = await (async () => {
+      if (deal.coupon && !(await takeCouponUse(deal.coupon.code, deal.coupon.maxUses))) {
+        throw new Error(`coupon:${couponProblemText("used_up")}`);
+      }
+      const number = await nextOrderNumber();
+      const saved = await createOrder(number);
+      if (!saved.data || saved.errors?.length) {
+        console.error("Saving the order failed", JSON.stringify(saved.errors));
+        throw new Error("save_failed");
+      }
+      return { number, order: saved.data };
+    })().catch(async (err) => {
+      // No order was saved: its gift jars go back to the campaign.
+      if (gift) await releaseGift({ id: orderId, giftCampaignId: gift.campaignId });
+      throw err;
     });
-    if (!order || errors?.length) {
-      console.error("Saving the order failed", JSON.stringify(errors));
-      throw new Error("save_failed");
-    }
+    const { number, order } = created;
+    const total = pricing.total;
+    const payAmount = total + (freeDelivery ? 0 : site.deliveryFee);
+    return finishOrder(order, number, payAmount, giftNote);
+  };
 
+  const finishOrder = async (order: OrderRecord, number: string, payAmount: number, giftNote: GiftDrop | null) => {
     // A brand-new customer's saved details («معلوماتي») start from this order.
     if (customer?.created && owner) {
       const { errors: profileErrors } = await client.models.CustomerProfile.create({ name, province, area, address, owner });
@@ -539,16 +648,17 @@ async function placeOrderHandler(event: PlaceOrderEvent) {
       if (!pay.ok || !pay.data.formUrl || !pay.data.paymentId) {
         console.error("Qi payment could not be created", pay.ok ? JSON.stringify(pay.data).slice(0, 300) : pay.error);
         await client.models.Order.update({ id: order.id, status: "CANCELLED", qiStatus: "FAILED" });
+        await releaseGift(order);
         throw new Error("pay_failed");
       }
       await client.models.Order.update({ id: order.id, qiPaymentId: pay.data.paymentId });
-      return { id: order.id, orderNumber: number, createdAt: order.createdAt, telegramSent: false, payUrl: pay.data.formUrl };
+      return { id: order.id, orderNumber: number, createdAt: order.createdAt, telegramSent: false, payUrl: pay.data.formUrl, giftNote };
     }
 
     const telegramSent = await notifyTeam(order);
     // Report the purchase to Meta (website orders only; never blocks the order).
     if (!isTeam) await reportPurchase(order, tracking, Date.parse(order.createdAt) || Date.now());
-    return { id: order.id, orderNumber: number, createdAt: order.createdAt, telegramSent, payUrl: null };
+    return { id: order.id, orderNumber: number, createdAt: order.createdAt, telegramSent, payUrl: null, giftNote };
   };
 
   // Customers ordering for themselves: one order at a time (see lib/order-rules.ts).
@@ -629,7 +739,7 @@ async function reportPurchase(order: OrderRecord, tracking: Tracking, atMs: numb
       phone: order.phone,
       name: order.name,
       province: order.province,
-      items: (order.items ?? []) as { slug: string; qty: number; price: number }[],
+      items: (order.items ?? []) as { slug: string; qty: number; price: number; gift?: boolean | null }[],
       jars: order.jars,
       total: order.total,
       freeDelivery: order.freeDelivery,
@@ -648,13 +758,13 @@ type OrderRecord = Schema["Order"]["type"];
 async function notifyTeam(order: OrderRecord): Promise<boolean> {
   const previous = await client.models.Order.listOrderByPhone({ phone: order.phone }, { limit: 2, selectionSet: ["id"] });
   const returning = (previous.data ?? []).some((o) => o.id !== order.id);
-  const { lines } = priceCart(
-    (order.items ?? []).filter((i): i is NonNullable<typeof i> => Boolean(i)).map((i) => ({ slug: i.slug, qty: i.qty })),
-  );
+  const { lines } = priceCart(paidLines(order.items).map((i) => ({ slug: i.slug, qty: i.qty })));
   const message = buildOrderMessage({
     orderNumber: order.orderNumber,
     time: baghdadTime(new Date(order.createdAt)),
     lines,
+    gifts: giftLines(order.items).map((i) => ({ nameEn: i.nameEn, qty: i.qty })),
+    giftManual: order.giftCampaignId === MANUAL_GIFT,
     total: order.total,
     name: order.name,
     phone: order.phone,
@@ -776,7 +886,10 @@ async function finishPayment(order: OrderRecord, p: QiPayment): Promise<{ status
     return { status: "SUCCESS", paid: true };
   }
   if (p.status === "FAILED" || p.status === "AUTHENTICATION_FAILED" || p.canceled) {
-    if (order.status === "NEW") await client.models.Order.update({ id: order.id, status: "CANCELLED", qiStatus: "FAILED" });
+    if (order.status === "NEW") {
+      await client.models.Order.update({ id: order.id, status: "CANCELLED", qiStatus: "FAILED" });
+      await releaseGift(order);
+    }
     return { status: "FAILED", paid: false };
   }
   return { status: "CREATED", paid: false };
@@ -874,8 +987,18 @@ async function quote(event: { identity: unknown; arguments: QuoteArgs }) {
   });
   const rule = deal.coupon ? ruleOf(deal.coupon) : null;
   const p = priceOrder(lines.map((l) => ({ price: l.product.price, qty: l.qty })), rule, deal.credit);
+  // The gift offer for this cart: shown while jars are left; the customer's own limit is
+  // checked once we know their number.
+  const offer = await giftNow().catch((err) => (console.error("gift offer failed", err), null));
+  let gift: GiftQuote | null = null;
+  if (offer && offer.rules.products.length && (offer.left == null || offer.left > 0)) {
+    const r = offer.rules;
+    const reason = jars < r.minPaidJars ? "min_jars" : history && giftUses(history, r.id) >= r.perPhone ? "limit" : null;
+    gift = { ...offerOf(r), perOrder: offer.left == null ? r.perOrder : Math.min(r.perOrder, offer.left), eligible: !reason, reason };
+  }
   return JSON.stringify({
     ...p,
+    gift,
     deliveryFee: p.freeDelivery ? 0 : site.deliveryFee,
     pay: p.total + (p.freeDelivery ? 0 : site.deliveryFee),
     credit: deal.credit,
@@ -929,6 +1052,106 @@ async function campaignStats(event: { arguments: { slugs: (string | null)[] } })
   return JSON.stringify({ visits });
 }
 
+// ---- Gift campaigns: the shop's offer, and the team's actions -----------------------
+
+// The live campaign as the shop shows it (banner, flavors), or null when there is none or
+// its jars are used up.
+async function giftOffer() {
+  const offer = await giftNow();
+  if (!offer || !offer.rules.products.length || (offer.left != null && offer.left <= 0)) return JSON.stringify(null);
+  return JSON.stringify(offerOf(offer.rules));
+}
+
+type GiftAdminArgs = { action: string; campaignId?: string | null; orderId?: string | null; gifts?: unknown };
+
+async function giftAdmin(event: { identity: unknown; arguments: GiftAdminArgs }) {
+  const identity = event.identity as AppSyncIdentityCognito | null;
+  if (!identity || !(identity.groups ?? []).includes("ADMINS")) throw new Error("forbidden");
+  const a = event.arguments;
+  giftCache = null;
+
+  // How many of the campaign's jars are taken (after giving back those of cancelled orders).
+  if (a.action === "status") {
+    const { data: c } = await client.models.GiftCampaign.get({ id: String(a.campaignId ?? "") });
+    if (!c) throw new Error("not_found");
+    const released = await reconcileGifts(dynamo, c.id, loadGiftOrder);
+    const used = await giftsUsed(dynamo, c.id);
+    const cap = rulesOf(c).cap;
+    return JSON.stringify({ used, cap, left: cap == null ? null : Math.max(0, cap - used), released });
+  }
+
+  const { data: order } = await client.models.Order.get({ id: String(a.orderId ?? "") });
+  if (!order) throw new Error("not_found");
+  const alive = order.status !== "CANCELLED";
+  const capOf = async (campaignId: string) => {
+    const { data: c } = await client.models.GiftCampaign.get({ id: campaignId });
+    return c ? rulesOf(c).cap : null;
+  };
+  const take = async (campaignId: string, units: number, cap: number | null) => {
+    let ok = await setGiftUnits(dynamo, campaignId, order.id, units, cap);
+    if (!ok && (await reconcileGifts(dynamo, campaignId, loadGiftOrder))) ok = await setGiftUnits(dynamo, campaignId, order.id, units, cap);
+    return ok;
+  };
+  const plain = (i: { slug: string; nameAr: string; nameEn: string; qty: number; price: number; gift?: boolean | null; campaignId?: string | null }) => ({
+    slug: i.slug,
+    nameAr: i.nameAr,
+    nameEn: i.nameEn,
+    qty: i.qty,
+    price: i.price,
+    gift: i.gift ?? null,
+    campaignId: i.campaignId ?? null,
+  });
+
+  // After the order's status changed: a cancelled order gives its jars back; a reopened one
+  // takes them again. If none are left, the gift stays on the order as a manual gift.
+  if (a.action === "sync") {
+    const campaignId = order.giftCampaignId;
+    const units = Number(order.giftUnits ?? 0);
+    if (!countsAgainstCap(campaignId) || !units) return JSON.stringify({ ok: true });
+    if (await take(campaignId, alive ? units : 0, await capOf(campaignId))) return JSON.stringify({ ok: true, released: !alive });
+    await client.models.Order.update({
+      id: order.id,
+      giftCampaignId: MANUAL_GIFT,
+      items: [...paidLines(order.items).map(plain), ...giftLines(order.items).map((i) => ({ ...plain(i), campaignId: MANUAL_GIFT }))],
+    });
+    return JSON.stringify({ ok: true, converted: true });
+  }
+
+  // The team sets the order's gift lines: [] removes them; campaignId = a campaign or "manual".
+  if (a.action === "setGifts") {
+    const me = await customerPhone(identity);
+    const picks = cleanGiftPicks(a.gifts);
+    const units = picks.reduce((n, g) => n + g.qty, 0);
+    const target = units ? String(a.campaignId ?? "").trim() || MANUAL_GIFT : null;
+    const before = order.giftCampaignId ?? null;
+    if (countsAgainstCap(target)) {
+      const { data: c } = await client.models.GiftCampaign.get({ id: target });
+      if (!c) throw new Error("gift:changed");
+      // A campaign that is over can keep the gift it already gave, but gives no new ones.
+      if (before !== target && !giftCampaignLive(c)) throw new Error("gift:ended");
+      const rules = rulesOf(c);
+      const problem = giftProblem(rules, { picks, paidJars: order.jars, phoneUses: giftUses(await historyFor(order.phone), rules.id, order.id) });
+      if (problem) throw new Error(`gift:${problem}`);
+      if (alive && !(await take(target, units, rules.cap))) throw new Error("gift:cap");
+    }
+    if (countsAgainstCap(before) && before !== target) await setGiftUnits(dynamo, before, order.id, 0, null);
+    const { errors } = await client.models.Order.update({
+      id: order.id,
+      items: [...paidLines(order.items).map(plain), ...(target ? giftItems(picks, target) : [])],
+      giftUnits: units || null,
+      giftCampaignId: target,
+      editedBy: me,
+      editedAt: new Date().toISOString(),
+    });
+    if (errors?.length) {
+      console.error("saving the gift lines failed", JSON.stringify(errors));
+      throw new Error("save_failed");
+    }
+    return JSON.stringify({ ok: true, giftUnits: units });
+  }
+  throw new Error("unknown_action");
+}
+
 // ---- Entry ----------------------------------------------------------------------
 
 export const handler = async (event: unknown) => {
@@ -938,6 +1161,8 @@ export const handler = async (event: unknown) => {
   if (field === "quote") return quote(event as Parameters<typeof quote>[0]);
   if (field === "campaignVisit") return campaignVisit(event as Parameters<typeof campaignVisit>[0]);
   if (field === "campaignStats") return campaignStats(event as Parameters<typeof campaignStats>[0]);
+  if (field === "giftOffer") return giftOffer();
+  if (field === "giftAdmin") return giftAdmin(event as Parameters<typeof giftAdmin>[0]);
   try {
     return await placeOrderHandler(event as PlaceOrderEvent);
   } catch (err) {

@@ -7,6 +7,7 @@ import { LoginPanel } from "./LoginPanel";
 import { useCart } from "./CartProvider";
 import { dataClient } from "@/lib/data";
 import { reportPendingPurchase } from "@/lib/pixel";
+import { GIFT_DROP_TEXT, type GiftDrop } from "@/lib/gifts";
 
 type State = "checking" | "paid" | "failed" | "waiting";
 
@@ -17,9 +18,16 @@ export function PaidView() {
   const cart = useCart();
   const [orderNumber, setOrderNumber] = useState<string | null | undefined>(undefined);
   const [state, setState] = useState<State>("checking");
+  // The order went through without the gift the customer chose (saved before leaving for Qi).
+  const [giftNote, setGiftNote] = useState<GiftDrop | null>(null);
 
   useEffect(() => {
-    setOrderNumber(new URLSearchParams(window.location.search).get("o"));
+    const o = new URLSearchParams(window.location.search).get("o");
+    setOrderNumber(o);
+    try {
+      const saved = JSON.parse(sessionStorage.getItem("elue-gift-note") ?? "null") as { orderNumber: string; note: GiftDrop } | null;
+      if (saved && saved.orderNumber === o) setGiftNote(saved.note);
+    } catch {}
   }, []);
 
   useEffect(() => {
@@ -66,6 +74,7 @@ export function PaidView() {
           <p>
             رقم الطلب <strong dir="ltr">{orderNumber}</strong>. لا يُطلب منك أي مبلغ عند الاستلام.
           </p>
+          {giftNote && <p role="alert">{GIFT_DROP_TEXT[giftNote] ?? GIFT_DROP_TEXT.changed}</p>}
           <Link className="btn btn--full" href={`/account?order=${encodeURIComponent(orderNumber)}`}>
             عرض الطلب
           </Link>

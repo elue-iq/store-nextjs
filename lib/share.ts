@@ -7,11 +7,12 @@
 import { formatIraqiMobile } from "./phone";
 import { deliveryPayOf, formatIQD, minusIQD, site } from "./site";
 import { slotText } from "./delivery-slot";
+import { giftLines, paidLines } from "./gifts";
 
 type Who = { name: string; phone: string; orderNumber: string };
 
 type OrderInfo = Who & {
-  items?: ({ slug: string; nameAr: string; qty: number; price: number } | null)[] | null;
+  items?: ({ slug: string; nameAr: string; qty: number; price: number; gift?: boolean | null } | null)[] | null;
   jars?: number | null;
   total?: number | null;
   paid?: boolean | null;
@@ -45,7 +46,8 @@ function summary(o: OrderInfo): string[] {
   const delivery = deliveryPayOf(o);
   const collect = (o.paid ? 0 : o.total) + (delivery === "driver" ? site.deliveryFee : 0);
   return [
-    `• ${items.map((i) => `${i.nameAr} × ${i.qty}`).join("، ")}`,
+    `• ${paidLines(items).map((i) => `${i.nameAr} × ${i.qty}`).join("، ")}`,
+    giftLines(items).length ? `🎁 هدية من ÉLUE: ${giftLines(items).map((i) => `${i.nameAr} × ${i.qty}`).join("، ")}` : null,
     o.discount ? `🎁 ${o.couponLabel ?? "خصم"}: ${minusIQD(o.discount)}` : null,
     o.creditUsed ? `🎁 من رصيدكم: ${minusIQD(o.creditUsed)}` : null,
     o.cashback ? `🎁 تنضاف لرصيدكم ${formatIQD(o.cashback)} بعد التسليم` : null,

@@ -11,6 +11,7 @@
 //   number has no earlier order that wasn't cancelled.
 // - Test orders (source contains "test=") are hidden unless asked for.
 
+import { giftLines, paidLines } from "./gifts";
 import type { Order, OrderStatus } from "./data";
 import { products } from "./products";
 import { formatIraqiMobile } from "./phone";
@@ -207,7 +208,8 @@ export function sourceLabel(o: Order): string {
   return utm ?? s.slice(0, 40);
 }
 
-const lines = (o: Order) => (o.items ?? []).filter((i): i is NonNullable<typeof i> => Boolean(i));
+// Paid lines only: gift jars (lib/gifts.ts) are not sales, so they stay out of jars and revenue.
+const lines = (o: Order) => paidLines(o.items);
 
 // The part of an order that counts under the flavor filter.
 // Orders given away (payMethod GIFT) carry jars but no revenue.
@@ -568,6 +570,10 @@ export function ordersCsv(orders: Order[], types: Map<string, "new" | "returning
     "first_touch_utm_medium",
     "first_touch_utm_campaign",
     "attribution_bucket",
+    "gift_units",
+    "gift_campaign_id",
+    "gift_items",
+    "marketing_consent",
     "العميل",
     "ملاحظة",
   ];
@@ -614,6 +620,10 @@ export function ordersCsv(orders: Order[], types: Map<string, "new" | "returning
       attr.first?.utm_medium,
       attr.first?.utm_campaign,
       attributionBucket(o),
+      o.giftUnits ?? 0,
+      o.giftCampaignId,
+      giftLines(o.items).map((i) => `${i.slug}×${i.qty}`).join(" "),
+      o.marketingConsent == null ? "" : o.marketingConsent ? "yes" : "no",
       types.get(o.id) === "returning" ? "عائد" : "جديد",
       o.note,
     ]

@@ -73,19 +73,20 @@ export function boxyTrack(slug: string | null | undefined): string | null {
 // customer already paid) plus the delivery fee line when the driver collects it, so the total
 // always equals what the driver must collect (same rule as Modon).
 export function boxyProducts(o: {
-  items?: ({ nameAr?: string | null; qty: number; price: number } | null)[] | null;
+  items?: ({ nameAr?: string | null; qty: number; price: number; gift?: boolean | null } | null)[] | null;
   total: number;
   paid?: boolean | null;
   freeDelivery?: boolean | null;
   deliveryPaid?: boolean | null;
 }): { title: string; price: number; quantity: number }[] {
   const paid = Boolean(o.paid);
-  const jars = (o.items ?? [])
-    .filter((i): i is NonNullable<typeof i> => Boolean(i))
-    .map((i) => ({ title: String(i.nameAr ?? "ترافل ÉLUE"), price: paid ? 0 : i.price, quantity: i.qty }));
+  const all = (o.items ?? []).filter((i): i is NonNullable<typeof i> => Boolean(i));
+  const jars = all.filter((i) => !i.gift).map((i) => ({ title: String(i.nameAr ?? "ترافل ÉLUE"), price: paid ? 0 : i.price, quantity: i.qty }));
+  // Gift jars travel in the same parcel: listed at 0, so the total stays what the driver collects.
+  const gifts = all.filter((i) => i.gift).map((i) => ({ title: `${String(i.nameAr ?? "ترافل ÉLUE")} (هدية)`, price: 0, quantity: i.qty }));
   // A coupon or credit: the jars' prices are lowered so they add up to the order's total.
   const goods = jars.reduce((n, l) => n + l.price * l.quantity, 0);
-  const lines = paid ? jars : spreadDiscount(jars, goods - o.total);
+  const lines = [...(paid ? jars : spreadDiscount(jars, goods - o.total)), ...gifts];
   if (deliveryPayOf(o) === "driver") lines.push({ title: "رسوم التوصيل", price: site.deliveryFee, quantity: 1 });
   return lines;
 }

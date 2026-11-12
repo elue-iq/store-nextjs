@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { dataClient } from "@/lib/data";
 import { normalizeCode } from "@/lib/coupons";
 import { formatIQD, minusIQD } from "@/lib/site";
+import type { GiftQuote } from "@/lib/gifts";
 
 // The server's price for a cart (query «quote»): coupon, credit, delivery. The checkout
 // shows exactly what placeOrder will charge.
@@ -21,6 +22,8 @@ export type Quote = {
   credit: number;
   coupon: { code: string; ok: boolean; label?: string; error?: string | null; hint?: string | null } | null;
   campaign: { slug: string } | null;
+  // The live gift campaign for this cart and customer (null = no offer now).
+  gift?: GiftQuote | null;
 };
 
 export function useQuote(o: {

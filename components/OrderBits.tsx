@@ -4,6 +4,7 @@ import { formatIQD } from "@/lib/site";
 import { getProduct } from "@/lib/products";
 import { baghdadTime, STATUS_LABELS, type Order, type OrderStatus } from "@/lib/data";
 import { parseTrackEvents } from "@/lib/modon";
+import { GIFT_TAG } from "@/lib/gifts";
 
 export function StatusChip({ status }: { status: OrderStatus }) {
   return <span className={`status-chip status-chip--${status.toLowerCase()}`}>{STATUS_LABELS[status]}</span>;
@@ -39,12 +40,13 @@ export function OrderItemsList({ items }: { items: Order["items"] }) {
       {items
         .filter((i): i is NonNullable<typeof i> => Boolean(i))
         .map((i) => (
-          <li key={i.slug}>
+          <li key={`${i.gift ? "gift-" : ""}${i.slug}`} className={i.gift ? "order-items__gift" : undefined}>
             <span>
               {getProduct(i.slug)?.nameAr ?? i.nameAr} <small dir="ltr">{i.nameEn}</small>
+              {i.gift && <em className="gift-tag">{GIFT_TAG}</em>}
             </span>
             <span className="order-items__qty">× {i.qty}</span>
-            <span className="order-items__price">{formatIQD(i.qty * i.price)}</span>
+            <span className="order-items__price">{formatIQD(i.gift ? 0 : i.qty * i.price)}</span>
           </li>
         ))}
     </ul>

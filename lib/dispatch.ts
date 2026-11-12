@@ -3,6 +3,7 @@
 // Plain TypeScript with relative imports only, so it bundles into a function and
 // also runs in the browser.
 
+import { itemNameAr, piecesOf } from "./gifts";
 import { formatIraqiMobile } from "./phone";
 import { fullAddress } from "./iraq";
 import { deliveryPayOf, formatIQD, payMethodText, site } from "./site";
@@ -20,8 +21,9 @@ export type DispatchOrder = {
   note?: string | null;
   deliverySlot?: string | null; // Baghdad delivery period
   deliveryDate?: string | null; // wanted day (YYYY-MM-DD)
-  items?: ({ slug?: string; nameAr: string; qty: number } | null)[] | null;
-  jars?: number | null;
+  items?: ({ slug?: string; nameAr: string; qty: number; gift?: boolean | null } | null)[] | null;
+  jars?: number | null; // paid jars
+  giftUnits?: number | null; // gift jars in the same parcel (lib/gifts.ts)
   total: number;
   paid?: boolean | null;
   freeDelivery?: boolean | null;
@@ -92,7 +94,7 @@ const HTML: Style = { esc: escapeHtml, b: (s) => `<b>${s}</b>`, num: ltr };
 const PLAIN: Style = { esc: (s) => s, b: (s) => `*${s}*`, num: (s) => `‎${s}` };
 
 function itemLines(o: DispatchOrder, st: Style): string[] {
-  return (o.items ?? []).filter((i): i is NonNullable<typeof i> => Boolean(i)).map((i) => `• ${st.esc(i.nameAr)}: ${jarsWord(i.qty)}`);
+  return (o.items ?? []).filter((i): i is NonNullable<typeof i> => Boolean(i)).map((i) => `• ${st.esc(itemNameAr(i))}: ${jarsWord(i.qty)}`);
 }
 
 // A new order for a local courier. Kept short on purpose: the driver is busy.
@@ -108,7 +110,8 @@ function courierText(o: DispatchOrder, st: Style, test: boolean): string {
     o.note ? `📝 ${st.esc(o.note)}` : null,
     o.province === site.baghdadWindow.province && slotText(o) ? `🕐 ${st.b(slotText(o)!)}` : null,
     "",
-    ...(o.items ?? []).filter((i): i is NonNullable<typeof i> => Boolean(i)).map((i) => `• ${st.esc(i.nameAr)} × ${st.num(String(i.qty))}`),
+    ...(o.items ?? []).filter((i): i is NonNullable<typeof i> => Boolean(i)).map((i) => `• ${st.esc(itemNameAr(i))} × ${st.num(String(i.qty))}`),
+    o.giftUnits ? `📦 ${st.b(`عدد العلب: ${st.num(String(piecesOf(o)))}`)} (منها ${st.num(String(o.giftUnits))} هدية)` : null,
     "",
     collect > 0 ? `💵 ${st.b(formatIQD(collect))} (شامل التوصيل)` : "✅ مدفوع: لا يُطلب شيء",
   ]

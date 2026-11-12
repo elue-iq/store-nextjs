@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "./AuthProvider";
 import { useToast } from "./Toast";
 import { DeliveryFields, type DeliveryFieldsHandle } from "./DeliveryFields";
@@ -18,6 +18,8 @@ import { collectBreakdown, modonCollect } from "@/lib/modon";
 import { formatIraqiMobile, normalizeIraqiMobile } from "@/lib/phone";
 import { deliveryPayOf, formatIQD, freeDeliveryFor, needsPayRef, PAID_METHODS, PAY_METHOD_LABELS, site, type DeliveryPay, type PayMethod } from "@/lib/site";
 import { checkDelivery, cleanDelivery, phone2Error, phoneError, type DeliveryInfo, type FieldErrors } from "@/lib/validate";
+import { giftCampaignLive, giftLines, MANUAL_GIFT, MAX_GIFT_UNITS, paidLines } from "@/lib/gifts";
+import { callGiftAdmin, giftErrorText, listGiftCampaigns, type GiftCampaign } from "@/lib/gift-admin";
 
 // Team form for one order:
 // - "create": a new order for a customer (e.g. taken by phone). Goes through
@@ -81,16 +83,44 @@ export function AdminOrderForm({
   const [slot, setSlot] = useState<SlotKey>(isSlotKey(order?.deliverySlot) ? order.deliverySlot : DEFAULT_SLOT);
   const [slotDate, setSlotDate] = useState(order?.deliveryDate ?? "");
   const inBaghdad = delivery.province === site.baghdadWindow.province;
+  // Paid jars. Gift jars (price 0, lib/gifts.ts) are their own lines, edited below.
   const [qty, setQty] = useState<Record<string, number>>(() =>
-    Object.fromEntries((order?.items ?? []).filter(Boolean).map((i) => [i!.slug, i!.qty])),
+    Object.fromEntries(paidLines(order?.items).map((i) => [i.slug, i.qty])),
   );
   const [busy, setBusy] = useState(false);
 
+  // Gift jars: a live campaign's gift (counts against its total and the phone's allowance)
+  // or a manual gift from the team (no limits). Checked and saved by the server.
+  const oldGifts = giftLines(order?.items);
+  const oldGiftKey = JSON.stringify([order?.giftCampaignId ?? "", products.map((p) => oldGifts.find((g) => g.slug === p.slug)?.qty ?? 0)]);
+  const [giftQty, setGiftQty] = useState<Record<string, number>>(() => Object.fromEntries(oldGifts.map((i) => [i.slug, i.qty])));
+  const [giftKind, setGiftKind] = useState<string>(order?.giftCampaignId ?? "");
+  const [giftCampaigns, setGiftCampaigns] = useState<GiftCampaign[]>([]);
+  useEffect(() => {
+    let alive = true;
+    listGiftCampaigns()
+      .then((all) => {
+        if (!alive) return;
+        const usable = all.filter((c) => giftCampaignLive(c) || c.id === order?.giftCampaignId);
+        setGiftCampaigns(usable);
+        setGiftKind((k) => k || usable.find((c) => giftCampaignLive(c))?.id || MANUAL_GIFT);
+      })
+      .catch(() => alive && setGiftKind((k) => k || MANUAL_GIFT));
+    return () => {
+      alive = false;
+    };
+  }, [order?.giftCampaignId]);
+  const giftCampaign = giftCampaigns.find((c) => c.id === giftKind) ?? null;
+  // A campaign gives only its own flavors; a manual gift can be any flavor.
+  const giftProducts = giftCampaign ? products.filter((p) => (giftCampaign.products ?? []).includes(p.slug)) : products;
+  const giftPicks = giftProducts.filter((p) => (giftQty[p.slug] ?? 0) > 0).map((p) => ({ slug: p.slug, qty: giftQty[p.slug] }));
+  const giftUnits = giftPicks.reduce((n, g) => n + g.qty, 0);
+  const giftKey = JSON.stringify([giftUnits ? giftKind : "", products.map((p) => giftPicks.find((g) => g.slug === p.slug)?.qty ?? 0)]);
+  const giftsChanged = giftKey !== oldGiftKey;
+
   // Existing lines keep the price they were sold at; new lines use today's price.
-  const oldQty: Record<string, number> = Object.fromEntries(
-    (order?.items ?? []).filter(Boolean).map((i) => [i!.slug, i!.qty]),
-  );
-  const oldPrice = Object.fromEntries((order?.items ?? []).filter(Boolean).map((i) => [i!.slug, i!.price]));
+  const oldQty: Record<string, number> = Object.fromEntries(paidLines(order?.items).map((i) => [i.slug, i.qty]));
+  const oldPrice = Object.fromEntries(paidLines(order?.items).map((i) => [i.slug, i.price]));
   const lines = products
     .filter((p) => (qty[p.slug] ?? 0) > 0)
     .map((p) => ({ product: p, qty: qty[p.slug], price: oldPrice[p.slug] ?? p.price }));
@@ -127,6 +157,9 @@ export function AdminOrderForm({
 
   function step(slug: string, by: number) {
     setQty((q) => ({ ...q, [slug]: Math.min(MAX_QTY_PER_LINE, Math.max(0, (q[slug] ?? 0) + by)) }));
+  }
+  function stepGift(slug: string, by: number) {
+    setGiftQty((q) => ({ ...q, [slug]: Math.min(MAX_GIFT_UNITS, Math.max(0, (q[slug] ?? 0) + by)) }));
   }
 
   async function save() {
@@ -222,10 +255,12 @@ export function AdminOrderForm({
         JSON.stringify(items.map((i) => [i.slug, i.qty])) ===
         JSON.stringify(products.filter((p) => oldQty[p.slug]).map((p) => [p.slug, oldQty[p.slug]]));
       if (!sameItems) {
-        Object.assign(changes, { items, jars, total });
+        // The gift lines stay as they are here: the server replaces them (setGifts below).
+        const keptGifts = oldGifts.map((g) => ({ slug: g.slug, nameAr: g.nameAr, nameEn: g.nameEn, qty: g.qty, price: 0, gift: true, campaignId: g.campaignId ?? order.giftCampaignId ?? MANUAL_GIFT }));
+        Object.assign(changes, { items: [...items, ...keptGifts], jars, total });
         // A coupon / credit on the order: the discount follows the new jars.
         if (savedRule || order.creditUsed || order.discount) {
-          const oldLines = (order.items ?? []).filter(Boolean).map((i) => ({ price: i!.price, qty: i!.qty }));
+          const oldLines = paidLines(order.items).map((i) => ({ price: i.price, qty: i.qty }));
           const oldFree = couponEffect(savedRule, oldLines).freeJars;
           const perJar = order.commission ? order.commission / Math.max(1, order.jars - oldFree) : 0;
           Object.assign(changes, {
@@ -244,23 +279,37 @@ export function AdminOrderForm({
       const heardNoteNew = heard === "creator" || heard === "other" ? heardNote.trim().slice(0, 100) || null : null;
       if (heardNew !== (order.heardFrom ?? null)) changes.heardFrom = heardNew;
       if (heardNoteNew !== (order.heardNote ?? null)) changes.heardNote = heardNoteNew;
-      if (!Object.keys(changes).length) {
+      if (!Object.keys(changes).length && !giftsChanged) {
         setBusy(false);
         onDone(order.orderNumber);
         return;
       }
-      const { errors: gqlErrors } = await dataClient.models.Order.update({
-        id: order.id,
-        ...changes,
-        editedBy: auth.phone,
-        editedAt: new Date().toISOString(),
-      });
-      setBusy(false);
-      if (gqlErrors?.length) {
-        console.error("order edit failed", gqlErrors);
-        toast({ id: "admin", tone: "attention", message: "تعذّر حفظ التعديلات. حاول مجددًا." });
-        return;
+      if (Object.keys(changes).length) {
+        const { errors: gqlErrors } = await dataClient.models.Order.update({
+          id: order.id,
+          ...changes,
+          editedBy: auth.phone,
+          editedAt: new Date().toISOString(),
+        });
+        if (gqlErrors?.length) {
+          setBusy(false);
+          console.error("order edit failed", gqlErrors);
+          toast({ id: "admin", tone: "attention", message: "تعذّر حفظ التعديلات. حاول مجددًا." });
+          return;
+        }
       }
+      // The gift lines: checked on the server (campaign rules, jars left) and saved there.
+      if (giftsChanged) {
+        const { error } = await callGiftAdmin({ action: "setGifts", orderId: order.id, campaignId: giftKind || MANUAL_GIFT, gifts: giftPicks });
+        if (error) {
+          setBusy(false);
+          toast({ id: "admin", tone: "attention", message: `${Object.keys(changes).length ? "حُفظت باقي التعديلات، لكن الهدية ما انحفظت: " : ""}${error}` });
+          document.getElementById("order-gifts")?.scrollIntoView({ block: "center", behavior: "smooth" });
+          return;
+        }
+        changes.items = true; // the parcel changed: the delivery company is updated below
+      }
+      setBusy(false);
       // Already at Modon: send the new details there too (only possible before pickup).
       // "paid" changes the amount the driver collects, so it must re-sync.
       const modonFields = ["phone", "phone2", "name", "province", "area", "address", "note", "items", "paid", "freeDelivery", "deliveryPaid"];
@@ -304,6 +353,8 @@ export function AdminOrderForm({
       couponCode: jarsPay === "cash" && quote?.coupon?.ok ? quote.coupon.code : undefined,
       heardFrom: heard || undefined,
       heardNote: heard === "creator" || heard === "other" ? heardNote.trim().slice(0, 100) || undefined : undefined,
+      gifts: giftUnits ? JSON.stringify(giftPicks) : undefined,
+      giftCampaignId: giftUnits ? giftKind || MANUAL_GIFT : undefined,
     });
     setBusy(false);
     if (data?.orderNumber) {
@@ -320,6 +371,10 @@ export function AdminOrderForm({
       setErrors(fields);
     }
     if (code === "coupon") return toast({ id: "admin", tone: "attention", message: errorDetail(gqlErrors) });
+    if (code === "gift") {
+      document.getElementById("order-gifts")?.scrollIntoView({ block: "center", behavior: "smooth" });
+      return toast({ id: "admin", tone: "attention", message: giftErrorText(gqlErrors) });
+    }
     toast({ id: "admin", tone: "attention", message: "تعذّر إنشاء الطلب. راجع الحقول وحاول مجددًا." });
   }
 
@@ -442,8 +497,50 @@ export function AdminOrderForm({
         ) : (
           jarsPay === "cash" && <PriceLines quote={quote} />
         )}
+        <fieldset className="admin-order-form__group admin-order-form__gifts" id="order-gifts">
+          <legend>هدايا: علب مجانية تنضاف للطلب بسعر 0</legend>
+          <label>
+            نوع الهدية
+            <select value={giftKind} onChange={(e) => setGiftKind(e.target.value)}>
+              {!giftKind && <option value="">جارٍ التحميل…</option>}
+              {giftCampaigns.map((c) => (
+                <option key={c.id} value={c.id}>
+                  حملة: {c.name}
+                  {giftCampaignLive(c) ? "" : " (منتهية)"}
+                </option>
+              ))}
+              <option value={MANUAL_GIFT}>هدية يدوية (خارج الحملات)</option>
+            </select>
+            <small className="field-hint">
+              {giftCampaign
+                ? `هدية الحملة تنحسب من كميتها (${giftCampaign.perOrder ?? 1} بالطلب، ${giftCampaign.perPhone ?? 1} لكل رقم).`
+                : "الهدية اليدوية بلا حدود وما تنحسب من أي حملة."}
+            </small>
+          </label>
+          <ul className="admin-order-form__items">
+            {giftProducts.map((p) => (
+              <li key={p.slug}>
+                <span>
+                  {p.nameAr}
+                  <small dir="ltr">{p.nameEn}</small>
+                </span>
+                <span className="stepper stepper--small" role="group" aria-label={`هدية ${p.nameAr}`}>
+                  <button type="button" onClick={() => stepGift(p.slug, 1)} aria-label="زيادة">
+                    +
+                  </button>
+                  <output>{giftQty[p.slug] ?? 0}</output>
+                  <button type="button" onClick={() => stepGift(p.slug, -1)} aria-label="إنقاص">
+                    −
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </fieldset>
         <p className="order-card__total">
-          <span>المجموع · {jars} علبة</span>
+          <span>
+            المجموع · {jars} علبة{giftUnits ? ` + ${giftUnits} هدية` : ""}
+          </span>
           <strong>{formatIQD(total)}</strong>
         </p>
         {editing ? (

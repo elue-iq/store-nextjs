@@ -12,7 +12,7 @@ import { fullAddress } from "./iraq";
 import { getProduct } from "./products";
 import { modonCollect } from "./modon";
 
-export type ReceiptLine = { nameAr: string; nameEn: string; qty: number; price: number; subtotal: number };
+export type ReceiptLine = { nameAr: string; nameEn: string; qty: number; price: number; subtotal: number; gift?: boolean };
 
 export type ReceiptData = {
   orderId: string;
@@ -109,9 +109,9 @@ function draw(ctx: CanvasRenderingContext2D, d: ReceiptData): number {
   y += 70;
   for (const l of d.lines) {
     text(l.nameAr, R, y, { size: 34, weight: 600 });
-    text(formatIQD(l.subtotal), M, y, { size: 34, weight: 600, align: "left" });
+    text(l.gift ? "هدية" : formatIQD(l.subtotal), M, y, { size: 34, weight: 600, align: "left", ...(l.gift ? { color: C.terracotta } : {}) });
     y += 44;
-    text(`${l.nameEn}  ·  الكمية: ${l.qty}  ·  سعر العلبة: ${formatIQD(l.price)}`, R, y, { size: 24, color: C.muted });
+    text(`${l.nameEn}  ·  الكمية: ${l.qty}  ·  ${l.gift ? "هدية من ÉLUE" : `سعر العلبة: ${formatIQD(l.price)}`}`, R, y, { size: 24, color: C.muted });
     y += 62;
   }
   y -= 20;
@@ -273,7 +273,7 @@ export async function saveImage(blob: Blob, filename: string): Promise<boolean> 
 export function receiptFromOrder(o: {
   orderNumber: string;
   createdAt: string;
-  items: ({ slug?: string; nameAr: string; nameEn: string; qty: number; price: number } | null)[];
+  items: ({ slug?: string; nameAr: string; nameEn: string; qty: number; price: number; gift?: boolean | null } | null)[];
   total: number;
   name: string;
   phone: string; // 9647XXXXXXXXX
@@ -302,8 +302,9 @@ export function receiptFromOrder(o: {
         nameAr: getProduct(i.slug ?? "")?.nameAr ?? i.nameAr,
         nameEn: i.nameEn,
         qty: i.qty,
-        price: i.price,
-        subtotal: i.qty * i.price,
+        price: i.gift ? 0 : i.price,
+        subtotal: i.gift ? 0 : i.qty * i.price,
+        gift: Boolean(i.gift),
       })),
     total: o.total,
     name: o.name,

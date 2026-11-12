@@ -19,7 +19,9 @@ const ltr = (s: string) => `⁦${s}⁩`;
 export function buildOrderMessage(o: {
   orderNumber: string;
   time: string;
-  lines: OrderLine[];
+  lines: OrderLine[]; // paid jars
+  gifts?: { nameEn: string; qty: number }[]; // gift jars (lib/gifts.ts)
+  giftManual?: boolean; // added by hand by the team (not a campaign's gift)
   total: number;
   name: string;
   phone: string; // 9647XXXXXXXXX
@@ -50,6 +52,7 @@ export function buildOrderMessage(o: {
   campaignSlug?: string | null;
 }): string {
   const jars = o.lines.reduce((n, l) => n + l.qty, 0);
+  const giftUnits = (o.gifts ?? []).reduce((n, g) => n + g.qty, 0);
   const delivery = deliveryPayOf(o);
   const collect = (o.paid ? 0 : o.total) + (delivery === "driver" ? site.deliveryFee : 0);
   // How it was paid: "Qi Card · رقم العملية 123".
@@ -66,7 +69,8 @@ export function buildOrderMessage(o: {
     `<b>طلب جديد ${ltr(o.orderNumber)}</b>${o.returning ? " · عميل سابق" : ""}`,
     "",
     ...o.lines.map((l) => `• ${ltr(`${l.qty} × ${escapeHtml(l.product.nameEn)}`)} — ${formatIQD(l.subtotal)}`),
-    `عدد العلب: ${jars}`,
+    ...(o.gifts ?? []).map((g) => `• ${ltr(`${g.qty} × ${escapeHtml(g.nameEn)}`)} — <b>هدية</b>`),
+    giftUnits ? `<b>عدد العلب: ${jars + giftUnits}</b> (${jars} مدفوعة + ${giftUnits} هدية${o.giftManual ? " يدوية" : ""})` : `عدد العلب: ${jars}`,
     ...(o.discount || o.creditUsed
       ? [
           `قبل الخصم: ${formatIQD(o.subtotal ?? o.total)}`,

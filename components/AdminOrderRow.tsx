@@ -107,6 +107,7 @@ export function OrderRow({
     ...(slot ? [{ key: "slot", text: slot }] : []),
     ...(money ? [{ key: "pay", ...money }] : []),
     ...(o.couponCode ? [{ key: "coupon", text: o.couponCode }] : []),
+    ...(o.giftUnits ? [{ key: "gift", text: `هدية × ${o.giftUnits}` }] : []),
   ];
   return (
     <article className={`ocard ocard--${o.status.toLowerCase()}`}>
@@ -143,7 +144,7 @@ export function OrderRow({
         </div>
       )}
       {picked.length > 0 && (
-        <p className="ocard__flavors">{picked.map((i) => `${i.nameAr} × ${i.qty}`).join(" · ")}</p>
+        <p className="ocard__flavors">{picked.map((i) => `${i.nameAr}${i.gift ? " (هدية)" : ""} × ${i.qty}`).join(" · ")}</p>
       )}
     </article>
   );
