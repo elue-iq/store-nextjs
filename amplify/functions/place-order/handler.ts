@@ -1156,7 +1156,10 @@ async function giftAdmin(event: { identity: unknown; arguments: GiftAdminArgs })
 
 export const handler = async (event: unknown) => {
   if ((event as UrlEvent)?.requestContext?.http) return qiNotification(event as UrlEvent);
-  const field = (event as { info?: { fieldName?: string } })?.info?.fieldName;
+  // AppSync sends the operation name at the top level ({ typeName, fieldName, arguments,
+  // identity, request }); `info.fieldName` is the other common shape, kept for direct calls.
+  const ev = event as { fieldName?: string; info?: { fieldName?: string } } | null;
+  const field = ev?.fieldName ?? ev?.info?.fieldName;
   if (field === "qiConfirm") return qiConfirm(event as Parameters<typeof qiConfirm>[0]);
   if (field === "quote") return quote(event as Parameters<typeof quote>[0]);
   if (field === "campaignVisit") return campaignVisit(event as Parameters<typeof campaignVisit>[0]);
