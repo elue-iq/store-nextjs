@@ -65,7 +65,7 @@ const view = (o: Order) => ({
 async function findOrder(orderNumber: string): Promise<Order | null> {
   let nextToken: string | null | undefined;
   do {
-    const res = await client.models.Order.list({ filter: { orderNumber: { eq: orderNumber } }, limit: 1000, nextToken });
+    const res = await client.models.Order.list({ filter: { orderNumber: { eq: orderNumber } }, limit: 100, nextToken });
     if (res.data?.length) return res.data[0];
     nextToken = res.nextToken;
   } while (nextToken);
@@ -85,7 +85,7 @@ export const handler: Schema["courierApp"]["functionHandler"] = async (event) =>
     const orders: Order[] = [];
     let nextToken: string | null | undefined;
     do {
-      const res = await client.models.Order.list({ filter: { courierId: { eq: courier.id } }, limit: 1000, nextToken });
+      const res = await client.models.Order.list({ filter: { courierId: { eq: courier.id } }, limit: 100, nextToken });
       orders.push(...(res.data ?? []));
       nextToken = res.nextToken;
     } while (nextToken);

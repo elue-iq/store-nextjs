@@ -237,7 +237,7 @@ async function refresh(orderId?: string | null): Promise<{ updated: string[]; re
     do {
       const res = await client.models.Order.list({
         filter: { boxyUid: { attributeExists: true }, status: { ne: "DELIVERED" } },
-        limit: 500,
+        limit: 100,
         nextToken,
       });
       for (const o of res.data) if (o.boxyUid && o.status !== "CANCELLED") orders.push(o);
