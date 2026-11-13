@@ -72,7 +72,9 @@ async function loadAllOrders(): Promise<Order[]> {
   const all: Order[] = [];
   let nextToken: string | null | undefined;
   do {
-    const res = await dataClient.models.Order.list({ limit: 200, nextToken });
+    // 100 per page: each order runs one resolver per team-only field (61 today), and AppSync stops a
+    // request at 10,000 resolvers («Resolver invocation limit reached»). 200 per page broke at ~164 orders.
+    const res = await dataClient.models.Order.list({ limit: 100, nextToken });
     if (res.errors?.length) throw new Error(res.errors.map((e) => e.message).join(" | "));
     all.push(...res.data);
     nextToken = res.nextToken;
