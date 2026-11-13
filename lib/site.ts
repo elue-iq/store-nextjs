@@ -83,14 +83,15 @@ export function siteUrl(): string {
   return "http://localhost:3000";
 }
 
-export function formatIQD(amount: number): string {
-  return `${amount.toLocaleString("en-US")} ${site.currency}`;
+export function formatIQD(amount: number | null | undefined): string {
+  // A missing amount (e.g. an order record that came back partial) shows as 0, not a crash.
+  return `${(Number(amount) || 0).toLocaleString("en-US")} ${site.currency}`;
 }
 
 // A discount amount: «−4,500 د.ع». The minus and the number are kept together left-to-right,
 // so in Arabic text the minus stays next to the number (not at the far end of the line).
-export function minusIQD(amount: number): string {
-  return `\u2066−${amount.toLocaleString("en-US")}\u2069 ${site.currency}`;
+export function minusIQD(amount: number | null | undefined): string {
+  return `\u2066−${(Number(amount) || 0).toLocaleString("en-US")}\u2069 ${site.currency}`;
 }
 
 // How an order's delivery fee is settled (set by the team; customers always pay the driver):
