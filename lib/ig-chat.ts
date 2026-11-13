@@ -62,7 +62,7 @@ function summary(s: ChatState): string {
   const { lines, total } = priceCart(items);
   const jars = lines.reduce((n, l) => n + l.qty, 0);
   const free = freeDeliveryFor(jars);
-  const fmt = (n: number) => n.toLocaleString("en-US");
+  const fmt = (n: number) => (Number(n) || 0).toLocaleString("en-US");
   return [
     "ملخص طلبكم:",
     ...lines.map((l) => `• ${l.product.nameAr} × ${l.qty}`),
