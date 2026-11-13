@@ -27,9 +27,9 @@ export type CapiOrder = {
   phone: string; // 9647XXXXXXXXX
   name: string;
   province?: string | null;
-  items: ({ slug: string; qty: number; price: number } | null)[];
-  jars: number;
-  total: number; // jars after any discount
+  items: ({ slug: string; qty: number; price: number; gift?: boolean | null } | null)[]; // gift jars: price 0
+  jars: number; // paid jars
+  total: number; // paid jars after any discount (gift jars add nothing)
   freeDelivery?: boolean | null;
 };
 
@@ -73,8 +73,8 @@ export function purchaseEvent(o: CapiOrder, t: Tracking, atMs: number) {
       order_id: o.orderNumber,
       content_type: "product",
       content_ids: items.map((i) => i.slug),
-      contents: items.map((i) => ({ id: i.slug, quantity: i.qty, item_price: usd(i.price) })),
-      num_items: o.jars,
+      contents: items.map((i) => ({ id: i.slug, quantity: i.qty, item_price: i.gift ? 0 : usd(i.price) })),
+      num_items: items.reduce((n, i) => n + i.qty, 0),
     },
   };
 }

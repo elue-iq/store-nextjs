@@ -7,6 +7,7 @@
 // every edge is sharp. One order gives a one-page PDF, several give one PDF with a
 // page per order, ready to print at once.
 
+import { piecesOf } from "./gifts";
 import qrcode from "qrcode-generator";
 import { LOGO_PATH, LOGO_VIEWBOX } from "./brand-mark";
 import { collectAmount, type DispatchOrder } from "./dispatch";
@@ -192,7 +193,8 @@ function drawLabel(ctx: CanvasRenderingContext2D, o: LabelOrder, courierName: st
 
   // ---- Bottom: the goods, and the amount the courier collects.
   rect(M, bottom, W - 2 * M, 3);
-  const jars = o.jars ?? (o.items ?? []).reduce((s, i) => s + (i?.qty ?? 0), 0);
+  // Every jar in the parcel: paid + gift.
+  const jars = piecesOf(o);
   text("نوع البضاعة", R, bottom + 62, { size: CAP });
   text("ترافل شوكولاتة ÉLUE", R, bottom + 62 + 58, { size: VAL, weight: BOLD });
   text("عدد العلب", M + 260, bottom + 62, { size: CAP });

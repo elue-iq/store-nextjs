@@ -20,6 +20,9 @@ import { AdminPrep } from "./AdminPrep";
 import { AdminReviews } from "./AdminReviews";
 import { AdminCoupons } from "./AdminCoupons";
 import { AdminAffiliates } from "./AdminAffiliates";
+import { AdminGifts } from "./AdminGifts";
+import { callGiftAdmin } from "@/lib/gift-admin";
+import { MANUAL_GIFT } from "@/lib/gifts";
 import { AdminDashboard } from "./AdminDashboard";
 import { OrderRow, REVIEW_STATE_LABELS, baghdadDay, reviewState, shortTime, type ReviewState } from "./AdminOrderRow";
 import { buildCustomers, CustomerDetail, CustomerList, CustomersSummary } from "./AdminCustomers";
@@ -52,7 +55,7 @@ function orderFromUrl(): string | null {
 // Which section the list screen shows (?view=dashboard etc.), so a refresh stays there.
 function viewFromUrl(): View {
   const v = new URLSearchParams(window.location.search).get("view");
-  return v === "dashboard" || v === "customers" || v === "products" || v === "delivery" || v === "reviews" || v === "prep" || v === "coupons" || v === "affiliates"
+  return v === "dashboard" || v === "customers" || v === "products" || v === "delivery" || v === "reviews" || v === "prep" || v === "coupons" || v === "affiliates" || v === "gifts"
     ? v
     : "orders";
 }
@@ -583,6 +586,17 @@ export function AdminView() {
     );
   }
 
+  if (view === "gifts") {
+    return (
+      <div className="admin-screen">
+        {pullEl}
+        {listHead("حملات الهدايا", "علب هدية تنضاف للطلب كمنتج حقيقي")}
+        <AdminGifts orders={orders} onOpenOrder={openOrder} />
+        {drawer}
+      </div>
+    );
+  }
+
   if (view === "affiliates") {
     return (
       <div className="admin-screen">
@@ -926,6 +940,13 @@ function OrderDetail({
     } else {
       toast({ id: "admin", message: `${o.orderNumber}: ${STATUS_LABELS[status]}` });
       if (status === "DELIVERED") setJustDelivered(true);
+      // A campaign's gift: cancelling gives its jars back, reopening takes them again.
+      if (o.giftUnits && o.giftCampaignId && o.giftCampaignId !== MANUAL_GIFT && (status === "CANCELLED" || o.status === "CANCELLED")) {
+        const { data, error } = await callGiftAdmin({ action: "sync", orderId: o.id });
+        if (error) toast({ id: "gift", tone: "attention", message: "لم تُحدَّث كمية هدايا الحملة. افتح «حملات الهدايا» للتحديث." });
+        else if (data?.converted) toast({ id: "gift", tone: "attention", message: "رجع الطلب، لكن كمية هدايا الحملة خلصت: صارت هديته يدوية." });
+        else if (status === "CANCELLED") toast({ id: "gift", message: "رجعت هدية هذا الطلب إلى كمية الحملة." });
+      }
       // A cancelled order that was already sent to a local courier: tell them not to deliver it.
       if (status === "CANCELLED" && o.courierKind === "LOCAL" && o.courierStatus === "SENT") {
         const { error } = await callDispatch({ action: "cancel_notice", orderId: o.id });
@@ -1015,7 +1036,10 @@ function OrderDetail({
         <p className="order-hero__money">
           <span>{collect > 0 ? "يستلم المندوب" : "المبلغ"}</span>
           <strong>{collect > 0 ? formatIQD(collect) : o.paid ? "مدفوع" : formatIQD(o.total)}</strong>
-          <small>{jarsLabel(o.jars)}</small>
+          <small>
+            {jarsLabel(o.jars)}
+            {o.giftUnits ? ` + ${o.giftUnits} هدية` : ""}
+          </small>
         </p>
         {confirmCancel ? (
           <div className="order-hero__confirm" role="alert">
@@ -1108,9 +1132,20 @@ function OrderDetail({
           </dl>
         ) : null}
         <p className="order-card__total">
-          <span>المجموع · {jarsLabel(o.jars)}</span>
+          <span>
+            المجموع · {jarsLabel(o.jars)}
+            {o.giftUnits ? ` + ${o.giftUnits} هدية` : ""}
+          </span>
           <strong>{formatIQD(o.total)}</strong>
         </p>
+        {o.giftUnits ? (
+          <p className="order-detail__paid">
+            {o.giftCampaignId === MANUAL_GIFT ? "هدية يدوية من الفريق" : "هدية حملة"}: {o.giftUnits} {o.giftUnits === 1 ? "علبة" : "علب"} بسعر 0. تُجهَّز وتُسلَّم مع الطلب (المجموع {o.jars + o.giftUnits} علب).
+          </p>
+        ) : null}
+        {o.marketingConsent != null && (
+          <p className="order-card__meta">عروض واتساب: {o.marketingConsent ? "موافق" : "غير موافق"}</p>
+        )}
         {o.couponCode && !o.discount && (
           <p className="order-detail__paid">
             الكود <strong dir="ltr">{o.couponCode}</strong>: {o.couponLabel}

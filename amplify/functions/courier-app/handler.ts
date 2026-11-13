@@ -52,6 +52,7 @@ const view = (o: Order) => ({
   deliveryDate: o.deliveryDate,
   items: o.items,
   jars: o.jars,
+  giftUnits: o.giftUnits,
   total: o.total,
   paid: o.paid,
   freeDelivery: o.freeDelivery,

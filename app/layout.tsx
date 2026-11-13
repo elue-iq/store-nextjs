@@ -11,6 +11,7 @@ import { StockProvider } from "@/components/StockProvider";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { ColdBanner } from "@/components/ColdBanner";
+import { GiftBanner } from "@/components/GiftBanner";
 import { MetaPixel } from "@/components/MetaPixel";
 import { ChromeGate } from "@/components/ChromeGate";
 import { site, siteUrl } from "@/lib/site";
@@ -61,6 +62,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <Header />
                 <ChromeGate>
                   <ColdBanner />
+                  <GiftBanner />
                 </ChromeGate>
                 <main>{children}</main>
                 <ChromeGate>

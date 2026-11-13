@@ -4,7 +4,7 @@ import { dataClient, errorCode } from "./data";
 import type { DispatchOrder } from "./dispatch";
 
 export type CourierOrder = Omit<DispatchOrder, "items"> & {
-  items?: ({ slug?: string; nameAr: string; nameEn: string; qty: number; price: number } | null)[] | null;
+  items?: ({ slug?: string; nameAr: string; nameEn: string; qty: number; price: number; gift?: boolean | null } | null)[] | null;
   status: string;
   createdAt: string;
   updatedAt: string;

@@ -1,5 +1,6 @@
 "use client";
 
+import { itemNameAr, piecesOf } from "@/lib/gifts";
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "./AuthProvider";
 import { CourierScanner } from "./CourierScanner";
@@ -21,7 +22,7 @@ function OrderCard({ o, busy, onStatus, courierName }: { o: CourierOrder; busy: 
   const [confirm, setConfirm] = useState(false);
   const collect = collectAmount(o);
   const done = o.status === "DELIVERED";
-  const items = (o.items ?? []).filter((i): i is NonNullable<typeof i> => Boolean(i)).map((i) => `${i.nameAr} × ${i.qty}`).join("، ");
+  const items = (o.items ?? []).filter((i): i is NonNullable<typeof i> => Boolean(i)).map((i) => `${itemNameAr(i)} × ${i.qty}`).join("، ");
   const phone = formatIraqiMobile(o.phone);
   return (
     <article className={`courier-card${done ? " is-done" : ""}`}>
@@ -34,7 +35,7 @@ function OrderCard({ o, busy, onStatus, courierName }: { o: CourierOrder; busy: 
       {o.note && <p className="courier-card__note">ملاحظة: {o.note}</p>}
       {slotText(o) && <p className="courier-card__note"><strong>موعد التوصيل: {slotText(o)}</strong></p>}
       <p className="courier-card__items">
-        {items} {items && "·"} {o.jars} علبة
+        {items} {items && "·"} {piecesOf(o)} علبة{o.giftUnits ? ` (منها ${o.giftUnits} هدية)` : ""}
       </p>
       <p className="courier-card__collect">{collect > 0 ? <>المطلوب من الزبون: <strong>{formatIQD(collect)}</strong></> : <strong>مدفوع: لا يُطلب شيء</strong>}</p>
       <div className="courier-card__contact">

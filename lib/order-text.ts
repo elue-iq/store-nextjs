@@ -31,9 +31,13 @@ export type OrderDetails = {
 
 // Plain text for WhatsApp. With an order number it's the "follow your order"
 // message sent after ordering; without one it's the fallback order message.
-export function buildWhatsAppText(details: OrderDetails, items: CartItem[], orderId?: string): string {
+export function buildWhatsAppText(details: OrderDetails, items: CartItem[], orderId?: string, gifts: CartItem[] = []): string {
   const { lines, total } = priceCart(items);
-  const rows = lines.map((l) => `${l.qty} × ${l.product.nameEn} (${l.product.nameAr})`);
+  const rows = [
+    ...lines.map((l) => `${l.qty} × ${l.product.nameEn} (${l.product.nameAr})`),
+    // Gift jars: 0 IQD, never part of the total.
+    ...priceCart(gifts).lines.map((l) => `${l.qty} × ${l.product.nameEn} (${l.product.nameAr}) — هدية`),
+  ];
   const text = [
     orderId ? `مرحبًا ÉLUE، هذا طلبي رقم ${orderId}:` : "مرحبًا ÉLUE، أودّ أن أطلب:",
     ...rows,

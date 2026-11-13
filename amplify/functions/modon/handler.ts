@@ -123,7 +123,7 @@ function orderForm(o: Order, regionId: number, qr?: string): FormData {
   form.append("region_id", String(regionId));
   form.append("location", [o.area, o.address].filter(Boolean).join(" - ") || o.area || o.province || "-");
   form.append("type_name", TYPE_NAME);
-  form.append("items_number", String(o.jars));
+  form.append("items_number", String(o.jars + (o.giftUnits ?? 0))); // paid + gift jars
   form.append("price", String(modonCollect(o.total, Boolean(o.paid), deliveryPayOf(o))));
   form.append("package_size", String(PACKAGE_SIZE));
   form.append(

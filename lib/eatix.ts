@@ -129,7 +129,7 @@ export type EatixOrder = {
   area?: string | null;
   address: string;
   note?: string | null;
-  items: { slug: string; nameAr: string; nameEn: string; qty: number; price: number }[];
+  items: { slug: string; nameAr: string; nameEn: string; qty: number; price: number; gift?: boolean | null }[]; // gift jars: price 0
   total: number;
   paid?: boolean | null;
   freeDelivery?: boolean | null;
@@ -204,7 +204,7 @@ export function buildSubmit(cfg: EatixConfig, o: EatixOrder) {
         totalFee: i.price * i.qty * f,
         resultAmount: i.price * i.qty * f,
         discountAmount: 0,
-        memo: "",
+        memo: i.gift ? "Gift" : "",
         ...(cfg.itemExtra ?? {}),
       };
     }),

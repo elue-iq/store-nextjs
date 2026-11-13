@@ -87,10 +87,11 @@ export function trackPixel(event: string, params?: Record<string, unknown>, even
   else fbq("track", event, params ?? {});
 }
 
-type Item = { slug: string; qty: number };
+// gift = a free jar from a gift campaign: listed at price 0, and never part of `value`.
+type Item = { slug: string; qty: number; gift?: boolean };
 
 function contentsOf(items: Item[]) {
-  return items.map((i) => ({ id: i.slug, quantity: i.qty, item_price: toUsd(getProduct(i.slug)?.price ?? 0) }));
+  return items.map((i) => ({ id: i.slug, quantity: i.qty, item_price: i.gift ? 0 : toUsd(getProduct(i.slug)?.price ?? 0) }));
 }
 
 function baseOf(items: Item[], totalIqd: number) {

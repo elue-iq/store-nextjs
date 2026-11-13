@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { itemNameAr } from "@/lib/gifts";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "./AuthProvider";
@@ -35,6 +36,7 @@ const CUSTOMER_FIELDS = [
   "source",
   "items.*",
   "jars",
+  "giftUnits",
   "total",
   "status",
   "telegramSent",
@@ -313,7 +315,7 @@ function MyOrders({
               <span className="order-row__sub">
                 {o.items
                   .filter((i): i is NonNullable<typeof i> => Boolean(i))
-                  .map((i) => `${getProduct(i.slug)?.nameAr ?? i.nameAr} × ${i.qty}`)
+                  .map((i) => `${itemNameAr(i)} × ${i.qty}`)
                   .join("، ")}
               </span>
             </span>
@@ -344,7 +346,8 @@ function MyOrderDetail({ order: o }: { order: Order }) {
     const skipped: string[] = [];
     for (const i of o.items) {
       const product = i && getProduct(i.slug);
-      if (!i || !product) continue;
+      // Gift jars are not re-ordered: a gift comes from a campaign, not from the cart.
+      if (!i || !product || i.gift) continue;
       if (!stock.isAvailable(i.slug)) {
         skipped.push(product.nameAr);
         continue;

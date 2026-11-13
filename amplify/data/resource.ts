@@ -29,6 +29,9 @@ const schema = a
       nameEn: a.string().required(),
       qty: a.integer().required(),
       price: a.integer().required(),
+      // A gift jar (see lib/gifts.ts): price 0, and the gift campaign's id or "manual".
+      gift: a.boolean(),
+      campaignId: a.string(),
     }),
 
     Order: a
@@ -43,8 +46,14 @@ const schema = a
         phone2: a.string(), // optional second phone number (9647XXXXXXXXX)
         source: a.string(),
         items: a.ref("OrderItem").required().array().required(),
-        jars: a.integer().required(),
+        jars: a.integer().required(), // PAID jars only; gift jars are in giftUnits
         total: a.integer().required(),
+        // Gift jars on the order (lines with gift = true) and the gift campaign they belong
+        // to ("manual" = added by hand by the team). See lib/gifts.ts.
+        giftUnits: a.integer(),
+        giftCampaignId: a.string(),
+        // The customer ticked «أوافق أستلم عروض ELUE على واتساب» at checkout.
+        marketingConsent: a.boolean(),
         status: a.ref("OrderStatus").required(),
         telegramSent: a.boolean(),
         // Number of the same order in the cashier system, typed in by the team.
@@ -251,6 +260,23 @@ const schema = a
       })
       .authorization((allow) => [allow.group("ADMINS")]),
 
+    // A gift campaign: free jars as real product lines on the order (lib/gifts.ts). Team only:
+    // the shop reads the live one through «giftOffer» / «quote», placeOrder checks every rule.
+    GiftCampaign: a
+      .model({
+        name: a.string().required(),
+        active: a.boolean(),
+        startsAt: a.datetime(),
+        endsAt: a.datetime(),
+        banner: a.string(), // Arabic line shown across the site
+        products: a.string().array(), // flavors (slugs) the customer may choose as the gift
+        perOrder: a.integer(), // gift jars per order (default 1)
+        minPaidJars: a.integer(), // paid jars needed to qualify (default 1)
+        cap: a.integer(), // gift jars available in total
+        perPhone: a.integer(), // gifted orders per phone number (default 1)
+      })
+      .authorization((allow) => [allow.group("ADMINS")]),
+
     // Every notification Boxy sends to our webhook (written by the boxy function). Team only.
     BoxyEvent: a
       .model({
@@ -293,6 +319,8 @@ const schema = a
       telegramSent: a.boolean().required(),
       // Online payment: where to send the customer to pay (Qi Card).
       payUrl: a.string(),
+      // The order was placed without the gift the customer chose: why (lib/gifts.ts GiftDrop).
+      giftNote: a.string(),
     }),
 
     QiConfirmResult: a.customType({
@@ -342,6 +370,10 @@ const schema = a
         heardNote: a.string(),
         sourceRef: a.string(), // Instagram DM flow only (honored for team callers)
         tracking: a.string(),
+        // Gift jars: [{slug, qty}] and the campaign they are for (the team may send "manual").
+        gifts: a.json(),
+        giftCampaignId: a.string(),
+        marketingConsent: a.boolean(),
       })
       .returns(a.ref("PlaceOrderResult"))
       .authorization((allow) => [allow.authenticated()])
@@ -365,6 +397,22 @@ const schema = a
       .arguments({ items: a.json().required(), couponCode: a.string(), ref: a.string(), province: a.string(), phone: a.string() })
       .returns(a.json())
       .authorization((allow) => [allow.publicApiKey(), allow.authenticated()])
+      .handler(a.handler.function(placeOrder)),
+
+    // The live gift campaign as the shop shows it (banner, flavors to choose from), or null.
+    giftOffer: a
+      .query()
+      .returns(a.json())
+      .authorization((allow) => [allow.publicApiKey(), allow.authenticated()])
+      .handler(a.handler.function(placeOrder)),
+
+    // Admin: gift campaigns. status (units used / left), setGifts (gift lines of an order),
+    // sync (after an order is cancelled or reopened: give back or take its gift units).
+    giftAdmin: a
+      .mutation()
+      .arguments({ action: a.string().required(), campaignId: a.string(), orderId: a.string(), gifts: a.json() })
+      .returns(a.json())
+      .authorization((allow) => [allow.group("ADMINS")])
       .handler(a.handler.function(placeOrder)),
 
     // A visitor arrived from an affiliate link (?ref=slug): counts the visit and returns the
