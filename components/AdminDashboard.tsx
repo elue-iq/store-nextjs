@@ -39,7 +39,7 @@ function loadFilters(): Filters {
   return DEFAULT_FILTERS;
 }
 
-const n0 = (n: number) => n.toLocaleString("en-US");
+const n0 = (n: number | null | undefined) => (Number(n) || 0).toLocaleString("en-US");
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 const trim = (x: number) => (x >= 100 ? Math.round(x) : Math.round(x * 10) / 10).toString();
 const compact = (n: number) => (n >= 1e6 ? `${trim(n / 1e6)}M` : n >= 1e3 ? `${trim(n / 1e3)}K` : String(Math.round(n)));
