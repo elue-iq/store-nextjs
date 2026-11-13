@@ -18,5 +18,5 @@ export function pointsSummary(orders: { total: number; status: string }[]) {
 }
 
 export function formatPoints(n: number): string {
-  return n.toLocaleString("en-US");
+  return (Number(n) || 0).toLocaleString("en-US");
 }

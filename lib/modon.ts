@@ -43,7 +43,7 @@ export function modonCollect(total: number, paid = false, delivery: DeliveryPay 
 // One short line describing how the collected amount breaks down, for the admin.
 export function collectBreakdown(total: number, paid: boolean, delivery: DeliveryPay): string {
   const parts: string[] = [];
-  parts.push(paid ? "الطلب مدفوع مسبقاً" : `${total.toLocaleString("en-US")} الطلب`);
+  parts.push(paid ? "الطلب مدفوع مسبقاً" : `${(Number(total) || 0).toLocaleString("en-US")} الطلب`);
   parts.push(
     delivery === "gift"
       ? "التوصيل مجاني (هدية)"

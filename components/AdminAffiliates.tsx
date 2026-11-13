@@ -8,6 +8,7 @@ import { formatIraqiMobile, normalizeIraqiMobile } from "@/lib/phone";
 import { chatUrl } from "@/lib/share";
 import { formatIQD } from "@/lib/site";
 import { requestOrdersRefresh } from "@/lib/ordersRefresh";
+import { parseJsonResult } from "@/lib/json-result";
 
 // «الشركاء»: sponsors (influencers, partners) and their campaigns. Each campaign has its own
 // link (?ref=slug), optional coupon and a commission per delivered jar. The numbers come from
@@ -103,7 +104,7 @@ export function AdminAffiliates({ orders, onOpenOrder }: { orders: Order[] | nul
     setCoupons(k.data ?? []);
     if (list.length) {
       const { data } = await dataClient.queries.campaignStats({ slugs: list.map((x) => x.slug) });
-      if (typeof data === "string") setVisits((JSON.parse(data) as { visits: Record<string, number> }).visits ?? {});
+      setVisits(parseJsonResult<{ visits: Record<string, number> }>(data)?.visits ?? {});
     }
   }, []);
   useEffect(() => {

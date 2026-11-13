@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { dataClient } from "@/lib/data";
+import { parseJsonResult } from "@/lib/json-result";
 import { normalizeCode } from "@/lib/coupons";
 import { formatIQD, minusIQD } from "@/lib/site";
 import type { GiftQuote } from "@/lib/gifts";
@@ -53,10 +54,12 @@ export function useQuote(o: {
         )
         .then(({ data, errors }) => {
           if (mine !== seq.current) return;
-          if (errors?.length || typeof data !== "string") {
-            console.error("quote failed", errors);
+          const q = errors?.length ? null : parseJsonResult<Quote>(data);
+          // Only a complete price is used; otherwise the page falls back to its own prices.
+          if (!q || typeof q.total !== "number" || typeof q.subtotal !== "number") {
+            console.error("quote failed", errors ?? data);
             setQuote(null);
-          } else setQuote(JSON.parse(data) as Quote);
+          } else setQuote(q);
         })
         .catch((err) => {
           if (mine === seq.current) {

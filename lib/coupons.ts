@@ -96,7 +96,7 @@ export function couponEffect(rule: CouponRule | null | undefined, lines: Line[])
 // «خصم 10%» etc. Shown to the customer.
 export function couponLabel(rule: CouponRule): string {
   const v = Number(rule.value ?? 0);
-  const iqd = (n: number) => `${n.toLocaleString("en-US")} د.ع`;
+  const iqd = (n: number) => `${(Number(n) || 0).toLocaleString("en-US")} د.ع`;
   switch (rule.kind) {
     case "PERCENT":
       return `خصم ${v}%${rule.maxDiscount ? ` (حتى ${iqd(rule.maxDiscount)})` : ""}`;
