@@ -5784,3 +5784,43 @@ body:has(.admin-app) .gift-banner {
 .admin-order-form__gifts select {
   width: 100%;
 }
+
+/* «فقط | بدون» next to a filter: include or exclude what is chosen. */
+.not-toggle {
+  display: inline-flex;
+  flex: none;
+  align-items: stretch;
+  border: 1.5px solid var(--sand-deep);
+  border-radius: 999px;
+  overflow: hidden;
+  background: #fff;
+  font-size: 0.85rem;
+  vertical-align: middle;
+}
+.not-toggle button {
+  min-height: 2.1rem;
+  padding: 0 0.75rem;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+.not-toggle button[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--cream);
+}
+.not-toggle button:last-child[aria-pressed="true"] {
+  background: var(--terracotta);
+}
+.admin-select-not {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+/* An excluding select reads as «بدون …». */
+.admin-select-not.is-not .admin-sort {
+  border-color: var(--terracotta);
+  text-decoration: line-through;
+  text-decoration-color: var(--terracotta);
+}
