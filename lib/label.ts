@@ -7,7 +7,7 @@
 // every edge is sharp. One order gives a one-page PDF, several give one PDF with a
 // page per order, ready to print at once.
 
-import { piecesOf } from "./gifts";
+import { itemNameAr, piecesOf } from "./gifts";
 import qrcode from "qrcode-generator";
 import { LOGO_PATH, LOGO_VIEWBOX } from "./brand-mark";
 import { collectAmount, type DispatchOrder } from "./dispatch";
@@ -43,7 +43,35 @@ function dateText(iso?: string | null): string {
   return new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Baghdad", dateStyle: "short" }).format(d);
 }
 
-function drawLabel(ctx: CanvasRenderingContext2D, o: LabelOrder, courierName: string) {
+// What is in the parcel, in Arabic: «شوكولاتة داكنة × 2», «جزر (هدية) × 1». Paid lines
+// first, then gifts; the same flavor is merged.
+export function goodsEntries(o: Pick<LabelOrder, "items">): string[] {
+  const merged = new Map<string, number>();
+  for (const i of o.items ?? []) {
+    if (!i || !(i.qty > 0)) continue;
+    const name = itemNameAr(i);
+    if (!name) continue;
+    merged.set(name, (merged.get(name) ?? 0) + i.qty);
+  }
+  return [...merged.entries()]
+    .sort((a, b) => Number(a[0].includes("(")) - Number(b[0].includes("(")))
+    .map(([name, qty]) => `${name} × ${qty}`);
+}
+
+// How tightly a label is drawn. The first that fits is used (see render).
+type Fit = { goods: number; box: number; amount: number; pack: boolean; fields: number };
+const FITS: Fit[] = [
+  { goods: 38, box: 228, amount: 84, pack: false, fields: 1 },
+  { goods: 32, box: 228, amount: 84, pack: false, fields: 1 },
+  { goods: 32, box: 190, amount: 68, pack: false, fields: 1 },
+  { goods: 30, box: 190, amount: 68, pack: true, fields: 1 },
+  { goods: 30, box: 190, amount: 68, pack: true, fields: 0.85 },
+  { goods: 28, box: 180, amount: 64, pack: true, fields: 0.75 },
+];
+
+// Returns false when the columns ran into the goods (then it is drawn again, tighter).
+function drawLabel(ctx: CanvasRenderingContext2D, o: LabelOrder, courierName: string, fit: Fit): boolean {
+  const goodsSize = fit.goods;
   const R = W - M;
   // Three sizes only (like the Modon label): captions, values, and the two key numbers.
   const CAP = 30;
@@ -94,10 +122,37 @@ function drawLabel(ctx: CanvasRenderingContext2D, o: LabelOrder, courierName: st
   text(courierName, M, 150, { size: 52, weight: BOLD, align: "left" });
   rect(M, 214, W - 2 * M, 3);
 
+  // ---- The goods (bottom), laid out first: their height decides where the columns end.
+  const goodsLeft = M + 300; // the jar count sits left of this
+  const goodsWidth = R - goodsLeft;
+  const goodsLineH = goodsSize + 14;
+  const entries = goodsEntries(o);
+  let goods: string[] = [];
+  if (!fit.pack) {
+    // One flavor per line: easiest to check while packing.
+    goods = entries.flatMap((e) => wrap(e, goodsWidth, { size: goodsSize, weight: BOLD }));
+  } else {
+    ctx.font = `${BOLD} ${goodsSize}px ${AR}`;
+    ctx.direction = "rtl";
+    let ln = "";
+    for (const e of entries) {
+      const test = ln ? `${ln}   |   ${e}` : e;
+      if (ln && ctx.measureText(test).width > goodsWidth) {
+        goods.push(ln);
+        ln = e;
+      } else ln = test;
+    }
+    if (ln) goods.push(ln);
+  }
+  if (!goods.length) goods = ["ترافل شوكولاتة ÉLUE"];
+  const BOX_MIN = fit.box;
+  let bottom = 1310;
+  const boxYFor = (b: number) => b + 120 + (goods.length - 1) * goodsLineH + 48;
+  if (H - 52 - boxYFor(bottom) < BOX_MIN) bottom -= BOX_MIN - (H - 52 - boxYFor(bottom));
+
   // ---- The two columns, split by a thin vertical line.
   const top = 217;
   const split = 450;
-  const bottom = 1310;
   rect(split, top, 2, bottom - top);
 
   // Left column: QR, order number, delivery company, notes.
@@ -168,9 +223,10 @@ function drawLabel(ctx: CanvasRenderingContext2D, o: LabelOrder, courierName: st
   const rw = R - split - 48;
   let y = 290;
   // Longer values step down in size so nothing is ever cut off.
+  const GAP = Math.round(62 * fit.fields);
   const field = (caption: string, value: string, opts: { dir?: CanvasDirection; sizes?: number[]; weight?: number } = {}) => {
     text(caption, rr, y, { size: CAP });
-    const sizes = opts.sizes ?? [VAL, 40, 36, 32];
+    const sizes = (opts.sizes ?? [VAL, 40, 36, 32]).map((sz) => Math.round(sz * fit.fields));
     let size = sizes[0];
     let lines = wrap(value, rw, { size, weight: opts.weight ?? BOLD, dir: opts.dir });
     for (const sz of sizes) {
@@ -178,8 +234,8 @@ function drawLabel(ctx: CanvasRenderingContext2D, o: LabelOrder, courierName: st
       lines = wrap(value, rw, { size, weight: opts.weight ?? BOLD, dir: opts.dir });
       if (lines.length <= (sz === sizes[sizes.length - 1] ? 99 : 3)) break;
     }
-    lines.forEach((l, i) => text(l, rr, y + 62 + i * (size + 14), { size, weight: opts.weight ?? BOLD, dir: opts.dir }));
-    y += 62 + (lines.length - 1) * (size + 14) + 62;
+    lines.forEach((l, i) => text(l, rr, y + GAP + i * (size + 14), { size, weight: opts.weight ?? BOLD, dir: opts.dir }));
+    y += GAP + (lines.length - 1) * (size + 14) + GAP;
   };
   field("اسم التاجر", "ÉLUE", { dir: "ltr", weight: REGULAR });
   rect(split + 48, y - 32, R - split - 48, 3);
@@ -193,16 +249,16 @@ function drawLabel(ctx: CanvasRenderingContext2D, o: LabelOrder, courierName: st
 
   // ---- Bottom: the goods, and the amount the courier collects.
   rect(M, bottom, W - 2 * M, 3);
-  // Every jar in the parcel: paid + gift.
+  // Every jar in the parcel (paid + gift), by flavor, so the packer and the courier can check it.
   const jars = piecesOf(o);
-  text("نوع البضاعة", R, bottom + 62, { size: CAP });
-  text("ترافل شوكولاتة ÉLUE", R, bottom + 62 + 58, { size: VAL, weight: BOLD });
+  text("البضاعة", R, bottom + 62, { size: CAP });
+  goods.forEach((l, i) => text(l, R, bottom + 120 + i * goodsLineH, { size: goodsSize, weight: BOLD }));
   text("عدد العلب", M + 260, bottom + 62, { size: CAP });
   text(String(jars), M + 260, bottom + 62 + 58, { size: VAL, weight: BOLD, dir: "ltr" });
 
   const collect = collectAmount(o);
   const delivery = deliveryPayOf(o);
-  const boxY = bottom + 168;
+  const boxY = boxYFor(bottom);
   const boxH = H - boxY - 52;
   ctx.strokeStyle = BLACK;
   ctx.lineWidth = 4;
@@ -211,7 +267,7 @@ function drawLabel(ctx: CanvasRenderingContext2D, o: LabelOrder, courierName: st
   ctx.stroke();
   if (collect > 0) {
     text("المطلوب من الزبون", R - 36, boxY + 70, { size: CAP });
-    text(formatIQD(collect), R - 36, boxY + boxH - 50, { size: 84, weight: BOLD });
+    text(formatIQD(collect), R - 36, boxY + boxH - 50, { size: fit.amount, weight: BOLD });
     const parts = [
       o.paid ? "الطلب مدفوع" : `الطلب ${formatIQD(o.total)}`,
       delivery === "driver" ? `التوصيل ${formatIQD(site.deliveryFee)}` : delivery === "prepaid" ? "التوصيل مدفوع" : "التوصيل مجاني",
@@ -219,8 +275,10 @@ function drawLabel(ctx: CanvasRenderingContext2D, o: LabelOrder, courierName: st
     text(parts, M + 36, boxY + 70, { size: CAP, align: "left" });
   } else {
     text("المطلوب من الزبون", R - 36, boxY + 70, { size: CAP });
-    text("لا شيء، مدفوع بالكامل", R - 36, boxY + boxH - 50, { size: 64, weight: BOLD });
+    text("لا شيء، مدفوع بالكامل", R - 36, boxY + boxH - 50, { size: Math.min(64, fit.amount), weight: BOLD });
   }
+  // The last line of each column sits at its baseline; leave room above the goods rule.
+  return Math.max(ly, y - GAP) <= bottom - 16;
 }
 
 // Thermal printers have no greys: every pixel becomes black or white. At 600 dpi
@@ -256,7 +314,8 @@ function render(o: LabelOrder, courierName: string) {
   canvas.height = H * SCALE;
   const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
   ctx.scale(SCALE, SCALE);
-  drawLabel(ctx, o, courierName);
+  // Many flavors and a long address: draw again, tighter, until nothing overlaps.
+  for (const fit of FITS) if (drawLabel(ctx, o, courierName, fit)) break;
   return { canvas, ctx };
 }
 
