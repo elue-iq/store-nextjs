@@ -14,6 +14,7 @@ import { ColdBanner } from "@/components/ColdBanner";
 import { GiftBanner } from "@/components/GiftBanner";
 import { MetaPixel } from "@/components/MetaPixel";
 import { ChromeGate } from "@/components/ChromeGate";
+import { ActivityIndicator } from "@/components/ActivityIndicator";
 import { site, siteUrl } from "@/lib/site";
 
 const description =
@@ -55,6 +56,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </div>
         )}
         <MetaPixel />
+        <ActivityIndicator />
         <ToastProvider>
           <AuthProvider>
             <StockProvider>

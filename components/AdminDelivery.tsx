@@ -70,11 +70,17 @@ export function AdminDelivery({ order: o, onOpenCouriers }: { order: Order; onOp
   const [kind, setKind] = useState<IssueKind | "">("");
   const [text, setText] = useState("");
 
+  // The company just picked here, shown at once: the order itself catches up when the
+  // orders list refreshes (that takes a few seconds), so nobody waits on a frozen screen.
+  const [kindNow, setKindNow] = useState<string | null | undefined>(undefined);
+  const [picking, setPicking] = useState<"MODON" | "BOXY" | null>(null);
+  useEffect(() => setKindNow(undefined), [o.courierKind]);
+  const companyKind = kindNow !== undefined ? kindNow : o.courierKind;
   const atModon = Boolean(o.modonQr);
   const local = o.courierKind === "LOCAL" && Boolean(o.courierId);
-  const pickedModon = atModon || o.courierKind === "MODON";
+  const pickedModon = atModon || companyKind === "MODON";
   const atBoxy = Boolean(o.boxyUid);
-  const pickedBoxy = atBoxy || o.courierKind === "BOXY";
+  const pickedBoxy = atBoxy || companyKind === "BOXY";
   const cancelled = o.status === "CANCELLED";
   const delivered = o.status === "DELIVERED";
 
@@ -106,8 +112,10 @@ export function AdminDelivery({ order: o, onOpenCouriers }: { order: Order; onOp
     );
   }
 
+  const [printing, setPrinting] = useState(false);
   async function printLabel() {
     setBusy(true);
+    setPrinting(true);
     try {
       const { buildLabelsPdf, labelsFilename } = await import("@/lib/label");
       const { downloadBlob } = await import("@/lib/receipt");
@@ -116,6 +124,7 @@ export function AdminDelivery({ order: o, onOpenCouriers }: { order: Order; onOp
       console.error("label failed", err);
       toast({ id: "delivery", tone: "attention", message: "تعذّر تجهيز الملصق. حاول مرة ثانية." });
     } finally {
+      setPrinting(false);
       setBusy(false);
     }
   }
@@ -141,25 +150,33 @@ export function AdminDelivery({ order: o, onOpenCouriers }: { order: Order; onOp
     toast({ id: "dispatch", message: `سُحب الطلب من ${o.courierName ?? "شركة التوصيل"}.` });
   }
 
-  async function pickModon() {
+  async function pickCompany(to: "MODON" | "BOXY") {
     setBusy(true);
-    const { errors } = await dataClient.models.Order.update({ id: o.id, courierKind: "MODON" });
-    requestOrdersRefresh();
-    setBusy(false);
-    if (errors?.length) toast({ id: "dispatch", tone: "attention", message: "تعذّر الحفظ. حاول مجددًا." });
+    setPicking(to);
+    try {
+      const { errors } = await dataClient.models.Order.update({ id: o.id, courierKind: to });
+      if (errors?.length) {
+        console.error("pick company failed", errors);
+        return toast({ id: "dispatch", tone: "attention", message: "تعذّر الحفظ. حاول مجددًا." });
+      }
+      setKindNow(to);
+      requestOrdersRefresh();
+      toast({ id: "dispatch", message: to === "BOXY" ? "اخترت بوكسي. اختر المنطقة وأرسل الطلب إليهم." : "اخترت مدن Express. اختر المنطقة وأرسل الطلب إليهم." });
+    } catch (err) {
+      console.error("pick company failed", err);
+      toast({ id: "dispatch", tone: "attention", message: "تعذّر الحفظ. تأكد من الإنترنت وحاول مجددًا." });
+    } finally {
+      setPicking(null);
+      setBusy(false);
+    }
   }
-
-  async function pickBoxy() {
-    setBusy(true);
-    const { errors } = await dataClient.models.Order.update({ id: o.id, courierKind: "BOXY" });
-    requestOrdersRefresh();
-    setBusy(false);
-    if (errors?.length) toast({ id: "dispatch", tone: "attention", message: "تعذّر الحفظ. حاول مجددًا." });
-  }
+  const pickModon = () => pickCompany("MODON");
+  const pickBoxy = () => pickCompany("BOXY");
 
   async function clearBoxy() {
     setBusy(true);
     await dataClient.models.Order.update({ id: o.id, courierKind: null });
+    setKindNow(null);
     requestOrdersRefresh();
     setBusy(false);
   }
@@ -167,6 +184,7 @@ export function AdminDelivery({ order: o, onOpenCouriers }: { order: Order; onOp
   async function clearModon() {
     setBusy(true);
     await dataClient.models.Order.update({ id: o.id, courierKind: null });
+    setKindNow(null);
     requestOrdersRefresh();
     setBusy(false);
   }
@@ -194,6 +212,7 @@ export function AdminDelivery({ order: o, onOpenCouriers }: { order: Order; onOp
         const { errors } = await dataClient.models.Order.update({ id: o.id, courierKind: "BOXY" });
         requestOrdersRefresh();
         if (errors?.length) return toast({ id: "dispatch", tone: "attention", message: "تعذّر الحفظ. حاول مجددًا." });
+        setKindNow("BOXY");
         toast({ id: "dispatch", message: "اخترت بوكسي. اختر المنطقة وأرسل الطلب إليهم." });
       } else if (to === "MODON") {
         if (local) {
@@ -203,6 +222,7 @@ export function AdminDelivery({ order: o, onOpenCouriers }: { order: Order; onOp
         const { errors } = await dataClient.models.Order.update({ id: o.id, courierKind: "MODON" });
         requestOrdersRefresh();
         if (errors?.length) return toast({ id: "dispatch", tone: "attention", message: "تعذّر الحفظ. حاول مجددًا." });
+        setKindNow("MODON");
         toast({ id: "dispatch", message: "اخترت مدن Express. اختر المنطقة وأرسل الطلب إليهم." });
       } else {
         const c = active.find((x) => x.id === to);
@@ -302,8 +322,8 @@ export function AdminDelivery({ order: o, onOpenCouriers }: { order: Order; onOp
             </p>
             {!cancelled && (
               <div className="modon__actions">
-                <button type="button" className="btn btn--ghost" disabled={busy} onClick={() => void printLabel()}>
-                  طباعة الملصق (PDF)
+                <button type="button" className="btn btn--ghost" disabled={busy} aria-busy={printing} onClick={() => void printLabel()}>
+                  {printing ? "جارٍ تجهيز الملصق…" : "طباعة الملصق (PDF)"}
                 </button>
                 <button type="button" className="btn btn--ghost" disabled={busy} onClick={() => void resend()}>
                   {o.courierStatus === "SENT" ? "إعادة الإرسال" : "حاول الإرسال مجددًا"}
@@ -324,11 +344,11 @@ export function AdminDelivery({ order: o, onOpenCouriers }: { order: Order; onOp
           !cancelled && (
             <>
               <div className="delivery__chips" role="group" aria-label="اختر شركة التوصيل">
-                <button type="button" aria-pressed={pickedModon} disabled={busy} onClick={() => void pickModon()}>
-                  مدن Express
+                <button type="button" aria-pressed={pickedModon || picking === "MODON"} aria-busy={picking === "MODON"} disabled={busy} onClick={() => void pickModon()}>
+                  {picking === "MODON" ? "جارٍ اختيار مدن…" : "مدن Express"}
                 </button>
-                <button type="button" aria-pressed={pickedBoxy} disabled={busy} onClick={() => void pickBoxy()}>
-                  بوكسي
+                <button type="button" aria-pressed={pickedBoxy || picking === "BOXY"} aria-busy={picking === "BOXY"} disabled={busy} onClick={() => void pickBoxy()}>
+                  {picking === "BOXY" ? "جارٍ اختيار بوكسي…" : "بوكسي"}
                 </button>
                 {active.map((c) => (
                   <button key={c.id} type="button" aria-pressed={confirm === c.id} disabled={busy} onClick={() => setConfirm(c.id)}>
