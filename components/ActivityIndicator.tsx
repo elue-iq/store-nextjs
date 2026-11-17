@@ -9,7 +9,9 @@
 import { useEffect, useRef, useState } from "react";
 
 const SHOW_AFTER = 250; // ms: quick answers never flash the bar
-const TAP_WINDOW = 1500; // a request starting this soon after a tap or key belongs to it
+const TAP_WINDOW = 1500; // a request starting this soon after a tap or key shows the top bar
+const BUTTON_WINDOW = 600; // only a request the tap itself starts puts a spinner on the button
+//   (a background refresh, or the reload after a save, never lands on whatever was tapped last)
 const LOAD_WINDOW = 8000; // and on the page's first load
 const MAX_PENDING = 30_000; // never leave a button stuck
 
@@ -60,7 +62,7 @@ function install() {
     if (!isApi(input)) return original(input, init);
     const now = performance.now();
     const byUser = now - lastTapAt < TAP_WINDOW || now - startedAt < LOAD_WINDOW || userInflight > 0;
-    const button = now - lastTapAt < TAP_WINDOW && lastTapEl?.isConnected ? lastTapEl : null;
+    const button = now - lastTapAt < BUTTON_WINDOW && lastTapEl?.isConnected ? lastTapEl : null;
     if (byUser) {
       userInflight += 1;
       notify();
