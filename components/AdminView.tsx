@@ -24,6 +24,7 @@ import { AdminGifts } from "./AdminGifts";
 import { callGiftAdmin } from "@/lib/gift-admin";
 import { MANUAL_GIFT } from "@/lib/gifts";
 import { AdminDashboard } from "./AdminDashboard";
+import { NotToggle } from "./NotToggle";
 import { OrderRow, REVIEW_STATE_LABELS, baghdadDay, reviewState, shortTime, type ReviewState } from "./AdminOrderRow";
 import { buildCustomers, CustomerDetail, CustomerList, CustomersSummary } from "./AdminCustomers";
 import { jarsLabel } from "./AddToCart";
@@ -101,6 +102,10 @@ export function AdminView() {
   const [pay, setPay] = useState<"" | PayKey | "freeDelivery">("");
   const [courier, setCourier] = useState(""); // "" = all, "none", "MODON", or a local courier's id
   const [review, setReview] = useState<"" | ReviewState>(""); // delivered orders by review state
+  // «بدون»: a filter keeps every order EXCEPT what is chosen in it.
+  type NotKey = "flavors" | "status" | "when" | "province" | "pay" | "courier" | "review";
+  const [not, setNotAll] = useState<Partial<Record<NotKey, boolean>>>({});
+  const setNot = (k: NotKey, on: boolean) => setNotAll((cur) => ({ ...cur, [k]: on }));
   const searchRef = useRef<HTMLInputElement>(null);
   const reviewDue = useMemo(() => (allOrders ?? []).filter((o) => reviewState(o) === "notAsked").length, [allOrders]);
   const [selected, setSelected] = useState<string | null>(null);
@@ -280,14 +285,16 @@ export function AdminView() {
   // would give with the other filters as they are now.
   const matches = useCallback(
     (o: Order, q: string, qDigits: string): boolean => {
-      if (filter !== "ALL" && o.status !== filter) return false;
-      if (pay === "freeDelivery" ? !o.freeDelivery || o.deliveryPaid : pay && payKeyOf(o) !== pay) return false;
-      if (province && o.province !== province) return false;
-      if (review && reviewState(o) !== review) return false;
+      // «hit === not»: the order is left out (not chosen when «فقط», chosen when «بدون»).
+      const out = (k: NotKey, hit: boolean) => hit === Boolean(not[k]);
+      if (filter !== "ALL" && out("status", o.status === filter)) return false;
+      if (pay && out("pay", pay === "freeDelivery" ? Boolean(o.freeDelivery && !o.deliveryPaid) : payKeyOf(o) === pay)) return false;
+      if (province && out("province", o.province === province)) return false;
+      if (review && out("review", reviewState(o) === review)) return false;
       if (when) {
         const day = baghdadDay(o.createdAt);
         const ago = (n: number) => baghdadDay(new Date(Date.now() - n * 86_400_000).toISOString());
-        if (when === "today" ? day !== today : when === "yesterday" ? day !== ago(1) : day < ago(when === "7d" ? 6 : 29)) return false;
+        if (out("when", when === "today" ? day === today : when === "yesterday" ? day === ago(1) : day >= ago(when === "7d" ? 6 : 29))) return false;
       }
       if (courier) {
         const mine =
@@ -298,7 +305,7 @@ export function AdminView() {
               : o.courierKind === "LOCAL" && o.courierId
                 ? o.courierId
                 : "none";
-        if (courier === "LOCAL" ? !(o.courierKind === "LOCAL" && o.courierId) : mine !== courier) return false;
+        if (out("courier", courier === "LOCAL" ? Boolean(o.courierKind === "LOCAL" && o.courierId) : mine === courier)) return false;
       }
       if (!q) return true;
       return (
@@ -316,7 +323,7 @@ export function AdminView() {
         (qDigits.length >= 3 && o.phone.includes(qDigits))
       );
     },
-    [filter, pay, province, when, courier, review, today],
+    [filter, pay, province, when, courier, review, today, not],
   );
 
   const { shown, flavorCounts, jarsOfPicked } = useMemo(() => {
@@ -325,12 +332,15 @@ export function AdminView() {
     const base = (orders ?? []).filter((o) => matches(o, q, qDigits));
     const counts: Record<string, number> = {};
     for (const o of base) for (const slug of new Set(o.items.map((i) => i?.slug))) if (slug) counts[slug] = (counts[slug] ?? 0) + 1;
-    const list = flavors.length ? base.filter((o) => o.items.some((i) => i && flavors.includes(i.slug))) : base;
-    const jars = flavors.length
+    // Every jar in the parcel counts, gifts included: «بدون جزر» = no carrot jar at all.
+    const list = flavors.length ? base.filter((o) => o.items.some((i) => i && flavors.includes(i.slug)) !== Boolean(not.flavors)) : base;
+    const jars = flavors.length && !not.flavors
       ? list.reduce((n, o) => n + o.items.reduce((m, i) => m + (i && flavors.includes(i.slug) ? i.qty : 0), 0), 0)
       : list.reduce((n, o) => n + o.jars, 0);
+    // With «بدون», each flavor chip counts the orders WITHOUT it.
+    if (not.flavors) for (const p of products) counts[p.slug] = base.length - (counts[p.slug] ?? 0);
     return { shown: sort === "newest" ? list : [...list].reverse(), flavorCounts: counts, jarsOfPicked: jars };
-  }, [orders, query, sort, flavors, matches]);
+  }, [orders, query, sort, flavors, matches, not.flavors]);
 
   const provinces = useMemo(
     () => [...new Set((orders ?? []).map((o) => o.province).filter((p): p is string => Boolean(p)))].sort((a, b) => a.localeCompare(b, "ar")),
@@ -346,6 +356,7 @@ export function AdminView() {
     setPay("");
     setCourier("");
     setQuery("");
+    setNotAll({});
   };
 
   // Orders for the label PDF: the local-courier orders shown, minus cancelled ones.
@@ -721,9 +732,17 @@ export function AdminView() {
           </span>
         </form>
         <div className="admin-filters admin-flavors" role="group" aria-label="فلترة حسب النكهة">
-          <button type="button" aria-pressed={flavors.length === 0} onClick={() => setFlavors([])}>
+          <button
+            type="button"
+            aria-pressed={flavors.length === 0}
+            onClick={() => {
+              setFlavors([]);
+              setNot("flavors", false);
+            }}
+          >
             كل النكهات
           </button>
+          {flavors.length > 0 && <NotToggle on={Boolean(not.flavors)} onChange={(on) => setNot("flavors", on)} what="النكهة" />}
           {products.map((p) => (
             <button
               key={p.slug}
@@ -739,21 +758,36 @@ export function AdminView() {
         <div className="admin-tools__row">
           <div className="admin-filters" role="group" aria-label="فلترة حسب الحالة">
             {(["ALL", ...STATUS_ORDER] as Filter[]).map((f) => (
-              <button key={f} type="button" aria-pressed={filter === f} onClick={() => setFilter(f)}>
-                {f === "ALL" ? "الكل" : STATUS_LABELS[f]}
-                <span>{f === "ALL" ? (orders?.length ?? 0) : stats.counts[f]}</span>
-              </button>
+              <span key={f} style={{ display: "contents" }}>
+                <button
+                  type="button"
+                  aria-pressed={filter === f}
+                  onClick={() => {
+                    setFilter(f);
+                    if (f === "ALL") setNot("status", false);
+                  }}
+                >
+                  {f === "ALL" ? "الكل" : STATUS_LABELS[f]}
+                  <span>{f === "ALL" ? (orders?.length ?? 0) : stats.counts[f]}</span>
+                </button>
+                {f === "ALL" && filter !== "ALL" && <NotToggle on={Boolean(not.status)} onChange={(on) => setNot("status", on)} what="الحالة" />}
+              </span>
             ))}
           </div>
           <div className="admin-tools__selects">
-            <select className="admin-sort" value={when} onChange={(e) => setWhen(e.target.value as typeof when)} aria-label="الفترة">
+            <span className={`admin-select-not${not.when ? " is-not" : ""}`}>
+              {when && <NotToggle on={Boolean(not.when)} onChange={(on) => setNot("when", on)} what="الفترة" />}
+              <select className="admin-sort" value={when} onChange={(e) => { if (!e.target.value) setNot("when", false); setWhen(e.target.value as typeof when); }} aria-label="الفترة">
               <option value="">كل الأوقات</option>
               <option value="today">اليوم</option>
               <option value="yesterday">أمس</option>
               <option value="7d">آخر 7 أيام</option>
               <option value="30d">آخر 30 يوماً</option>
             </select>
-            <select className="admin-sort" value={province} onChange={(e) => setProvince(e.target.value)} aria-label="المحافظة">
+            </span>
+            <span className={`admin-select-not${not.province ? " is-not" : ""}`}>
+              {province && <NotToggle on={Boolean(not.province)} onChange={(on) => setNot("province", on)} what="المحافظة" />}
+              <select className="admin-sort" value={province} onChange={(e) => { if (!e.target.value) setNot("province", false); setProvince(e.target.value); }} aria-label="المحافظة">
               <option value="">كل المحافظات</option>
               {provinces.map((p) => (
                 <option key={p} value={p}>
@@ -761,7 +795,10 @@ export function AdminView() {
                 </option>
               ))}
             </select>
-            <select className="admin-sort" value={pay} onChange={(e) => setPay(e.target.value as typeof pay)} aria-label="طريقة الدفع">
+            </span>
+            <span className={`admin-select-not${not.pay ? " is-not" : ""}`}>
+              {pay && <NotToggle on={Boolean(not.pay)} onChange={(on) => setNot("pay", on)} what="طريقة الدفع" />}
+              <select className="admin-sort" value={pay} onChange={(e) => { if (!e.target.value) setNot("pay", false); setPay(e.target.value as typeof pay); }} aria-label="طريقة الدفع">
               <option value="">كل طرق الدفع</option>
               {(["cod", "QI", "ZAINCASH", "OTHER", "GIFT", "unknown"] as PayKey[]).map((k) => (
                 <option key={k} value={k}>
@@ -770,7 +807,10 @@ export function AdminView() {
               ))}
               <option value="freeDelivery">توصيل مجاني (هدية)</option>
             </select>
-            <select className="admin-sort" value={courier} onChange={(e) => setCourier(e.target.value)} aria-label="شركة التوصيل">
+            </span>
+            <span className={`admin-select-not${not.courier ? " is-not" : ""}`}>
+              {courier && <NotToggle on={Boolean(not.courier)} onChange={(on) => setNot("courier", on)} what="شركة التوصيل" />}
+              <select className="admin-sort" value={courier} onChange={(e) => { if (!e.target.value) setNot("courier", false); setCourier(e.target.value); }} aria-label="شركة التوصيل">
               <option value="">كل شركات التوصيل</option>
               <option value="MODON">مدن Express</option>
               <option value="BOXY">بوكسي</option>
@@ -782,7 +822,10 @@ export function AdminView() {
               ))}
               <option value="none">بلا شركة توصيل</option>
             </select>
-            <select className="admin-sort" value={review} onChange={(e) => setReview(e.target.value as typeof review)} aria-label="التقييم">
+            </span>
+            <span className={`admin-select-not${not.review ? " is-not" : ""}`}>
+              {review && <NotToggle on={Boolean(not.review)} onChange={(on) => setNot("review", on)} what="التقييم" />}
+              <select className="admin-sort" value={review} onChange={(e) => { if (!e.target.value) setNot("review", false); setReview(e.target.value as typeof review); }} aria-label="التقييم">
               <option value="">كل التقييمات</option>
               {(["notAsked", "waiting", "reviewed"] as ReviewState[]).map((r) => (
                 <option key={r} value={r}>
@@ -790,6 +833,7 @@ export function AdminView() {
                 </option>
               ))}
             </select>
+            </span>
             <select className="admin-sort" value={sort} onChange={(e) => setSort(e.target.value as Sort)} aria-label="الترتيب">
               <option value="newest">الأحدث أولًا</option>
               <option value="oldest">الأقدم أولًا</option>
@@ -818,7 +862,8 @@ export function AdminView() {
       {orders && (
         <p className="admin-summary" aria-live="polite">
           <strong>{shown.length}</strong> طلب · <strong>{jarsOfPicked}</strong> علبة
-          {flavors.length > 0 && ` من ${flavors.map((f) => products.find((p) => p.slug === f)?.nameAr ?? f).join(" + ")}`}
+          {flavors.length > 0 &&
+            (not.flavors ? " · بدون " : " من ") + flavors.map((f) => products.find((p) => p.slug === f)?.nameAr ?? f).join(not.flavors ? " و" : " + ")}
           {extraFilters > 0 && (
             <button type="button" className="link-button" onClick={clearFilters}>
               مسح الفلاتر ({extraFilters})

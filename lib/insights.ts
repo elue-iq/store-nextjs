@@ -69,7 +69,11 @@ export type Filters = {
   method: "" | PayKey; // how it was paid: cash, Qi Card, ZainCash…
   customer: "" | "new" | "returning";
   showTests: boolean;
+  // «بدون»: these filters keep every order EXCEPT what is chosen.
+  not?: Partial<Record<NotKey, boolean>>;
 };
+
+export type NotKey = "flavors" | "province" | "source" | "payment" | "method";
 
 export const ALL_STATUSES: OrderStatus[] = ["NEW", "CONFIRMED", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"];
 
@@ -86,6 +90,7 @@ export const DEFAULT_FILTERS: Filters = {
   method: "",
   customer: "",
   showTests: false,
+  not: {},
 };
 
 // How many filters differ from the defaults (the period is shown on its own).
@@ -372,18 +377,19 @@ export function computeInsights(all: Order[], f: Filters, today: string): Insigh
   // No comparison with days before the first order (nothing to compare with).
   const prev = resolved.prev && resolved.prev.to >= firstDay ? resolved.prev : null;
 
-  // Every filter except the period and the status.
+  // Every filter except the period and the status. A filter set to «بدون» keeps the
+  // orders it would otherwise drop: «hit === not» means the order is left out.
+  const not = f.not ?? {};
+  const paymentHit = (o: Order) =>
+    f.payment === "paid" ? Boolean(o.paid) : f.payment === "cod" ? !o.paid : f.payment === "deliveryPaid" ? Boolean(o.deliveryPaid) : Boolean(o.freeDelivery && !o.deliveryPaid);
   const base = real.filter((o) => {
-    if (f.flavors.length && !lines(o).some((l) => f.flavors.includes(l.slug) && l.qty > 0)) return false;
-    if (f.province && (o.province ?? "") !== f.province) return false;
+    if (f.flavors.length && lines(o).some((l) => f.flavors.includes(l.slug) && l.qty > 0) === Boolean(not.flavors)) return false;
+    if (f.province && ((o.province ?? "") === f.province) === Boolean(not.province)) return false;
     if (f.channel === "web" && o.createdBy) return false;
     if (f.channel === "team" && !o.createdBy) return false;
-    if (f.source && sourceLabel(o) !== f.source) return false;
-    if (f.payment === "paid" && !o.paid) return false;
-    if (f.payment === "cod" && o.paid) return false;
-    if (f.payment === "deliveryPaid" && !o.deliveryPaid) return false;
-    if (f.payment === "free" && (!o.freeDelivery || o.deliveryPaid)) return false;
-    if (f.method && payKeyOf(o) !== f.method) return false;
+    if (f.source && (sourceLabel(o) === f.source) === Boolean(not.source)) return false;
+    if (f.payment && paymentHit(o) === Boolean(not.payment)) return false;
+    if (f.method && (payKeyOf(o) === f.method) === Boolean(not.method)) return false;
     if (f.customer && types.get(o.id) !== f.customer) return false;
     return true;
   });
@@ -393,6 +399,8 @@ export function computeInsights(all: Order[], f: Filters, today: string): Insigh
   });
   const statusOk = (o: Order) => !f.statuses.length || f.statuses.includes(o.status);
 
+  // Without the chosen flavors, the numbers are whole orders (not one flavor's share).
+  const focus = not.flavors ? [] : f.flavors;
   const period = inRange(cur);
   const list = period.filter(statusOk).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const prevPeriod = prev ? inRange(prev) : null;
@@ -404,7 +412,7 @@ export function computeInsights(all: Order[], f: Filters, today: string): Insigh
   const statusMap = new Map<string, Row>();
   for (const s of ALL_STATUSES) statusMap.set(s, { key: s, label: s, orders: 0, jars: 0, revenue: 0 });
   for (const o of period) {
-    const p = partOf(o, f.flavors);
+    const p = partOf(o, focus);
     add(statusMap, o.status, o.status, p.jars, p.revenue);
   }
 
@@ -421,7 +429,7 @@ export function computeInsights(all: Order[], f: Filters, today: string): Insigh
     const d = dayOf(o.createdAt);
     const i = Math.min(buckets.length - 1, Math.floor(daysBetween(cur.from, d) / step));
     if (i < 0) continue;
-    const p = partOf(o, f.flavors);
+    const p = partOf(o, focus);
     buckets[i].revenue += p.revenue;
     buckets[i].jars += p.jars;
     buckets[i].orders += 1;
@@ -443,7 +451,7 @@ export function computeInsights(all: Order[], f: Filters, today: string): Insigh
   const allJars = [...flavorMap.values()].reduce((n, r) => n + r.jars, 0);
   const flavors = [...flavorMap.values()]
     .sort((a, b) => b.jars - a.jars || b.revenue - a.revenue)
-    .map((r) => ({ ...r, share: allJars ? r.jars / allJars : 0, withOrders: r.orders, selected: f.flavors.includes(r.key) }));
+    .map((r) => ({ ...r, share: allJars ? r.jars / allJars : 0, withOrders: r.orders, selected: focus.includes(r.key) }));
 
   const provinces = new Map<string, Row>();
   const areas = new Map<string, Row>();
@@ -455,7 +463,7 @@ export function computeInsights(all: Order[], f: Filters, today: string): Insigh
   const weekdays = Array<number>(7).fill(0);
   const customers = new Map<string, { phone: string; name: string; orders: number; revenue: number }>();
   for (const o of list) {
-    const p = partOf(o, f.flavors);
+    const p = partOf(o, focus);
     add(provinces, o.province || "—", o.province || "غير محددة", p.jars, p.revenue);
     const area = (o.area ?? "").trim().replace(/\s+/g, " ");
     if (area) add(areas, `${o.province}|${area}`, f.province ? area : `${area} (${o.province ?? ""})`, p.jars, p.revenue);
@@ -482,8 +490,8 @@ export function computeInsights(all: Order[], f: Filters, today: string): Insigh
     range: cur,
     prevRange: prev,
     orders: list,
-    kpis: kpisOf(list, f.flavors, types),
-    prev: prevList ? kpisOf(prevList, f.flavors, types) : null,
+    kpis: kpisOf(list, focus, types),
+    prev: prevList ? kpisOf(prevList, focus, types) : null,
     cancelled: cancelledOf(period),
     prevCancelled: prevPeriod ? cancelledOf(prevPeriod) : null,
     statuses: ALL_STATUSES.map((s) => statusMap.get(s)!),

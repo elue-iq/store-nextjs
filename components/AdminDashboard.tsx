@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { OrderRow } from "./AdminOrderRow";
+import { NotToggle } from "./NotToggle";
 import { STATUS_LABELS, type Order, type OrderStatus } from "@/lib/data";
 import { products } from "@/lib/products";
 import { formatIQD, PAY_KEY_LABELS, type PayKey } from "@/lib/site";
@@ -20,6 +21,7 @@ import {
   todayBaghdad,
   isTest,
   type Filters,
+  type NotKey,
   type Row,
 } from "@/lib/insights";
 
@@ -252,6 +254,13 @@ export function AdminDashboard({
   const k = ins.kpis;
   const p = ins.prev;
   const flavorNames = f.flavors.map((s) => products.find((x) => x.slug === s)?.nameAr ?? s);
+  const not = f.not ?? {};
+  // Numbers for the chosen flavors only when they are included («فقط»), not excluded («بدون»).
+  const focusOn = f.flavors.length > 0 && !not.flavors;
+  const setNot = (k: NotKey, on: boolean) => set({ not: { ...not, [k]: on } });
+  // A select cleared back to «الكل» also drops its «بدون».
+  const pick = <K extends NotKey>(k: K, value: Filters[K]) => set({ [k]: value, ...(value ? {} : { not: { ...not, [k]: false } }) } as Partial<Filters>);
+  const bdn = (k: NotKey) => (not[k] ? "بدون " : "");
   const vsText = ins.prevRange ? `مقارنة بـ ${rangeLabel(ins.prevRange)}` : "";
   const extra = activeFilterCount(f);
   const cancelRate = ins.cancelled.of ? ins.cancelled.count / ins.cancelled.of : 0;
@@ -269,30 +278,32 @@ export function AdminDashboard({
 
   // Removable chips for every filter that isn't the default.
   const chips: { key: string; text: string; clear: () => void }[] = [];
-  if (f.flavors.length) chips.push({ key: "fl", text: `النكهة: ${flavorNames.join("، ")}`, clear: () => set({ flavors: [] }) });
+  if (f.flavors.length)
+    chips.push({ key: "fl", text: `النكهة: ${bdn("flavors")}${flavorNames.join("، ")}`, clear: () => set({ flavors: [], not: { ...not, flavors: false } }) });
   if (f.statuses.slice().sort().join() !== DEFAULT_FILTERS.statuses.slice().sort().join())
     chips.push({
       key: "st",
       text: f.statuses.length ? `الحالة: ${f.statuses.map((s) => STATUS_LABELS[s]).join("، ")}` : "كل الحالات مع الملغاة",
       clear: () => set({ statuses: DEFAULT_FILTERS.statuses }),
     });
-  if (f.province) chips.push({ key: "pr", text: `المحافظة: ${f.province}`, clear: () => set({ province: "" }) });
+  if (f.province) chips.push({ key: "pr", text: `المحافظة: ${bdn("province")}${f.province}`, clear: () => pick("province", "") });
   if (f.channel) chips.push({ key: "ch", text: f.channel === "web" ? "من الموقع" : "أنشأه الفريق", clear: () => set({ channel: "" }) });
-  if (f.source) chips.push({ key: "so", text: `المصدر: ${f.source}`, clear: () => set({ source: "" }) });
+  if (f.source) chips.push({ key: "so", text: `المصدر: ${bdn("source")}${f.source}`, clear: () => pick("source", "") });
   if (f.payment)
     chips.push({
       key: "pa",
       text:
-        f.payment === "paid"
+        bdn("payment") +
+        (f.payment === "paid"
           ? "العلب مدفوعة مسبقاً"
           : f.payment === "cod"
             ? "العلب تُدفع عند الاستلام"
             : f.payment === "deliveryPaid"
               ? "التوصيل مدفوع مسبقاً"
-              : "توصيل مجاني (هدية)",
-      clear: () => set({ payment: "" }),
+              : "توصيل مجاني (هدية)"),
+      clear: () => pick("payment", ""),
     });
-  if (f.method) chips.push({ key: "me", text: `طريقة الدفع: ${PAY_KEY_LABELS[f.method]}`, clear: () => set({ method: "" }) });
+  if (f.method) chips.push({ key: "me", text: `طريقة الدفع: ${bdn("method")}${PAY_KEY_LABELS[f.method]}`, clear: () => pick("method", "") });
   if (f.customer) chips.push({ key: "cu", text: f.customer === "new" ? "عملاء جدد" : "عملاء عائدون", clear: () => set({ customer: "" }) });
   if (f.showTests) chips.push({ key: "te", text: "مع الطلبات التجريبية", clear: () => set({ showTests: false }) });
 
@@ -367,9 +378,10 @@ export function AdminDashboard({
           </div>
         )}
         <div className="admin-filters" role="group" aria-label="النكهة">
-          <button type="button" aria-pressed={!f.flavors.length} onClick={() => set({ flavors: [] })}>
+          <button type="button" aria-pressed={!f.flavors.length} onClick={() => set({ flavors: [], not: { ...not, flavors: false } })}>
             كل النكهات
           </button>
+          {f.flavors.length > 0 && <NotToggle on={Boolean(not.flavors)} onChange={(on) => setNot("flavors", on)} what="النكهة" />}
           {products.map((x) => (
             <button key={x.slug} type="button" aria-pressed={f.flavors.includes(x.slug)} onClick={() => toggleFlavor(x.slug)}>
               <i className="dash-swatch" style={{ background: x.band }} aria-hidden="true" />
@@ -400,7 +412,9 @@ export function AdminDashboard({
             </fieldset>
             <label>
               المحافظة
-              <select className="admin-sort" value={f.province} onChange={(e) => set({ province: e.target.value })}>
+              <span className={`admin-select-not${not.province ? " is-not" : ""}`}>
+                {f.province && <NotToggle on={Boolean(not.province)} onChange={(on) => setNot("province", on)} what="المحافظة" />}
+                <select className="admin-sort" value={f.province} onChange={(e) => pick("province", e.target.value)}>
                 <option value="">كل المحافظات</option>
                 {choices.provinces.map(([name, n]) => (
                   <option key={name} value={name}>
@@ -408,6 +422,7 @@ export function AdminDashboard({
                   </option>
                 ))}
               </select>
+              </span>
             </label>
             <label>
               القناة
@@ -419,7 +434,9 @@ export function AdminDashboard({
             </label>
             <label>
               المصدر
-              <select className="admin-sort" value={f.source} onChange={(e) => set({ source: e.target.value })}>
+              <span className={`admin-select-not${not.source ? " is-not" : ""}`}>
+                {f.source && <NotToggle on={Boolean(not.source)} onChange={(on) => setNot("source", on)} what="المصدر" />}
+                <select className="admin-sort" value={f.source} onChange={(e) => pick("source", e.target.value)}>
                 <option value="">كل المصادر</option>
                 {choices.sources.map(([name, n]) => (
                   <option key={name} value={name}>
@@ -427,20 +444,26 @@ export function AdminDashboard({
                   </option>
                 ))}
               </select>
+              </span>
             </label>
             <label>
               الدفع
-              <select className="admin-sort" value={f.payment} onChange={(e) => set({ payment: e.target.value as Filters["payment"] })}>
+              <span className={`admin-select-not${not.payment ? " is-not" : ""}`}>
+                {f.payment && <NotToggle on={Boolean(not.payment)} onChange={(on) => setNot("payment", on)} what="الدفع" />}
+                <select className="admin-sort" value={f.payment} onChange={(e) => pick("payment", e.target.value as Filters["payment"])}>
                 <option value="">الكل</option>
                 <option value="cod">العلب تُدفع عند الاستلام</option>
                 <option value="paid">العلب مدفوعة مسبقاً</option>
                 <option value="deliveryPaid">التوصيل مدفوع مسبقاً</option>
                 <option value="free">توصيل مجاني (هدية)</option>
               </select>
+              </span>
             </label>
             <label>
               طريقة الدفع
-              <select className="admin-sort" value={f.method} onChange={(e) => set({ method: e.target.value as Filters["method"] })}>
+              <span className={`admin-select-not${not.method ? " is-not" : ""}`}>
+                {f.method && <NotToggle on={Boolean(not.method)} onChange={(on) => setNot("method", on)} what="طريقة الدفع" />}
+                <select className="admin-sort" value={f.method} onChange={(e) => pick("method", e.target.value as Filters["method"])}>
                 <option value="">الكل</option>
                 {(["cod", "QI", "ZAINCASH", "OTHER", "GIFT", "unknown"] as PayKey[]).map((k) => (
                   <option key={k} value={k}>
@@ -448,6 +471,7 @@ export function AdminDashboard({
                   </option>
                 ))}
               </select>
+              </span>
             </label>
             <label>
               العميل
@@ -481,7 +505,7 @@ export function AdminDashboard({
 
       {/* ---- Headline ---- */}
       <section className="dash-hero">
-        <p className="dash-hero__label">{f.flavors.length ? `مبيعات ${flavorNames.join(" + ")}` : "المبيعات"}</p>
+        <p className="dash-hero__label">{focusOn ? `مبيعات ${flavorNames.join(" + ")}` : f.flavors.length ? `المبيعات بدون ${flavorNames.join(" و")}` : "المبيعات"}</p>
         <p className="dash-hero__value">{formatIQD(k.revenue)}</p>
         <p className="dash-hero__sub">
           {(() => {
@@ -500,9 +524,9 @@ export function AdminDashboard({
       </section>
 
       <dl className="dash-tiles">
-        <StatTile label={f.flavors.length ? "طلبات فيها النكهة" : "الطلبات"} value={n0(k.orders)} delta={deltaOf(k.orders, p?.orders)} />
+        <StatTile label={focusOn ? "طلبات فيها النكهة" : "الطلبات"} value={n0(k.orders)} delta={deltaOf(k.orders, p?.orders)} />
         <StatTile label="العلب" value={n0(k.jars)} delta={deltaOf(k.jars, p?.jars)} sub={k.orders ? `${trim(k.jarsPerOrder)} علبة لكل طلب` : undefined} />
-        <StatTile label={f.flavors.length ? "متوسط قيمة النكهة في الطلب" : "متوسط قيمة الطلب"} value={formatIQD(k.aov)} delta={deltaOf(k.aov, p?.aov)} />
+        <StatTile label={focusOn ? "متوسط قيمة النكهة في الطلب" : "متوسط قيمة الطلب"} value={formatIQD(k.aov)} delta={deltaOf(k.aov, p?.aov)} />
         <StatTile
           label="العملاء"
           value={n0(k.customers)}
@@ -591,9 +615,9 @@ export function AdminDashboard({
         </Card>
 
         <Card
-          title={f.flavors.length ? "النكهات في هذه الطلبات" : "النكهات"}
+          title={focusOn ? "النكهات في هذه الطلبات" : "النكهات"}
           sub={
-            f.flavors.length
+            focusOn
               ? "ما طُلب مع النكهة المختارة. اضغط نكهة لإضافتها أو إزالتها من الفلتر."
               : "بعدد العلب. اضغط نكهة لعرض أرقامها فقط."
           }
@@ -606,7 +630,7 @@ export function AdminDashboard({
               display: jarsText(r.jars),
               selected: r.selected,
               sub:
-                f.flavors.length && !r.selected
+                focusOn && !r.selected
                   ? `في ${pct(k.orders ? r.withOrders / k.orders : 0)} من هذه الطلبات · ${formatIQD(r.revenue)}`
                   : `${pct(r.share)} من العلب · ${formatIQD(r.revenue)} · في ${ordersText(r.withOrders)}`,
             }))}
@@ -695,7 +719,7 @@ export function AdminDashboard({
           )}
         </Card>
 
-        <Card title="حجم الطلب" sub={f.flavors.length ? "بعدد علب النكهة المختارة في الطلب." : "كم علبة في الطلب الواحد."}>
+        <Card title="حجم الطلب" sub={focusOn ? "بعدد علب النكهة المختارة في الطلب." : "كم علبة في الطلب الواحد."}>
           <BarList
             rows={ins.sizes.map((r) => ({
               key: r.key,

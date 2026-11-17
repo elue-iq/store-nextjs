@@ -330,7 +330,11 @@ async function labelPage(o: LabelOrder): Promise<PdfPage> {
 export async function buildLabelsPdf(orders: LabelOrder[]): Promise<Blob> {
   await loadFonts();
   const pages: PdfPage[] = [];
-  for (const o of orders) pages.push(await labelPage(o));
+  for (const o of orders) {
+    pages.push(await labelPage(o));
+    // Let the screen update between labels (each is heavy drawing work).
+    await new Promise((r) => setTimeout(r, 0));
+  }
   return makePdf(pages, 283.465, 425.197);
 }
 
