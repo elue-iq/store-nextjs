@@ -12,6 +12,7 @@
 // - Test orders (source contains "test=") are hidden unless asked for.
 
 import { giftLines, paidLines } from "./gifts";
+import { orderTime } from "./order-time";
 import type { Order, OrderStatus } from "./data";
 import { products } from "./products";
 import { formatIraqiMobile } from "./phone";
@@ -247,7 +248,7 @@ export function customerTypes(orders: Order[]): Map<string, "new" | "returning">
   }
   const out = new Map<string, "new" | "returning">();
   for (const list of byPhone.values()) {
-    list.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    list.sort((a, b) => orderTime(a).localeCompare(orderTime(b)));
     let hadOrder = false;
     for (const o of list) {
       out.set(o.id, hadOrder ? "returning" : "new");
@@ -371,7 +372,7 @@ export function computeInsights(all: Order[], f: Filters, today: string): Insigh
   const types = customerTypes(all);
   const testCount = all.filter(isTest).length;
   const real = f.showTests ? all : all.filter((o) => !isTest(o));
-  const firstDay = real.reduce((d, o) => (dayOf(o.createdAt) < d ? dayOf(o.createdAt) : d), today);
+  const firstDay = real.reduce((d, o) => (dayOf(orderTime(o)) < d ? dayOf(orderTime(o)) : d), today);
   const resolved = resolveRange(f, today, firstDay);
   const cur = resolved.cur;
   // No comparison with days before the first order (nothing to compare with).
@@ -394,7 +395,7 @@ export function computeInsights(all: Order[], f: Filters, today: string): Insigh
     return true;
   });
   const inRange = (r: Range) => base.filter((o) => {
-    const d = dayOf(o.createdAt);
+    const d = dayOf(orderTime(o));
     return d >= r.from && d <= r.to;
   });
   const statusOk = (o: Order) => !f.statuses.length || f.statuses.includes(o.status);
@@ -402,7 +403,7 @@ export function computeInsights(all: Order[], f: Filters, today: string): Insigh
   // Without the chosen flavors, the numbers are whole orders (not one flavor's share).
   const focus = not.flavors ? [] : f.flavors;
   const period = inRange(cur);
-  const list = period.filter(statusOk).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const list = period.filter(statusOk).sort((a, b) => orderTime(b).localeCompare(orderTime(a)));
   const prevPeriod = prev ? inRange(prev) : null;
   const prevList = prevPeriod ? prevPeriod.filter(statusOk) : null;
 
@@ -426,7 +427,7 @@ export function computeInsights(all: Order[], f: Filters, today: string): Insigh
     buckets.push({ key: d, label: unit === "week" ? `${dayLabel(d)} – ${dayLabel(end)}` : dayLabel(d), from: d, to: end, revenue: 0, orders: 0, jars: 0 });
   }
   for (const o of list) {
-    const d = dayOf(o.createdAt);
+    const d = dayOf(orderTime(o));
     const i = Math.min(buckets.length - 1, Math.floor(daysBetween(cur.from, d) / step));
     if (i < 0) continue;
     const p = partOf(o, focus);
@@ -473,8 +474,8 @@ export function computeInsights(all: Order[], f: Filters, today: string): Insigh
     add(payMethods, payKeyOf(o), PAY_KEY_LABELS[payKeyOf(o)], p.jars, p.revenue);
     const size = p.jars >= 5 ? "5+" : String(p.jars);
     add(sizes, size, p.jars >= 5 ? "5 علب أو أكثر" : p.jars === 1 ? "علبة واحدة" : p.jars === 2 ? "علبتان" : `${p.jars} علب`, p.jars, p.revenue);
-    hours[hourOf(o.createdAt)] += 1;
-    weekdays[weekdayOf(o.createdAt)] += 1;
+    hours[hourOf(orderTime(o))] += 1;
+    weekdays[weekdayOf(orderTime(o))] += 1;
     const c = customers.get(o.phone) ?? { phone: o.phone, name: o.name, orders: 0, revenue: 0 };
     c.orders += 1;
     c.revenue += p.revenue;
@@ -587,7 +588,7 @@ export function ordersCsv(orders: Order[], types: Map<string, "new" | "returning
   ];
   const rows = orders.map((o) => {
     const qty = (slug: string) => lines(o).filter((l) => l.slug === slug).reduce((n, l) => n + l.qty, 0);
-    const at = new Date(Date.parse(o.createdAt) + BAGHDAD_MS).toISOString().slice(0, 16).replace("T", " ");
+    const at = new Date(Date.parse(orderTime(o)) + BAGHDAD_MS).toISOString().slice(0, 16).replace("T", " ");
     const attr = attributionOf(o);
     return [
       o.orderNumber,

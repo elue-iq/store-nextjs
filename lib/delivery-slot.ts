@@ -28,6 +28,20 @@ export function baghdadToday(now: Date = new Date()): string {
 
 const addDays = (ymd: string, n: number): string => new Date(Date.parse(`${ymd}T00:00:00Z`) + n * DAY).toISOString().slice(0, 10);
 
+// Team only: the day an order is recorded under (today or an earlier day, up to a year back).
+export function cleanOrderDay(v: unknown, now: Date = new Date()): string | null {
+  const s = String(v ?? "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s) || Number.isNaN(Date.parse(`${s}T00:00:00Z`))) return null;
+  const today = baghdadToday(now);
+  return s <= today && s >= addDays(today, -366) ? s : null;
+}
+
+// The moment on Baghdad day `ymd` with the same clock time (Baghdad, UTC+3, no daylight saving) as `clock`.
+export function onBaghdadDay(ymd: string, clock: Date): string {
+  const msIntoDay = (clock.getTime() + 3 * 3_600_000) % DAY;
+  return new Date(Date.parse(`${ymd}T00:00:00Z`) - 3 * 3_600_000 + msIntoDay).toISOString();
+}
+
 // "الجمعة 7/11"
 export function dateLabel(ymd: string): string {
   const d = new Date(`${ymd}T12:00:00Z`);
@@ -36,10 +50,11 @@ export function dateLabel(ymd: string): string {
 }
 
 // The days the customer can pick: "earliest" (empty value) and the next few days.
-export function slotDateOptions(now: Date = new Date()): { value: string; label: string }[] {
+export function slotDateOptions(now: Date = new Date(), withToday = false): { value: string; label: string }[] {
   const today = baghdadToday(now);
   return [
     { value: "", label: "أقرب موعد ممكن" },
+    ...(withToday ? [{ value: today, label: `اليوم · ${dateLabel(today)}` }] : []),
     ...Array.from({ length: DAYS_AHEAD }, (_, i) => {
       const v = addDays(today, i + 1);
       return { value: v, label: i === 0 ? `غداً · ${dateLabel(v)}` : dateLabel(v) };

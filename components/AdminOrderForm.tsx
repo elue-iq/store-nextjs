@@ -7,7 +7,8 @@ import { DeliveryFields, type DeliveryFieldsHandle } from "./DeliveryFields";
 import { SlotPicker } from "./SlotPicker";
 import { CouponBox, PriceLines, useQuote } from "./CouponBox";
 import { commissionFor, couponEffect, priceOrder, type CouponRule } from "@/lib/coupons";
-import { DEFAULT_SLOT, isSlotKey, type SlotKey } from "@/lib/delivery-slot";
+import { baghdadToday, DEFAULT_SLOT, isSlotKey, onBaghdadDay, type SlotKey } from "@/lib/delivery-slot";
+import { orderTime } from "@/lib/order-time";
 import { callModon } from "./AdminModon";
 import { callBoxy } from "./AdminBoxy";
 import { dataClient, errorCode, errorDetail, errorFields, type Order } from "@/lib/data";
@@ -82,6 +83,10 @@ export function AdminOrderForm({
   // Inside Baghdad the customer must have accepted the 6–10 pm delivery window.
   const [slot, setSlot] = useState<SlotKey>(isSlotKey(order?.deliverySlot) ? order.deliverySlot : DEFAULT_SLOT);
   const [slotDate, setSlotDate] = useState(order?.deliveryDate ?? "");
+  // The day the order is recorded under (today by default; the team can pick an earlier day).
+  const todayBaghdad = baghdadToday();
+  const originalDay = order ? baghdadToday(new Date(orderTime(order))) : todayBaghdad;
+  const [orderDay, setOrderDay] = useState(originalDay);
   const inBaghdad = delivery.province === site.baghdadWindow.province;
   // Paid jars. Gift jars (price 0, lib/gifts.ts) are their own lines, edited below.
   const [qty, setQty] = useState<Record<string, number>>(() =>
@@ -275,6 +280,10 @@ export function AdminOrderForm({
         }
       }
       if (inBaghdad && !order.slotAccepted) changes.slotAccepted = true;
+      if (orderDay && orderDay !== originalDay) {
+        // Back to the real day it was placed: clear the override.
+        changes.orderedAt = orderDay === baghdadToday(new Date(order.createdAt)) ? null : onBaghdadDay(orderDay, new Date(order.createdAt));
+      }
       const heardNew = heard || null;
       const heardNoteNew = heard === "creator" || heard === "other" ? heardNote.trim().slice(0, 100) || null : null;
       if (heardNew !== (order.heardFrom ?? null)) changes.heardFrom = heardNew;
@@ -348,6 +357,7 @@ export function AdminOrderForm({
       slotAccepted: inBaghdad ? true : undefined,
       deliverySlot: inBaghdad ? slot : undefined,
       deliveryDate: inBaghdad && slotDate ? slotDate : undefined,
+      orderDate: orderDay && orderDay !== todayBaghdad ? orderDay : undefined,
       freeDelivery: deliveryPay === "gift",
       deliveryPaid: deliveryPay === "prepaid",
       couponCode: jarsPay === "cash" && quote?.coupon?.ok ? quote.coupon.code : undefined,
@@ -664,9 +674,18 @@ export function AdminOrderForm({
 
       {inBaghdad && (
         <section className="order-detail__block" id="order-slot">
-          <SlotPicker id="order-slot-picker" slot={slot} date={slotDate} onSlot={setSlot} onDate={setSlotDate} />
+          <SlotPicker id="order-slot-picker" slot={slot} date={slotDate} onSlot={setSlot} onDate={setSlotDate} withToday />
         </section>
       )}
+
+      <section className="order-detail__block" id="order-day">
+        <h2>يوم الطلب</h2>
+        <label className="field">
+          <span>اليوم الذي يُسجَّل فيه الطلب</span>
+          <input type="date" dir="ltr" value={orderDay} max={todayBaghdad} onChange={(e) => setOrderDay(e.target.value || originalDay)} />
+        </label>
+        {orderDay !== todayBaghdad && <p className="field-note">يُحسب الطلب في هذا اليوم في القوائم والتقارير.</p>}
+      </section>
 
       <section className="order-detail__block">
         <h2>رقم طلب الكاشير</h2>

@@ -8,6 +8,7 @@ import { collectAmount } from "@/lib/dispatch";
 import { requestOrdersRefresh } from "@/lib/ordersRefresh";
 import { formatIQD } from "@/lib/site";
 import { baghdadDay } from "./AdminOrderRow";
+import { orderTime } from "@/lib/order-time";
 
 // «تسوية المندوب»: when a courier comes back, pick him and see everything he took in one
 // list: tick what was delivered (or came back) and confirm all at once, then settle the cash.
@@ -113,7 +114,7 @@ export function AdminSettle({ orders, onOpenOrder }: { orders: Order[] | null; o
   }
 
   const today = baghdadDay(new Date().toISOString());
-  const age = (o: Order) => (baghdadDay(o.createdAt) === today ? "اليوم" : baghdadDay(o.createdAt).slice(5));
+  const age = (o: Order) => (baghdadDay(orderTime(o)) === today ? "اليوم" : baghdadDay(orderTime(o)).slice(5));
 
   const row = (o: Order, set: Set<string>, put: (s: Set<string>) => void) => (
     <li key={o.id} className={set.has(o.id) ? "settle__row is-on" : "settle__row"}>

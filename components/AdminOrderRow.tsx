@@ -9,6 +9,8 @@ import { formatIQD, PAY_KEY_LABELS, payKeyOf } from "@/lib/site";
 import { formatIraqiMobile } from "@/lib/phone";
 import { useToast } from "./Toast";
 
+import { orderTime } from "@/lib/order-time";
+
 export const baghdadDay = (iso: string) =>
   new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Baghdad", year: "numeric", month: "2-digit", day: "2-digit" }).format(
     new Date(iso),
@@ -120,7 +122,7 @@ export function OrderRow({
       <div className="ocard__line">
         <Copyable className="ocard__name" text={o.name} label="الاسم" />
         <span className="ocard__time" dir="ltr">
-          {shortTime(o.createdAt, today)}
+          {shortTime(orderTime(o), today)}
         </span>
       </div>
       <div className="ocard__line">

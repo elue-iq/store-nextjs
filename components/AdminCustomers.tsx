@@ -1,5 +1,6 @@
 "use client";
 
+import { orderTime } from "@/lib/order-time";
 import { itemNameAr } from "@/lib/gifts";
 import { useMemo, useState } from "react";
 import { StatusChip } from "./OrderBits";
@@ -33,7 +34,7 @@ export function buildCustomers(orders: Order[]): Customer[] {
     else byPhone.set(o.phone, [o]);
   }
   return [...byPhone.entries()].map(([phone, list]) => {
-    const sorted = [...list].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const sorted = [...list].sort((a, b) => orderTime(b).localeCompare(orderTime(a)));
     const counted = sorted.filter((o) => o.status !== "CANCELLED");
     return {
       phone,
@@ -43,8 +44,8 @@ export function buildCustomers(orders: Order[]): Customer[] {
       spent: counted.reduce((n, o) => n + (payKeyOf(o) === "GIFT" ? 0 : o.total), 0),
       delivered: sorted.filter((o) => o.status === "DELIVERED").length,
       cancelled: sorted.length - counted.length,
-      lastAt: sorted[0].createdAt,
-      firstAt: sorted[sorted.length - 1].createdAt,
+      lastAt: orderTime(sorted[0]),
+      firstAt: orderTime(sorted[sorted.length - 1]),
     };
   });
 }
@@ -283,7 +284,7 @@ export function CustomerDetail({
                 </span>
                 <span className="order-row__side">
                   <strong>{formatIQD(o.total)}</strong>
-                  <span dir="ltr">{day(o.createdAt)}</span>
+                  <span dir="ltr">{day(orderTime(o))}</span>
                 </span>
                 <svg className="order-row__chevron" viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M15 5l-7 7 7 7" />

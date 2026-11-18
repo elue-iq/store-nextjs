@@ -12,18 +12,20 @@ export function SlotPicker({
   onSlot,
   onDate,
   id,
+  withToday = false,
 }: {
   slot: SlotKey;
   date: string;
   onSlot: (k: SlotKey) => void;
   onDate: (d: string) => void;
   id?: string;
+  withToday?: boolean; // the team can also pick today
 }) {
   const days = useMemo(() => {
-    const list = slotDateOptions();
+    const list = slotDateOptions(new Date(), withToday);
     // An existing order may already have a day that is no longer in the list.
     return date && !list.some((d) => d.value === date) ? [...list, { value: date, label: dateLabel(date) }] : list;
-  }, [date]);
+  }, [date, withToday]);
   return (
     <fieldset className="slot-picker" id={id}>
       <legend>موعد التوصيل في بغداد</legend>

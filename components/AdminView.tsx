@@ -25,6 +25,7 @@ import { callGiftAdmin } from "@/lib/gift-admin";
 import { MANUAL_GIFT } from "@/lib/gifts";
 import { AdminDashboard } from "./AdminDashboard";
 import { NotToggle } from "./NotToggle";
+import { orderTime } from "@/lib/order-time";
 import { OrderRow, REVIEW_STATE_LABELS, baghdadDay, reviewState, shortTime, type ReviewState } from "./AdminOrderRow";
 import { buildCustomers, CustomerDetail, CustomerList, CustomersSummary } from "./AdminCustomers";
 import { jarsLabel } from "./AddToCart";
@@ -267,7 +268,7 @@ export function AdminView() {
 
   const stats = useMemo(() => {
     const list = orders ?? [];
-    const todays = list.filter((o) => baghdadDay(o.createdAt) === today && o.status !== "CANCELLED");
+    const todays = list.filter((o) => baghdadDay(orderTime(o)) === today && o.status !== "CANCELLED");
     const counts = Object.fromEntries(STATUS_ORDER.map((s) => [s, 0])) as Record<OrderStatus, number>;
     for (const o of list) counts[o.status] += 1;
     return {
@@ -292,7 +293,7 @@ export function AdminView() {
       if (province && out("province", o.province === province)) return false;
       if (review && out("review", reviewState(o) === review)) return false;
       if (when) {
-        const day = baghdadDay(o.createdAt);
+        const day = baghdadDay(orderTime(o));
         const ago = (n: number) => baghdadDay(new Date(Date.now() - n * 86_400_000).toISOString());
         if (out("when", when === "today" ? day === today : when === "yesterday" ? day === ago(1) : day >= ago(when === "7d" ? 6 : 29))) return false;
       }
@@ -1053,7 +1054,7 @@ function OrderDetail({
             </select>
           </label>
           <span className="order-hero__time" dir="ltr">
-            {shortTime(o.createdAt, today)}
+            {shortTime(orderTime(o), today)}
           </span>
           <MoreMenu>
             <button type="button" role="menuitem" onClick={() => setEditing(true)}>

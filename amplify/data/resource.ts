@@ -63,6 +63,8 @@ const schema = a
         // Last team member who changed the order (details or status), and when.
         editedBy: a.string().authorization((allow) => [allow.group("ADMINS")]),
         editedAt: a.datetime().authorization((allow) => [allow.group("ADMINS")]),
+        // The team can record an order under another day (ISO, same clock time): see lib/order-time.ts.
+        orderedAt: a.string().authorization((allow) => [allow.group("ADMINS")]),
         // Customer already paid for the jars (e.g. Qi transfer); the driver
         // then collects only the delivery fee. `paid` is readable by the customer
         // (so their order shows it); the note is team only.
@@ -358,6 +360,8 @@ const schema = a
         // Baghdad only: delivery period (open | eve | night) and the wanted day (YYYY-MM-DD).
         deliverySlot: a.string(),
         deliveryDate: a.string(),
+        // Team only: record the order under this earlier day (YYYY-MM-DD, Baghdad); default today.
+        orderDate: a.string(),
         // The customer pays now with Qi Card instead of cash to the driver.
         payOnline: a.boolean(),
         // Discount code, and the affiliate campaign the customer came from (?ref=…).
