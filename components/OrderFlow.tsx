@@ -23,7 +23,7 @@ import { fullAddress } from "@/lib/iraq";
 import { checkDelivery, cleanDelivery, ltr, phone2Error, type DeliveryInfo, type FieldErrors } from "@/lib/validate";
 import { dataClient, errorCode, errorDetail, errorFields } from "@/lib/data";
 import { OPEN_STATUSES } from "@/lib/order-rules";
-import { getProduct } from "@/lib/products";
+import { getProduct, kcalText, kcalUnitEn } from "@/lib/products";
 import { GIFT_DROP_TEXT, GIFT_TAG, type GiftDrop } from "@/lib/gifts";
 import { EMPTY_DELIVERY, loadProfile, saveProfile, type Profile } from "@/lib/profile";
 
@@ -460,7 +460,7 @@ export function OrderFlow() {
               <span className="order-lines__swatch" aria-hidden="true" />
               <span className="order-lines__name">
                 {l.product.nameAr}
-                <small dir="ltr">{l.product.kcalPerPiece} kcal average piece</small>
+                <small dir="ltr">{kcalText(l.product)} kcal {kcalUnitEn(l.product)}</small>
                 {!stock.isAvailable(l.product.slug) && <strong className="order-lines__soldout">نفدت الكمية حاليًا</strong>}
               </span>
               <span className="stepper stepper--small" role="group" aria-label={`كمية ${l.product.nameAr}`}>

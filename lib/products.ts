@@ -5,14 +5,18 @@
 // While `image` is null the site draws the jar label instead of a photo.
 //
 // kcal values come from the approved nutrition labels (see `nutrition`), per average piece.
+// A mixed jar (`mixOf`) has no label of its own: its calories are the range of the flavors
+// inside it, read from their labels (kcalText), and its page shows each flavor's allergens.
 
-export type ProductSlug = "dark-chocolate" | "carrot" | "hazelnut" | "peanut-butter";
+export type ProductSlug = "dark-chocolate" | "carrot" | "hazelnut" | "peanut-butter" | "mix";
 
 export type Product = {
   slug: ProductSlug;
   nameEn: string;
   nameAr: string;
-  kcalPerPiece: number;
+  kcalPerPiece: number | null; // null for a mixed jar: see kcalText
+  // A mixed jar: the flavors whose pieces it holds.
+  mixOf?: ProductSlug[];
   price: number; // IQD
   // Band colour from the printed label (slightly deepened so text on it stays readable).
   band: string;
@@ -26,7 +30,8 @@ export type Product = {
   ingredients: string[];
   image: string | null;
   // The printed nutrition label (same numbers as the jar's label), shown on the product page.
-  nutrition: Nutrition;
+  // null for a mixed jar (each flavor inside has its own).
+  nutrition: Nutrition | null;
 };
 
 // From the approved nutrition labels. Values are estimated from the recipe;
@@ -198,6 +203,22 @@ export const products: Product[] = [
       containsAr: "صويا، فول سوداني.",
     },
   },
+  {
+    slug: "mix",
+    nameEn: "Mix",
+    nameAr: "ميكس",
+    kcalPerPiece: null,
+    price: PRICE,
+    // CONFIRM: no printed label yet; a sage from the brand palette.
+    band: "#5F6A55",
+    // CONFIRM: assumes one jar holds pieces of all four flavors.
+    taste: "تشكيلة من نكهاتنا الأربع في علبة واحدة",
+    points: [],
+    ingredients: ["شوكولاتة داكنة", "جزر", "شوكولاتة داكنة بالبندق", "شوكولاتة داكنة بالفول السوداني"],
+    image: null,
+    nutrition: null,
+    mixOf: ["dark-chocolate", "carrot", "hazelnut", "peanut-butter"],
+  },
 ];
 
 // Points that are true for every flavor.
@@ -214,3 +235,27 @@ export const nutNote = "تحتوي جميع النكهات على الصويا. 
 export function getProduct(slug: string): Product | undefined {
   return products.find((p) => p.slug === slug);
 }
+
+// The flavors inside a mixed jar ([] for a single flavor).
+export function mixParts(p: Product): Product[] {
+  return (p.mixOf ?? []).map((s) => getProduct(s)).filter((x): x is Product => Boolean(x && x.slug !== p.slug));
+}
+
+export const isMix = (p: Product) => mixParts(p).length > 0;
+
+// Calories per piece as shown: «38» for a flavor, «28–45» for a mixed jar (lowest to highest
+// of the flavors inside, from their labels). Never a made-up average.
+export function kcalText(p: Product): string {
+  if (p.kcalPerPiece != null) return String(p.kcalPerPiece);
+  const ks = mixParts(p)
+    .map((x) => x.kcalPerPiece)
+    .filter((k): k is number => k != null);
+  if (!ks.length) return "";
+  const lo = Math.min(...ks);
+  const hi = Math.max(...ks);
+  return lo === hi ? String(lo) : `${lo}–${hi}`;
+}
+
+// The words after the number: a flavor's is an average; a mixed jar's depends on the piece.
+export const kcalUnitEn = (p: Product) => (isMix(p) ? "per piece, by flavor" : "average piece");
+export const kcalUnitAr = (p: Product) => (isMix(p) ? "سعرات القطعة حسب النكهة" : "متوسط سعرات القطعة");

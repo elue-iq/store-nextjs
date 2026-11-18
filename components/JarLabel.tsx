@@ -1,5 +1,5 @@
 import Image from "next/image";
-import type { Product } from "@/lib/products";
+import { kcalText, kcalUnitEn, type Product } from "@/lib/products";
 import { Logo } from "./Logo";
 
 // Product visual.
@@ -18,7 +18,7 @@ export function JarLabel({
   const band = (
     <div className="jar-label__band" dir="ltr">
       <span className="jar-label__kcal">
-        <strong>{product.kcalPerPiece} kcal</strong> <span>average piece</span>
+        <strong>{kcalText(product)} kcal</strong> <span>{kcalUnitEn(product)}</span>
       </span>
       <span className="jar-label__sugar">No added sugar</span>
     </div>

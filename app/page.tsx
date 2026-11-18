@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { nutNote, products, sharedPoints } from "@/lib/products";
+import { kcalText, nutNote, products, sharedPoints } from "@/lib/products";
 import { formatIQD, site, siteUrl } from "@/lib/site";
 import { JarLabel } from "@/components/JarLabel";
 import { AddToCartButton } from "@/components/AddToCart";
@@ -67,7 +67,7 @@ export default function Home() {
               <li key={p.slug}>
                 <Link href={`/products/${p.slug}`} dir="ltr">
                   <span>{p.nameEn}</span>
-                  <strong>{p.kcalPerPiece} kcal</strong>
+                  <strong>{kcalText(p)} kcal</strong>
                 </Link>
               </li>
             ))}

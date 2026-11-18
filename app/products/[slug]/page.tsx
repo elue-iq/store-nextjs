@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getProduct, products, sharedPoints } from "@/lib/products";
+import { getProduct, kcalText, kcalUnitAr, kcalUnitEn, mixParts, products, sharedPoints } from "@/lib/products";
 import { formatIQD, siteUrl } from "@/lib/site";
 import { JarLabel } from "@/components/JarLabel";
 import { ProductBuyBox } from "@/components/AddToCart";
@@ -21,7 +21,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const product = getProduct(slug);
   if (!product) return {};
   const title = `${product.nameEn} Truffles`;
-  const description = `${product.nameAr}: ${product.kcalPerPiece} سعرة حرارية في المتوسط لكل قطعة، بلا سكر مضاف. ${formatIQD(product.price)} للعلبة.`;
+  const description = product.nutrition
+    ? `${product.nameAr}: ${kcalText(product)} سعرة حرارية في المتوسط لكل قطعة، بلا سكر مضاف. ${formatIQD(product.price)} للعلبة.`
+    : `${product.nameAr}: ${product.taste}، ${kcalText(product)} سعرة حرارية للقطعة حسب النكهة، بلا سكر مضاف. ${formatIQD(product.price)} للعلبة.`;
   const images = product.image ? [{ url: product.image, width: 1400, height: 1400, alt: `ÉLUE ${product.nameEn}` }] : undefined;
   return {
     title,
@@ -38,6 +40,8 @@ export default async function ProductPage({ params }: Props) {
   if (!product) notFound();
 
   const others = products.filter((p) => p.slug !== product.slug);
+  const parts = mixParts(product); // the flavors inside a mixed jar
+  const n = product.nutrition;
 
   // Product details for Google (price, availability, photo).
   const jsonLd = {
@@ -46,20 +50,23 @@ export default async function ProductPage({ params }: Props) {
     name: `ÉLUE ${product.nameEn} Chocolate Truffles`,
     alternateName: product.nameAr,
     image: product.image ? `${siteUrl()}${product.image}` : undefined,
-    description: `${product.taste}. ${product.kcalPerPiece} kcal average piece, no added sugar.`,
+    description: `${product.taste}. ${kcalText(product)} kcal ${kcalUnitEn(product)}, no added sugar.`,
     brand: { "@type": "Brand", name: "ÉLUE" },
-    nutrition: {
-      "@type": "NutritionInformation",
-      servingSize: `3 pieces (${product.nutrition.servingG} g)`,
-      calories: `${product.nutrition.kcalServing} kcal`,
-      fatContent: `${product.nutrition.fatG} g`,
-      saturatedFatContent: `${product.nutrition.satFatG} g`,
-      sodiumContent: `${product.nutrition.sodiumMg} mg`,
-      carbohydrateContent: `${product.nutrition.carbG} g`,
-      fiberContent: `${product.nutrition.fibreG} g`,
-      sugarContent: `${product.nutrition.sugarsG} g`,
-      proteinContent: `${product.nutrition.proteinG} g`,
-    },
+    // Only a single flavor has one label to quote; a mixed jar sends none.
+    nutrition: n
+      ? {
+          "@type": "NutritionInformation",
+          servingSize: `3 pieces (${n.servingG} g)`,
+          calories: `${n.kcalServing} kcal`,
+          fatContent: `${n.fatG} g`,
+          saturatedFatContent: `${n.satFatG} g`,
+          sodiumContent: `${n.sodiumMg} mg`,
+          carbohydrateContent: `${n.carbG} g`,
+          fiberContent: `${n.fibreG} g`,
+          sugarContent: `${n.sugarsG} g`,
+          proteinContent: `${n.proteinG} g`,
+        }
+      : undefined,
     offers: {
       "@type": "Offer",
       url: `${siteUrl()}/products/${product.slug}`,
@@ -88,8 +95,8 @@ export default async function ProductPage({ params }: Props) {
             {product.nameEn}
           </p>
           <p className="product__kcal">
-            <strong dir="ltr">{product.kcalPerPiece} kcal</strong>
-            <span>متوسط سعرات القطعة</span>
+            <strong dir="ltr">{kcalText(product)} kcal</strong>
+            <span>{kcalUnitAr(product)}</span>
           </p>
           <p className="product__price">{formatIQD(product.price)} للعلبة</p>
           <PixelViewContent slug={product.slug} />
@@ -106,25 +113,46 @@ export default async function ProductPage({ params }: Props) {
             ))}
           </ul>
 
-          <h2 className="product__subhead">المكونات</h2>
-          <p>{product.nutrition.ingredientsAr}</p>
-          <p className="product__allergy">
-            <strong>يحتوي على:</strong> {product.nutrition.containsAr}
-          </p>
+          {n ? (
+            <>
+              <h2 className="product__subhead">المكونات</h2>
+              <p>{n.ingredientsAr}</p>
+              <p className="product__allergy">
+                <strong>يحتوي على:</strong> {n.containsAr}
+              </p>
 
-          <h2 className="product__subhead">القيم الغذائية</h2>
-          <figure className="product__label">
-            <Image
-              src={product.nutrition.image}
-              alt={`القيم الغذائية والمكونات: ${product.nameAr}. ${product.nutrition.kcalServing} سعرة حرارية للحصة (3 حبات)، ${product.nutrition.kcalPiece} للحبة.`}
-              width={1000}
-              height={1556}
-              sizes="(max-width: 700px) 100vw, 480px"
-            />
-            <figcaption>
-              الحصة 3 حبات ({product.nutrition.servingG} غ)، والحبة الواحدة {product.nutrition.pieceG} غ. القيم تقديرية من مكونات الوصفة.
-            </figcaption>
-          </figure>
+              <h2 className="product__subhead">القيم الغذائية</h2>
+              <figure className="product__label">
+                <Image
+                  src={n.image}
+                  alt={`القيم الغذائية والمكونات: ${product.nameAr}. ${n.kcalServing} سعرة حرارية للحصة (3 حبات)، ${n.kcalPiece} للحبة.`}
+                  width={1000}
+                  height={1556}
+                  sizes="(max-width: 700px) 100vw, 480px"
+                />
+                <figcaption>
+                  الحصة 3 حبات ({n.servingG} غ)، والحبة الواحدة {n.pieceG} غ. القيم تقديرية من مكونات الوصفة.
+                </figcaption>
+              </figure>
+            </>
+          ) : (
+            <>
+              {/* A mixed jar: each piece is one of these flavors, with that flavor's own label. */}
+              <h2 className="product__subhead">النكهات داخل العلبة</h2>
+              <ul className="product__points">
+                {parts.map((p) => (
+                  <li key={p.slug}>
+                    <Link href={`/products/${p.slug}`}>{p.nameAr}</Link>: <span dir="ltr">{kcalText(p)} kcal</span> متوسط القطعة
+                  </li>
+                ))}
+              </ul>
+              <p className="product__allergy">
+                <strong>يحتوي على:</strong>{" "}
+                {parts.map((p) => `${p.nameAr}: ${p.nutrition?.containsAr ?? ""}`).join(" ")}
+              </p>
+              <p>المكونات والقيم الغذائية الكاملة لكل نكهة في صفحتها.</p>
+            </>
+          )}
 
           <h2 className="product__subhead">طازجة، ومكانها الثلاجة</h2>
           <p>لا تحتوي على سكر مضاف ولا على مواد حافظة، لذلك نحفظها بالتبريد.</p>
