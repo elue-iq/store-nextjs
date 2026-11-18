@@ -28,7 +28,7 @@ import { buildOrderMessage, sendToTelegram } from "../../../lib/telegram";
 import { eatixConfig, eatixFields, sendOrder, toEatixOrder } from "../../../lib/eatix";
 import { OPEN_STATUSES, ORDER_RULES } from "../../../lib/order-rules";
 import { freeDeliveryFor, needsPayRef, site } from "../../../lib/site";
-import { cleanSlotDate, DEFAULT_SLOT, isSlotKey, SLOT_PROVINCE } from "../../../lib/delivery-slot";
+import { baghdadToday, cleanOrderDay, cleanSlotDate, DEFAULT_SLOT, onBaghdadDay, isSlotKey, SLOT_PROVINCE } from "../../../lib/delivery-slot";
 import { clientIp, cleanTracking, sendPurchase, type Tracking } from "./meta";
 import { sendOrderConfirmation } from "../../../lib/orderConfirmation";
 import { pendingReview } from "../../../lib/reviews";
@@ -448,6 +448,9 @@ async function placeOrderHandler(event: PlaceOrderEvent) {
   const inBaghdad = province === SLOT_PROVINCE;
   const deliverySlot = inBaghdad ? (isSlotKey(args.deliverySlot) ? args.deliverySlot : DEFAULT_SLOT) : null;
   const deliveryDate = inBaghdad ? cleanSlotDate(args.deliveryDate) : null;
+  // Team only: an order taken earlier is recorded under its real day (same clock time as now).
+  const orderDay = isTeam ? cleanOrderDay(args.orderDate) : null;
+  const orderedAt = orderDay && orderDay !== baghdadToday() ? onBaghdadDay(orderDay, new Date()) : null;
   const source = String(args.source ?? "").trim().slice(0, 200) || null;
   // Marketing details from the customer's browser (cleaned: never trusted as is).
   const attribution = cleanAttribution(args.attribution);
@@ -598,6 +601,7 @@ async function placeOrderHandler(event: PlaceOrderEvent) {
       slotAccepted: slotAccepted || inBaghdad,
       deliverySlot,
       deliveryDate,
+      ...(orderedAt ? { orderedAt } : {}),
       createdBy: forCustomer ? callerPhone : null,
       owner,
       ...(online ? { qiStatus: "CREATED" } : {}),

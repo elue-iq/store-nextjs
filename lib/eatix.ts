@@ -257,6 +257,7 @@ export async function cancelOrder(cfg: EatixConfig, eatixId: string): Promise<Se
 export function toEatixOrder(o: {
   orderNumber: string;
   createdAt: string;
+  orderedAt?: string | null; // recorded under another day by the team
   name: string;
   phone: string;
   province?: string | null;
@@ -278,7 +279,7 @@ export function toEatixOrder(o: {
   }
   return {
     orderNumber: o.orderNumber,
-    createdAt: o.createdAt,
+    createdAt: o.orderedAt || o.createdAt,
     name: o.name,
     phone: o.phone,
     province: o.province,
