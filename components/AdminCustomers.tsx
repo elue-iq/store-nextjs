@@ -2,10 +2,11 @@
 
 import { orderTime } from "@/lib/order-time";
 import { itemNameAr } from "@/lib/gifts";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { StatusChip } from "./OrderBits";
-import { formatPoints, pointsSummary } from "@/lib/loyalty";
-import { baghdadTime, type Order } from "@/lib/data";
+import { formatPoints, pointsSummary, type PointsSummary } from "@/lib/loyalty";
+import { parseJsonResult } from "@/lib/json-result";
+import { baghdadTime, dataClient, type Order } from "@/lib/data";
 import { fullAddress } from "@/lib/iraq";
 import { getProduct } from "@/lib/products";
 import { formatIraqiMobile, toLatinDigits } from "@/lib/phone";
@@ -164,7 +165,18 @@ export function CustomerDetail({
   onNewOrder: () => void;
 }) {
   const latest = c.orders[0];
-  const points = pointsSummary(c.orders);
+  // Points from the server (they include points the team gave by hand); the orders' own until then.
+  const [serverPoints, setServerPoints] = useState<PointsSummary | null>(null);
+  useEffect(() => {
+    dataClient.queries
+      .myPoints({ phone: c.phone })
+      .then(({ data }) => {
+        const p = parseJsonResult<PointsSummary>(data);
+        if (p && typeof p.balance === "number") setServerPoints(p);
+      })
+      .catch(() => {});
+  }, [c.phone, c.orders.length]);
+  const points = serverPoints ?? pointsSummary(c.orders);
   const addresses = useMemo(() => [...new Set(c.orders.map((o) => fullAddress(o)))], [c.orders]);
   const flavors = useMemo(() => {
     const n = new Map<string, number>();
@@ -210,11 +222,8 @@ export function CustomerDetail({
           <dd>{formatIQD(avg)}</dd>
         </div>
         <div>
-          <dt>النقاط</dt>
-          <dd>
-            {formatPoints(points.earned)}
-
-          </dd>
+          <dt>رصيد النقاط</dt>
+          <dd>{formatPoints(points.balance)}</dd>
         </div>
       </dl>
 
@@ -233,6 +242,15 @@ export function CustomerDetail({
             <div>
               <dt>نقاط قيد الانتظار</dt>
               <dd>{formatPoints(points.pending)}</dd>
+            </div>
+          )}
+          {(points.spent > 0 || points.granted !== 0) && (
+            <div>
+              <dt>نقاط مستخدمة / يدوية</dt>
+              <dd>
+                {formatPoints(points.spent)} / {points.granted < 0 ? "−" : ""}
+                {formatPoints(Math.abs(points.granted))}
+              </dd>
             </div>
           )}
           <div>

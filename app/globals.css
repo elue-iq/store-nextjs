@@ -6523,3 +6523,172 @@ button:not(:disabled):active,
     animation: none;
   }
 }
+
+/* ---- Loyalty: points bar, rewards in the checkout and the account page ---- */
+.points-bar {
+  display: block;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--sand);
+}
+.points-bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--terracotta);
+  transition: width 0.4s ease;
+}
+.reward-pick {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0.9rem 0;
+  padding: 0.9rem 1rem;
+  border: 1.5px solid var(--sand-deep);
+  border-radius: 16px;
+  background: var(--paper);
+}
+.reward-pick__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.reward-pick__head h3 {
+  font-size: 1rem;
+  font-weight: 700;
+}
+.reward-pick__head strong {
+  color: var(--terracotta);
+  font-size: 1.15rem;
+}
+.reward-pick__head small {
+  font-size: 0.8rem;
+  font-weight: 400;
+}
+.reward-pick__next,
+.points-card__next {
+  display: grid;
+  gap: 0.3rem;
+}
+.reward-pick__next p,
+.points-card__next p {
+  margin: 0;
+  font-size: 0.88rem;
+}
+.reward-pick__list,
+.points-rewards {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.reward-option {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 0.15rem 0.6rem;
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  border: 1.5px solid var(--sand-deep);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.reward-option:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.reward-option.is-on {
+  border-color: var(--terracotta);
+  background: color-mix(in srgb, var(--terracotta) 8%, #fff);
+}
+.reward-option__title {
+  font-weight: 600;
+}
+.reward-option__cost {
+  color: var(--muted);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+.reward-option__state {
+  grid-column: 1 / -1;
+  color: var(--terracotta);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.reward-option__why {
+  display: block;
+  margin: 0.2rem 0.3rem 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.reward-pick__note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.reward-pick__more {
+  justify-self: start;
+  color: var(--terracotta);
+  font-size: 0.85rem;
+}
+.points-card .points-rewards {
+  margin: 0.4rem 0;
+}
+.points-rewards li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.6rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--cream) 70%, transparent);
+}
+.points-rewards__title {
+  flex: 1;
+  min-width: 9rem;
+  font-weight: 600;
+}
+.points-rewards__cost {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.points-rewards small {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.points-rewards li.is-ok .points-rewards__cost {
+  color: var(--terracotta);
+}
+.order-detail__points {
+  color: var(--terracotta);
+  font-size: 0.9rem;
+}
+/* Inside the terracotta «نقاطي» card */
+.points-card .points-card__next,
+.points-card .points-rewards {
+  flex-basis: 100%;
+}
+.points-card .points-bar {
+  background: rgb(245 239 230 / 0.28);
+}
+.points-card .points-bar i {
+  background: var(--cream);
+}
+.points-card .points-rewards li {
+  background: rgb(245 239 230 / 0.13);
+}
+.points-card .points-rewards__cost,
+.points-card .points-rewards small,
+.points-card .points-rewards li.is-ok .points-rewards__cost {
+  color: rgb(245 239 230 / 0.85);
+}
+.points-card .points-rewards .btn {
+  border-color: var(--cream);
+  background: var(--cream);
+  color: var(--terracotta);
+}

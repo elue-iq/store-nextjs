@@ -14,6 +14,7 @@ import { jarsLabel } from "./AddToCart";
 import { LoginPanel } from "./LoginPanel";
 import { SlotPicker } from "./SlotPicker";
 import { CouponBox, PriceLines, useQuote } from "./CouponBox";
+import { RewardPicker } from "./RewardPicker";
 import { DEFAULT_SLOT, type SlotKey } from "@/lib/delivery-slot";
 import { DeliveryFields, type DeliveryFieldsHandle } from "./DeliveryFields";
 import { buildWhatsAppText, priceCart, type CartItem } from "@/lib/order-text";
@@ -53,9 +54,12 @@ export function OrderFlow() {
   const signedIn = auth.status === "signedIn";
   // Coupon: the one typed, else the affiliate link's own coupon ("-" = the customer removed it).
   const couponCode = cart.couponCode === "-" ? "" : cart.couponCode || cart.refCoupon?.code || "";
+  // A loyalty reward picked by a signed-in customer (it replaces the discount code).
+  const rewardId = signedIn && !auth.isAdmin ? cart.rewardId : "";
   const { quote, loading: quoting } = useQuote({
     items: cart.items,
-    couponCode,
+    couponCode: rewardId ? "" : couponCode,
+    rewardId,
     refCode: cart.ref,
     signedIn: signedIn && !auth.isAdmin,
     enabled: cart.ready && auth.status !== "loading",
@@ -266,7 +270,8 @@ export function OrderFlow() {
         deliverySlot: inBaghdad ? slot : undefined,
         deliveryDate: inBaghdad && slotDate ? slotDate : undefined,
         payOnline: onlineOk && payOnline ? true : undefined,
-        couponCode: quote?.coupon?.ok ? quote.coupon.code : undefined,
+        couponCode: !rewardId && quote?.coupon?.ok ? quote.coupon.code : undefined,
+        rewardId: rewardId && quote?.reward?.ok ? rewardId : undefined,
         ref: cart.ref || undefined,
         attribution: JSON.stringify(readAttribution() ?? {}),
         heardFrom: heard || undefined,
@@ -298,6 +303,7 @@ export function OrderFlow() {
         setStep("sent");
         cart.clear();
         if (cart.couponCode) cart.setCouponCode("");
+        if (cart.rewardId) cart.setRewardId("");
         toast({ id: "checkout", message: `استلمنا طلبك رقم ${ltr(data.orderNumber)}.` });
         window.scrollTo({ top: 0 });
         return;
@@ -318,6 +324,8 @@ export function OrderFlow() {
       } else if (code === "open_order") {
         setOpenOrder(errorDetail(gqlErrors) || "—");
         window.scrollTo({ top: 0 });
+      } else if (code === "reward") {
+        toast({ id: "checkout", tone: "attention", message: `${errorDetail(gqlErrors)} ألغوا المكافأة أو عدّلوا السلة.` });
       } else if (code === "coupon") {
         toast({ id: "checkout", tone: "attention", message: `${errorDetail(gqlErrors)} أزيلوا الكود أو جرّبوا كود ثاني.` });
       } else if (code === "too_many_orders") {
@@ -541,13 +549,16 @@ export function OrderFlow() {
           <span>المجموع</span>
           <strong>{formatIQD(total)}</strong>
         </p>
-        <CouponBox
-          code={couponCode}
-          quote={quote}
-          loading={quoting}
-          onApply={(c) => cart.setCouponCode(c)}
-          onRemove={() => cart.setCouponCode("-")}
-        />
+        <RewardPicker quote={quote} selected={rewardId} onPick={(id) => cart.setRewardId(id)} />
+        {!rewardId && (
+          <CouponBox
+            code={couponCode}
+            quote={quote}
+            loading={quoting}
+            onApply={(c) => cart.setCouponCode(c)}
+            onRemove={() => cart.setCouponCode("-")}
+          />
+        )}
         <p className="order-pay">{collectStatement(total, false, freeDelivery ? "gift" : "driver")}</p>
         {!freeDelivery && <FreeDeliveryProgress jars={jarCount} />}
         <p className="order-pay">{site.paymentNote}</p>

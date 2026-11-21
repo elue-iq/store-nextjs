@@ -25,7 +25,13 @@ export type Quote = {
   campaign: { slug: string } | null;
   // The live gift campaign for this cart and customer (null = no offer now).
   gift?: GiftQuote | null;
+  // Loyalty (signed-in customers): the balance, every live reward with whether it works on
+  // this cart, and the one asked for. lib/rewards.ts
+  points?: { balance: number; pending: number } | null;
+  rewards?: QuoteReward[];
+  reward?: { id: string; title?: string; points?: number; ok: boolean; error?: string | null } | null;
 };
+export type QuoteReward = { id: string; title: string; points: number; kind: string; ok: boolean; reason: string | null };
 
 export function useQuote(o: {
   items: { slug: string; qty: number }[];
@@ -33,11 +39,12 @@ export function useQuote(o: {
   refCode: string;
   signedIn: boolean;
   phone?: string; // the team pricing an order for this customer
+  rewardId?: string;
   enabled?: boolean;
 }): { quote: Quote | null; loading: boolean } {
   const [quote, setQuote] = useState<Quote | null>(null);
   const [loading, setLoading] = useState(false);
-  const key = JSON.stringify([o.items, o.couponCode, o.refCode, o.signedIn, o.phone]);
+  const key = JSON.stringify([o.items, o.couponCode, o.refCode, o.signedIn, o.phone, o.rewardId]);
   const seq = useRef(0);
   useEffect(() => {
     if (o.enabled === false || !o.items.length) {
@@ -49,7 +56,13 @@ export function useQuote(o: {
     const t = setTimeout(() => {
       dataClient.queries
         .quote(
-          { items: JSON.stringify(o.items), couponCode: o.couponCode || undefined, ref: o.refCode || undefined, phone: o.phone || undefined },
+          {
+            items: JSON.stringify(o.items),
+            couponCode: o.couponCode || undefined,
+            ref: o.refCode || undefined,
+            phone: o.phone || undefined,
+            rewardId: o.rewardId || undefined,
+          },
           { authMode: o.signedIn ? "userPool" : "apiKey" },
         )
         .then(({ data, errors }) => {
@@ -161,7 +174,7 @@ export function PriceLines({ quote }: { quote: Quote | null }) {
       )}
       {quote.discount > 0 && (
         <div className="is-off">
-          <dt>{quote.coupon?.label ?? "الخصم"}</dt>
+          <dt>{quote.reward?.ok ? `مكافأة النقاط (${(quote.reward.points ?? 0).toLocaleString("en-US")} نقطة)` : quote.coupon?.label ?? "الخصم"}</dt>
           <dd>{minusIQD(quote.discount)}</dd>
         </div>
       )}

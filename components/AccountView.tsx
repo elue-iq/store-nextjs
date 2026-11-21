@@ -17,7 +17,8 @@ import { collectStatement, deliveryPayOf, formatIQD, minusIQD, site } from "@/li
 import { getProduct } from "@/lib/products";
 import { fullAddress } from "@/lib/iraq";
 import { reviewPath } from "@/lib/reviews";
-import { formatPoints, pointsFor, pointsSummary } from "@/lib/loyalty";
+import { formatPoints, pointsFor } from "@/lib/loyalty";
+import { PointsCard } from "./PointsCard";
 import { creditBalance } from "@/lib/coupons";
 import { checkDelivery, type DeliveryInfo, type FieldErrors } from "@/lib/validate";
 import { EMPTY_DELIVERY, loadProfile, saveProfile, type Profile } from "@/lib/profile";
@@ -53,6 +54,11 @@ const CUSTOMER_FIELDS = [
   "couponLabel",
   "cashback",
   "creditUsed",
+  // Loyalty reward used (lib/rewards.ts), and wholesale orders (they earn no points).
+  "pointsSpent",
+  "rewardId",
+  "rewardTitle",
+  "saleType",
   // Delivery tracking (from the courier's updates).
   "trackStatus",
   "trackEta",
@@ -193,7 +199,6 @@ export function AccountView() {
     );
   }
 
-  const points = pointsSummary(orders ?? []);
   const credit = creditBalance(orders ?? []);
 
   return (
@@ -217,18 +222,7 @@ export function AccountView() {
         </button>
       </div>
 
-      <section className="points-card" aria-label="نقاطي">
-        <div>
-          <span className="points-card__label">نقاطي</span>
-          <strong className="points-card__value">
-            {orders === null ? "…" : formatPoints(points.earned)} <small>نقطة</small>
-          </strong>
-        </div>
-        <p className="points-card__note">
-          {points.pending > 0 && <>{formatPoints(points.pending)} نقطة تُضاف بعد توصيل طلباتك الحالية. </>}
-          تحصل على 10 نقاط عن كل 1,000 د.ع، وتُضاف بعد توصيل الطلب.
-        </p>
-      </section>
+      <PointsCard orders={orders} />
 
       {credit > 0 && (
         <section className="points-card points-card--credit" aria-label="رصيدي">
@@ -393,7 +387,7 @@ function MyOrderDetail({ order: o }: { order: Order }) {
         <OrderItemsList items={o.items} />
         {o.discount ? (
           <p className="order-detail__muted">
-            {o.couponLabel ?? "خصم"} ({o.couponCode}): {minusIQD(o.discount)}
+            {o.rewardTitle ? `مكافأة النقاط (${o.rewardTitle})` : `${o.couponLabel ?? "خصم"} (${o.couponCode})`}: {minusIQD(o.discount)}
           </p>
         ) : null}
         {o.creditUsed ? <p className="order-detail__muted">من رصيدكم: {minusIQD(o.creditUsed)}</p> : null}
@@ -418,6 +412,12 @@ function MyOrderDetail({ order: o }: { order: Order }) {
               : `تحصل على ${formatPoints(points)} نقطة بعد توصيل هذا الطلب.`}
           </p>
         )}
+        {o.pointsSpent ? (
+          <p className="order-detail__points">
+            استخدمتوا {formatPoints(o.pointsSpent)} نقطة: {o.rewardTitle}
+            {o.status === "CANCELLED" ? " (رجعت لرصيدكم)" : ""}.
+          </p>
+        ) : null}
       </section>
 
       <section className="order-detail__block">
