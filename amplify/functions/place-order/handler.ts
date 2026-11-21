@@ -21,7 +21,7 @@ import { generateClient } from "aws-amplify/data";
 import { getAmplifyDataClientConfig } from "@aws-amplify/backend/function/runtime";
 import { env } from "$amplify/env/place-order";
 import type { Schema } from "../../data/resource";
-import { priceCart, type CartItem } from "../../../lib/order-text";
+import { MAX_WHOLESALE_QTY, priceCart, type CartItem } from "../../../lib/order-text";
 import { checkDelivery, cleanDelivery } from "../../../lib/validate";
 import { normalizeIraqiMobile } from "../../../lib/phone";
 import { buildOrderMessage, sendToTelegram } from "../../../lib/telegram";
@@ -35,6 +35,7 @@ import { pendingReview } from "../../../lib/reviews";
 import { createPayment, getPaymentStatus, qiConfig, verifyNotification, type QiPayment } from "../../../lib/qi";
 import { GetFunctionUrlConfigCommand, LambdaClient } from "@aws-sdk/client-lambda";
 import { getProduct } from "../../../lib/products";
+import { cleanUnitPrice, isWholesale, WHOLESALE } from "../../../lib/wholesale";
 import { cleanGiftPicks, giftCampaignLive, giftLines, MANUAL_GIFT, paidLines, type GiftDrop, type GiftPick, type GiftQuote } from "../../../lib/gifts";
 import { countsAgainstCap, giftProblem, giftsUsed, offerOf, pickLive, reconcileGifts, rulesOf, setGiftUnits, type GiftProblem, type GiftRules } from "./gifts";
 import { BatchGetItemCommand } from "@aws-sdk/client-dynamodb";
@@ -457,8 +458,11 @@ async function placeOrderHandler(event: PlaceOrderEvent) {
   const heardFrom = HEARD_KEYS.has(String(args.heardFrom ?? "")) ? String(args.heardFrom) : null;
   const heardNote = heardFrom ? String(args.heardNote ?? "").trim().slice(0, 100) || null : null;
   const tracking = cleanTracking(args.tracking, (event as unknown as { request?: { headers?: Record<string, string> } }).request?.headers, PRODUCTION);
+  // Wholesale (B2B): team only, each jar at the price the team typed, no coupons, credit or gifts.
+  const wholesale = isTeam && args.saleType === WHOLESALE;
+  const businessName = wholesale ? String(args.businessName ?? "").trim().slice(0, 120) || null : null;
   // Gift jars the customer chose (or the team added), and the campaign they saw.
-  const giftPicks = cleanGiftPicks(args.gifts);
+  const giftPicks = wholesale ? [] : cleanGiftPicks(args.gifts);
   const giftWanted = String(args.giftCampaignId ?? "").trim().slice(0, 80);
   const marketingConsent = isTeam ? null : Boolean(args.marketingConsent);
 
@@ -470,8 +474,20 @@ async function placeOrderHandler(event: PlaceOrderEvent) {
       rawItems = [];
     }
   }
-  const items = Array.isArray(rawItems) ? (rawItems.slice(0, 10) as CartItem[]) : [];
-  const { lines } = priceCart(items);
+  const items = Array.isArray(rawItems) ? (rawItems.slice(0, 10) as (CartItem & { price?: unknown })[]) : [];
+  const { lines } = priceCart(items, wholesale ? MAX_WHOLESALE_QTY : undefined);
+  // The price each jar is sold at: the site price, or for wholesale the team's price.
+  const unitPrice = new Map<string, number>();
+  for (const l of lines) {
+    if (!wholesale) {
+      unitPrice.set(l.product.slug, l.product.price);
+      continue;
+    }
+    const typed = cleanUnitPrice(items.find((i) => i?.slug === l.product.slug)?.price);
+    if (typed == null) throw new Error(`wholesale_price:${l.product.slug}`);
+    unitPrice.set(l.product.slug, typed);
+  }
+  const priceOf = (slug: string) => unitPrice.get(slug)!;
 
   const fields = checkDelivery({ name, province, area, address });
   if (Object.keys(fields).length) throw new Error(`invalid_fields:${JSON.stringify(fields)}`);
@@ -479,23 +495,24 @@ async function placeOrderHandler(event: PlaceOrderEvent) {
   const jars = lines.reduce((n, l) => n + l.qty, 0);
   if (!isTeam && jars > ORDER_RULES.maxJarsPerOrder) throw new Error(`too_many_jars:${ORDER_RULES.maxJarsPerOrder}`);
   // Free delivery for larger orders (site.freeDeliveryMinJars jars or more), unless the fee was prepaid.
-  if (!deliveryPaid && freeDeliveryFor(jars)) freeDelivery = true;
+  // Wholesale: the team decides the delivery fee itself.
+  if (!wholesale && !deliveryPaid && freeDeliveryFor(jars)) freeDelivery = true;
 
   // Coupon, credit and affiliate campaign. A code that can't be used stops the order with
   // the reason (the checkout already showed it), so nobody pays more than they expected.
   const history = await historyFor(phone);
   const deal = await findDeal({
-    couponCode: String(args.couponCode ?? ""),
-    ref: String(args.ref ?? ""),
+    couponCode: wholesale ? "" : String(args.couponCode ?? ""),
+    ref: wholesale ? "" : String(args.ref ?? ""),
     jars,
     phone,
     history,
-    useCredit: !paid,
+    useCredit: !paid && !wholesale,
   });
-  if (deal.couponError && normalizeCode(args.couponCode)) throw new Error(`coupon:${deal.couponError}`);
+  if (!wholesale && deal.couponError && normalizeCode(args.couponCode)) throw new Error(`coupon:${deal.couponError}`);
   const rule = deal.coupon ? ruleOf(deal.coupon) : null;
   const pricing = priceOrder(
-    lines.map((l) => ({ price: l.product.price, qty: l.qty })),
+    lines.map((l) => ({ price: priceOf(l.product.slug), qty: l.qty })),
     rule,
     deal.credit,
   );
@@ -569,11 +586,13 @@ async function placeOrderHandler(event: PlaceOrderEvent) {
           nameAr: l.product.nameAr,
           nameEn: l.product.nameEn,
           qty: l.qty,
-          price: l.product.price,
+          price: priceOf(l.product.slug),
         })),
         ...(gift ? giftItems(gift.picks, gift.campaignId) : []),
       ],
       jars,
+      saleType: wholesale ? WHOLESALE : null,
+      businessName,
       giftUnits: giftUnits || null,
       giftCampaignId: gift?.campaignId ?? null,
       marketingConsent,
@@ -762,7 +781,12 @@ type OrderRecord = Schema["Order"]["type"];
 async function notifyTeam(order: OrderRecord): Promise<boolean> {
   const previous = await client.models.Order.listOrderByPhone({ phone: order.phone }, { limit: 2, selectionSet: ["id"] });
   const returning = (previous.data ?? []).some((o) => o.id !== order.id);
-  const { lines } = priceCart(paidLines(order.items).map((i) => ({ slug: i.slug, qty: i.qty })));
+  const sold = paidLines(order.items);
+  const { lines: priced } = priceCart(sold.map((i) => ({ slug: i.slug, qty: i.qty })), MAX_WHOLESALE_QTY);
+  const lines = priced.map((l) => {
+    const price = sold.find((i) => i.slug === l.product.slug)?.price ?? l.product.price;
+    return { ...l, subtotal: price * l.qty };
+  });
   const message = buildOrderMessage({
     orderNumber: order.orderNumber,
     time: baghdadTime(new Date(order.createdAt)),
@@ -783,6 +807,8 @@ async function notifyTeam(order: OrderRecord): Promise<boolean> {
     returning,
     createdBy: order.createdBy ?? null,
     cashierOrderId: order.cashierOrderId ?? null,
+    wholesale: isWholesale(order),
+    businessName: order.businessName ?? null,
     paid: Boolean(order.paid),
     paidNote: order.paidNote ?? null,
     payMethod: order.payMethod ?? null,

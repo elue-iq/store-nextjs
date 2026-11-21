@@ -36,6 +36,8 @@ export function buildOrderMessage(o: {
   returning: boolean;
   createdBy?: string | null; // team member who placed it for the customer
   cashierOrderId?: string | null;
+  wholesale?: boolean; // a B2B order (lib/wholesale.ts)
+  businessName?: string | null;
   paid?: boolean | null; // customer already paid the jars
   paidNote?: string | null;
   payMethod?: string | null; // QI | ZAINCASH | OTHER | GIFT
@@ -66,7 +68,8 @@ export function buildOrderMessage(o: {
     delivery === "prepaid" ? `أجور التوصيل مدفوعة مسبقاً${!o.paid && how ? ` (${how})` : ""}` : null,
   ].filter(Boolean);
   return [
-    `<b>طلب جديد ${ltr(o.orderNumber)}</b>${o.returning ? " · عميل سابق" : ""}`,
+    `<b>طلب جديد ${ltr(o.orderNumber)}</b>${o.wholesale ? " · <b>جملة</b>" : ""}${o.returning ? " · عميل سابق" : ""}`,
+    ...(o.wholesale && o.businessName ? [`الجهة: ${escapeHtml(o.businessName)}`] : []),
     "",
     ...o.lines.map((l) => `• ${ltr(`${l.qty} × ${escapeHtml(l.product.nameEn)}`)} — ${formatIQD(l.subtotal)}`),
     ...(o.gifts ?? []).map((g) => `• ${ltr(`${g.qty} × ${escapeHtml(g.nameEn)}`)} — <b>هدية</b>`),

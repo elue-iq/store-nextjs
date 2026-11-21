@@ -51,7 +51,8 @@ function install() {
   const onTap = (e: Event) => {
     lastTapAt = performance.now();
     const el = (e.target as Element | null)?.closest?.("button, [role='button'], a.btn");
-    lastTapEl = el instanceof HTMLElement ? el : null;
+    // Buttons that never call the server themselves (filters) never show a spinner.
+    lastTapEl = el instanceof HTMLElement && !el.closest("[data-no-pending]") ? el : null;
   };
   // Capture phase: runs before the app's own click handler starts its request.
   document.addEventListener("click", onTap, true);

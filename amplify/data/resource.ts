@@ -47,6 +47,9 @@ const schema = a
         source: a.string(),
         items: a.ref("OrderItem").required().array().required(),
         jars: a.integer().required(), // PAID jars only; gift jars are in giftUnits
+        // "WHOLESALE": a B2B order at a team-set jar price (lib/wholesale.ts); empty = retail.
+        saleType: a.string(),
+        businessName: a.string(), // the business a wholesale order is for (shown on its invoice)
         total: a.integer().required(),
         // Gift jars on the order (lines with gift = true) and the gift campaign they belong
         // to ("manual" = added by hand by the team). See lib/gifts.ts.
@@ -306,6 +309,13 @@ const schema = a
 
     // Stock switch per flavor, set by the team on /admin. No row = available.
     // Everyone can read it (the shop shows «نفدت الكمية»); only ADMINS change it.
+    // Team-only prices, never shown to customers: the default wholesale jar price (lib/wholesale.ts).
+    WholesaleSetting: a
+      .model({
+        price: a.integer().required(),
+      })
+      .authorization((allow) => [allow.group("ADMINS")]),
+
     ProductSetting: a
       .model({
         slug: a.string().required(),
@@ -362,6 +372,9 @@ const schema = a
         deliveryDate: a.string(),
         // Team only: record the order under this earlier day (YYYY-MM-DD, Baghdad); default today.
         orderDate: a.string(),
+        // Team only: "WHOLESALE" = a B2B order; each item then carries its jar price (items[].price).
+        saleType: a.string(),
+        businessName: a.string(),
         // The customer pays now with Qi Card instead of cash to the driver.
         payOnline: a.boolean(),
         // Discount code, and the affiliate campaign the customer came from (?ref=…).
