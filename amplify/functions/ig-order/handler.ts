@@ -8,6 +8,7 @@ import { normalizeIraqiMobile } from "../../../lib/phone";
 import { freeDeliveryFor, site } from "../../../lib/site";
 import { products } from "../../../lib/products";
 import { begin, isStart, next, notStarted, type ChatState, type Reply, type Turn } from "../../../lib/ig-chat";
+import { catalogFrom, type Catalog, type ProductSettingRow } from "../../../lib/product-settings";
 
 // Instagram DM orders from ManyChat (External Request step).
 //
@@ -63,6 +64,25 @@ function itemsFrom(body: Record<string, unknown>): CartItem[] {
     .filter((i) => i.qty);
 }
 
+// The team's product settings (hidden flavors, discounts), read through placeOrder's function
+// (it has the data access), kept for a minute. Without them: every flavor at the site price
+// (placeOrder still prices the order and refuses hidden or sold-out flavors).
+let catalogCache: { at: number; catalog: Catalog } | null = null;
+async function shopCatalog(): Promise<Catalog> {
+  if (catalogCache && Date.now() - catalogCache.at < 60_000) return catalogCache.catalog;
+  try {
+    const res = await lambda.send(
+      new InvokeCommand({ FunctionName: process.env.PLACE_ORDER_FUNCTION, Payload: Buffer.from(JSON.stringify({ fieldName: "productSettings" })) }),
+    );
+    const rows = JSON.parse(res.Payload ? Buffer.from(res.Payload).toString("utf8") : "[]") as ProductSettingRow[];
+    catalogCache = { at: Date.now(), catalog: catalogFrom(Array.isArray(rows) ? rows : []) };
+  } catch (err) {
+    console.error("ig-order: product settings failed", err);
+    return catalogFrom([]);
+  }
+  return catalogCache.catalog;
+}
+
 // The same customer sending the same order twice within 10 minutes (a double tap,
 // a retried request) creates one order only.
 async function firstTime(dedupeKey: string): Promise<boolean> {
@@ -105,7 +125,7 @@ async function placeIgOrder(body: Record<string, unknown>): Promise<Record<strin
   if (!phone) return { ok: false, field: "phone", error: "رقم الهاتف غير صحيح. اكتبوه بصيغة 07xxxxxxxxx." };
 
   const items = itemsFrom(body);
-  const { lines, total } = priceCart(items);
+  const { lines, total } = priceCart(items, undefined, (await shopCatalog()).price);
   if (!lines.length) return { ok: false, field: "items", error: "لم يتم اختيار أي علبة. اختاروا النكهة والعدد." };
   const jars = lines.reduce((n, l) => n + l.qty, 0);
 
@@ -221,12 +241,13 @@ async function chatTurn(body: Record<string, unknown>) {
 
   const state = await loadState(id);
   let turn: Turn;
-  if (isStart(text)) turn = begin();
+  const catalog = await shopCatalog();
+  if (isStart(text)) turn = begin(catalog);
   else if (!state) {
     console.log("ig-order notStarted", { len: text.length, head: text.slice(0, 12) });
     turn = notStarted();
   }
-  else turn = next(state, text);
+  else turn = next(state, text, catalog);
 
   if (turn.place) {
     const result = await placeIgOrder(turn.place as unknown as Record<string, unknown>);

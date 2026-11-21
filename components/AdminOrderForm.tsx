@@ -17,6 +17,7 @@ import { HEARD_OPTIONS, type HeardKey } from "@/lib/attribution";
 import { MAX_QTY_PER_LINE, MAX_WHOLESALE_QTY } from "@/lib/order-text";
 import { cleanUnitPrice, DEFAULT_WHOLESALE_PRICE, saleKindOf, WHOLESALE, type SaleKind } from "@/lib/wholesale";
 import { loadWholesalePrice } from "@/lib/wholesale-admin";
+import { useStock } from "./StockProvider";
 import { collectBreakdown, modonCollect } from "@/lib/modon";
 import { formatIraqiMobile, normalizeIraqiMobile } from "@/lib/phone";
 import { deliveryPayOf, formatIQD, freeDeliveryFor, needsPayRef, PAID_METHODS, PAY_METHOD_LABELS, site, type DeliveryPay, type PayMethod } from "@/lib/site";
@@ -126,6 +127,7 @@ export function AdminOrderForm({
   const giftsChanged = giftKey !== oldGiftKey;
 
   // Retail (the site price) or wholesale (B2B, a team-set price per jar).
+  const stock = useStock();
   const oldSale: SaleKind = order ? saleKindOf(order) : "retail";
   const [sale, setSale] = useState<SaleKind>(oldSale);
   const wholesale = sale === "wholesale";
@@ -150,7 +152,7 @@ export function AdminOrderForm({
     .map((p) => ({
       product: p,
       qty: qty[p.slug],
-      price: wholesale ? cleanUnitPrice(priceText(p.slug, p.price)) ?? 0 : basePrice(p.slug, p.price),
+      price: wholesale ? cleanUnitPrice(priceText(p.slug, p.price)) ?? 0 : basePrice(p.slug, stock.priceOf(p)),
     }));
   const badPrice = wholesale ? lines.filter((l) => !l.price).map((l) => l.product.slug) : [];
   const jars = lines.reduce((n, l) => n + l.qty, 0);
@@ -532,7 +534,7 @@ export function AdminOrderForm({
             </button>
           </span>
           <small className="field-hint">
-            {wholesale ? "بيع لمحل أو كافيه: تكتب سعر العلبة بنفسك، بلا كوبونات أو هدايا." : `سعر الموقع: ${formatIQD(products[0]?.price ?? 0)} للعلبة.`}
+            {wholesale ? "بيع لمحل أو كافيه: تكتب سعر العلبة بنفسك، بلا كوبونات أو هدايا." : `سعر الموقع: ${formatIQD(products[0] ? stock.priceOf(products[0]) : 0)} للعلبة${products[0] && stock.discountOf(products[0].slug) ? " (بعد الخصم)" : ""}.`}
           </small>
         </div>
         {wholesale && (

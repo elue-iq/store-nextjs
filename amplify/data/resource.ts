@@ -320,6 +320,10 @@ const schema = a
       .model({
         slug: a.string().required(),
         available: a.boolean().required(),
+        // Taken off the shop (kept in the system; the team can still sell it). lib/product-settings.ts
+        hidden: a.boolean(),
+        // Dinars off each jar (not a percentage), shown to customers as the old price crossed out.
+        discount: a.integer(),
       })
       .identifier(["slug"])
       .authorization((allow) => [allow.publicApiKey().to(["read"]), allow.group("ADMINS")]),
