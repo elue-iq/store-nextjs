@@ -14,7 +14,9 @@ import { callBoxy } from "./AdminBoxy";
 import { dataClient, errorCode, errorDetail, errorFields, type Order } from "@/lib/data";
 import { products } from "@/lib/products";
 import { HEARD_OPTIONS, type HeardKey } from "@/lib/attribution";
-import { MAX_QTY_PER_LINE } from "@/lib/order-text";
+import { MAX_QTY_PER_LINE, MAX_WHOLESALE_QTY } from "@/lib/order-text";
+import { cleanUnitPrice, DEFAULT_WHOLESALE_PRICE, saleKindOf, WHOLESALE, type SaleKind } from "@/lib/wholesale";
+import { loadWholesalePrice } from "@/lib/wholesale-admin";
 import { collectBreakdown, modonCollect } from "@/lib/modon";
 import { formatIraqiMobile, normalizeIraqiMobile } from "@/lib/phone";
 import { deliveryPayOf, formatIQD, freeDeliveryFor, needsPayRef, PAID_METHODS, PAY_METHOD_LABELS, site, type DeliveryPay, type PayMethod } from "@/lib/site";
@@ -123,12 +125,34 @@ export function AdminOrderForm({
   const giftKey = JSON.stringify([giftUnits ? giftKind : "", products.map((p) => giftPicks.find((g) => g.slug === p.slug)?.qty ?? 0)]);
   const giftsChanged = giftKey !== oldGiftKey;
 
+  // Retail (the site price) or wholesale (B2B, a team-set price per jar).
+  const oldSale: SaleKind = order ? saleKindOf(order) : "retail";
+  const [sale, setSale] = useState<SaleKind>(oldSale);
+  const wholesale = sale === "wholesale";
+  const [businessName, setBusinessName] = useState(order?.businessName ?? "");
+  const [defaultWholesale, setDefaultWholesale] = useState(DEFAULT_WHOLESALE_PRICE);
+  useEffect(() => {
+    if (wholesale) void loadWholesalePrice().then(setDefaultWholesale);
+  }, [wholesale]);
+  // Prices typed on this form (wholesale only), as typed.
+  const [typedPrice, setTypedPrice] = useState<Record<string, string>>({});
+
   // Existing lines keep the price they were sold at; new lines use today's price.
   const oldQty: Record<string, number> = Object.fromEntries(paidLines(order?.items).map((i) => [i.slug, i.qty]));
   const oldPrice = Object.fromEntries(paidLines(order?.items).map((i) => [i.slug, i.price]));
+  const basePrice = (slug: string, sitePrice: number) =>
+    wholesale
+      ? (oldSale === "wholesale" ? oldPrice[slug] : undefined) ?? defaultWholesale
+      : (oldSale === "retail" ? oldPrice[slug] : undefined) ?? sitePrice;
+  const priceText = (slug: string, sitePrice: number) => typedPrice[slug] ?? String(basePrice(slug, sitePrice));
   const lines = products
     .filter((p) => (qty[p.slug] ?? 0) > 0)
-    .map((p) => ({ product: p, qty: qty[p.slug], price: oldPrice[p.slug] ?? p.price }));
+    .map((p) => ({
+      product: p,
+      qty: qty[p.slug],
+      price: wholesale ? cleanUnitPrice(priceText(p.slug, p.price)) ?? 0 : basePrice(p.slug, p.price),
+    }));
+  const badPrice = wholesale ? lines.filter((l) => !l.price).map((l) => l.product.slug) : [];
   const jars = lines.reduce((n, l) => n + l.qty, 0);
   // Coupon: an existing order keeps its own (re-priced if the jars change); a new order is
   // priced by the server for this customer (their credit and limits).
@@ -147,21 +171,32 @@ export function AdminOrderForm({
     refCode: "",
     signedIn: true,
     phone: customerForQuote,
-    enabled: !editing && Boolean(customerForQuote) && jarsPay === "cash",
+    enabled: !editing && !wholesale && Boolean(customerForQuote) && jarsPay === "cash",
   });
   const edited = priceOrder(
     lines.map((l) => ({ price: l.price, qty: l.qty })),
-    savedRule,
-    order?.creditUsed ?? 0,
+    wholesale ? null : savedRule,
+    wholesale ? 0 : order?.creditUsed ?? 0,
   );
-  const total = editing ? edited.total : jarsPay === "cash" && quote ? quote.total : lines.reduce((n, l) => n + l.qty * l.price, 0);
+  const plainTotal = lines.reduce((n, l) => n + l.qty * l.price, 0);
+  const total = wholesale ? plainTotal : editing ? edited.total : jarsPay === "cash" && quote ? quote.total : plainTotal;
   // Orders of site.freeDeliveryMinJars jars or more (or a free-delivery code): delivery is free automatically.
   const autoFreeDelivery =
-    deliveryPay === "driver" && (freeDeliveryFor(jars) || (editing ? edited.freeDelivery : Boolean(quote?.freeDelivery)));
+    !wholesale && deliveryPay === "driver" && (freeDeliveryFor(jars) || (editing ? edited.freeDelivery : Boolean(quote?.freeDelivery)));
   const driverCollects = modonCollect(total, paid, deliveryPay);
 
+  const maxQty = wholesale ? MAX_WHOLESALE_QTY : MAX_QTY_PER_LINE;
   function step(slug: string, by: number) {
-    setQty((q) => ({ ...q, [slug]: Math.min(MAX_QTY_PER_LINE, Math.max(0, (q[slug] ?? 0) + by)) }));
+    setQty((q) => ({ ...q, [slug]: Math.min(maxQty, Math.max(0, (q[slug] ?? 0) + by)) }));
+  }
+  function setLineQty(slug: string, text: string) {
+    const n = Math.floor(Number(text.replace(/[^\d]/g, "")) || 0);
+    setQty((q) => ({ ...q, [slug]: Math.min(maxQty, Math.max(0, n)) }));
+  }
+  function chooseSale(next: SaleKind) {
+    setSale(next);
+    // Retail allows up to MAX_QTY_PER_LINE jars per flavor.
+    if (next === "retail") setQty((q) => Object.fromEntries(Object.entries(q).map(([k, v]) => [k, Math.min(MAX_QTY_PER_LINE, v)])));
   }
   function stepGift(slug: string, by: number) {
     setGiftQty((q) => ({ ...q, [slug]: Math.min(MAX_GIFT_UNITS, Math.max(0, (q[slug] ?? 0) + by)) }));
@@ -180,6 +215,11 @@ export function AdminOrderForm({
     if (Object.keys(found).length) return fieldsRef.current?.focusFirstError(found);
     if (!lines.length) {
       toast({ id: "admin", tone: "attention", message: "أضف نكهة واحدة على الأقل." });
+      return;
+    }
+    if (badPrice.length) {
+      document.getElementById(`price-${badPrice[0]}`)?.focus();
+      toast({ id: "admin", tone: "attention", message: "اكتب سعر العلبة لكل نكهة (250 دينار أو أكثر)." });
       return;
     }
     // A new order must say how the customer heard of ÉLUE (edits of old orders may leave it empty).
@@ -236,6 +276,8 @@ export function AdminOrderForm({
         deliveryPaid: Boolean(order.deliveryPaid),
         deliverySlot: order.deliverySlot ?? null,
         deliveryDate: order.deliveryDate ?? null,
+        saleType: order.saleType ?? null,
+        businessName: order.businessName ?? null,
       };
       const after = {
         phone: customerPhone,
@@ -251,20 +293,25 @@ export function AdminOrderForm({
         deliveryPaid: deliveryPay === "prepaid",
         deliverySlot: inBaghdad ? slot : null,
         deliveryDate: inBaghdad && slotDate ? slotDate : null,
+        saleType: wholesale ? WHOLESALE : null,
+        businessName: wholesale ? businessName.trim().slice(0, 120) || null : null,
       };
       const changes: Record<string, unknown> = {};
       for (const key of Object.keys(after) as (keyof typeof after)[]) {
         if (after[key] !== before[key]) changes[key] = after[key];
       }
       const sameItems =
-        JSON.stringify(items.map((i) => [i.slug, i.qty])) ===
-        JSON.stringify(products.filter((p) => oldQty[p.slug]).map((p) => [p.slug, oldQty[p.slug]]));
+        JSON.stringify(items.map((i) => [i.slug, i.qty, i.price])) ===
+        JSON.stringify(products.filter((p) => oldQty[p.slug]).map((p) => [p.slug, oldQty[p.slug], oldPrice[p.slug]]));
       if (!sameItems) {
         // The gift lines stay as they are here: the server replaces them (setGifts below).
         const keptGifts = oldGifts.map((g) => ({ slug: g.slug, nameAr: g.nameAr, nameEn: g.nameEn, qty: g.qty, price: 0, gift: true, campaignId: g.campaignId ?? order.giftCampaignId ?? MANUAL_GIFT }));
         Object.assign(changes, { items: [...items, ...keptGifts], jars, total });
         // A coupon / credit on the order: the discount follows the new jars.
-        if (savedRule || order.creditUsed || order.discount) {
+        // Wholesale has none: a retail order turned wholesale drops its discount and gives the credit back.
+        if (wholesale) {
+          Object.assign(changes, { subtotal: total, ...(order.discount || order.creditUsed || order.cashback ? { discount: null, creditUsed: null, cashback: null } : {}) });
+        } else if (savedRule || order.creditUsed || order.discount) {
           const oldLines = paidLines(order.items).map((i) => ({ price: i.price, qty: i.qty }));
           const oldFree = couponEffect(savedRule, oldLines).freeJars;
           const perJar = order.commission ? order.commission / Math.max(1, order.jars - oldFree) : 0;
@@ -347,7 +394,9 @@ export function AdminOrderForm({
       ...info,
       note: note.trim() || undefined,
       phone2: phone2.trim() || undefined,
-      items: JSON.stringify(lines.map((l) => ({ slug: l.product.slug, qty: l.qty }))),
+      items: JSON.stringify(lines.map((l) => (wholesale ? { slug: l.product.slug, qty: l.qty, price: l.price } : { slug: l.product.slug, qty: l.qty }))),
+      saleType: wholesale ? WHOLESALE : undefined,
+      businessName: wholesale ? businessName.trim() || undefined : undefined,
       customerPhone,
       cashierOrderId: cashier.trim() || undefined,
       paid,
@@ -360,11 +409,11 @@ export function AdminOrderForm({
       orderDate: orderDay && orderDay !== todayBaghdad ? orderDay : undefined,
       freeDelivery: deliveryPay === "gift",
       deliveryPaid: deliveryPay === "prepaid",
-      couponCode: jarsPay === "cash" && quote?.coupon?.ok ? quote.coupon.code : undefined,
+      couponCode: !wholesale && jarsPay === "cash" && quote?.coupon?.ok ? quote.coupon.code : undefined,
       heardFrom: heard || undefined,
       heardNote: heard === "creator" || heard === "other" ? heardNote.trim().slice(0, 100) || undefined : undefined,
-      gifts: giftUnits ? JSON.stringify(giftPicks) : undefined,
-      giftCampaignId: giftUnits ? giftKind || MANUAL_GIFT : undefined,
+      gifts: giftUnits && !wholesale ? JSON.stringify(giftPicks) : undefined,
+      giftCampaignId: giftUnits && !wholesale ? giftKind || MANUAL_GIFT : undefined,
     });
     setBusy(false);
     if (data?.orderNumber) {
@@ -473,26 +522,72 @@ export function AdminOrderForm({
 
       <section className="order-detail__block">
         <h2>الطلب</h2>
-        <ul className="admin-order-form__items">
+        <div className="sale-kind">
+          <span className="not-toggle" role="group" aria-label="نوع البيع">
+            <button type="button" aria-pressed={!wholesale} onClick={() => chooseSale("retail")}>
+              مفرد
+            </button>
+            <button type="button" aria-pressed={wholesale} onClick={() => chooseSale("wholesale")}>
+              جملة
+            </button>
+          </span>
+          <small className="field-hint">
+            {wholesale ? "بيع لمحل أو كافيه: تكتب سعر العلبة بنفسك، بلا كوبونات أو هدايا." : `سعر الموقع: ${formatIQD(products[0]?.price ?? 0)} للعلبة.`}
+          </small>
+        </div>
+        {wholesale && (
+          <label>
+            اسم الجهة (المحل، الكافيه، الشركة)
+            <input value={businessName} onChange={(e) => setBusinessName(e.target.value)} maxLength={120} placeholder="يظهر على الفاتورة" />
+          </label>
+        )}
+        <ul className={`admin-order-form__items${wholesale ? " is-wholesale" : ""}`}>
           {products.map((p) => (
             <li key={p.slug}>
               <span>
                 {p.nameAr}
                 <small dir="ltr">{p.nameEn}</small>
               </span>
-              <span className="stepper stepper--small" role="group" aria-label={`كمية ${p.nameAr}`}>
-                <button type="button" onClick={() => step(p.slug, 1)} aria-label="زيادة">
-                  +
-                </button>
-                <output>{qty[p.slug] ?? 0}</output>
-                <button type="button" onClick={() => step(p.slug, -1)} aria-label="إنقاص">
-                  −
-                </button>
-              </span>
+              {wholesale ? (
+                <span className="wholesale-line">
+                  <label>
+                    <span>العدد</span>
+                    <input
+                      inputMode="numeric"
+                      dir="ltr"
+                      value={qty[p.slug] ? String(qty[p.slug]) : ""}
+                      placeholder="0"
+                      onChange={(e) => setLineQty(p.slug, e.target.value)}
+                      aria-label={`عدد ${p.nameAr}`}
+                    />
+                  </label>
+                  <label className={(qty[p.slug] ?? 0) > 0 && badPrice.includes(p.slug) ? "has-error" : undefined}>
+                    <span>سعر العلبة</span>
+                    <input
+                      id={`price-${p.slug}`}
+                      inputMode="numeric"
+                      dir="ltr"
+                      value={priceText(p.slug, p.price)}
+                      onChange={(e) => setTypedPrice((t) => ({ ...t, [p.slug]: e.target.value.replace(/[^\d]/g, "") }))}
+                      aria-label={`سعر علبة ${p.nameAr}`}
+                    />
+                  </label>
+                </span>
+              ) : (
+                <span className="stepper stepper--small" role="group" aria-label={`كمية ${p.nameAr}`}>
+                  <button type="button" onClick={() => step(p.slug, 1)} aria-label="زيادة">
+                    +
+                  </button>
+                  <output>{qty[p.slug] ?? 0}</output>
+                  <button type="button" onClick={() => step(p.slug, -1)} aria-label="إنقاص">
+                    −
+                  </button>
+                </span>
+              )}
             </li>
           ))}
         </ul>
-        {editing ? (
+        {wholesale ? null : editing ? (
           (order?.discount || order?.creditUsed) && (
             <PriceLines
               quote={{
@@ -507,6 +602,7 @@ export function AdminOrderForm({
         ) : (
           jarsPay === "cash" && <PriceLines quote={quote} />
         )}
+        {(!wholesale || oldGifts.length > 0) && (
         <fieldset className="admin-order-form__group admin-order-form__gifts" id="order-gifts">
           <legend>هدايا: علب مجانية تنضاف للطلب بسعر 0</legend>
           <label>
@@ -547,13 +643,14 @@ export function AdminOrderForm({
             ))}
           </ul>
         </fieldset>
+        )}
         <p className="order-card__total">
           <span>
             المجموع · {jars} علبة{giftUnits ? ` + ${giftUnits} هدية` : ""}
           </span>
           <strong>{formatIQD(total)}</strong>
         </p>
-        {editing ? (
+        {wholesale ? null : editing ? (
           order?.couponCode && (
             <p className="hint">
               الطلب عليه الكود <strong dir="ltr">{order.couponCode}</strong>

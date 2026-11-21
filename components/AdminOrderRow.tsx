@@ -10,6 +10,7 @@ import { formatIraqiMobile } from "@/lib/phone";
 import { useToast } from "./Toast";
 
 import { orderTime } from "@/lib/order-time";
+import { isWholesale } from "@/lib/wholesale";
 
 export const baghdadDay = (iso: string) =>
   new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Baghdad", year: "numeric", month: "2-digit", day: "2-digit" }).format(
@@ -106,6 +107,7 @@ export function OrderRow({
   const slot = o.status !== "DELIVERED" && o.status !== "CANCELLED" ? slotText(o) : null;
   const place = [o.province, o.area].filter(Boolean).join("، ") || fullAddress(o);
   const meta: { text: string; warn?: boolean; key: string }[] = [
+    ...(isWholesale(o) ? [{ key: "sale", text: o.businessName ? `جملة · ${o.businessName}` : "جملة" }] : []),
     ...(slot ? [{ key: "slot", text: slot }] : []),
     ...(money ? [{ key: "pay", ...money }] : []),
     ...(o.couponCode ? [{ key: "coupon", text: o.couponCode }] : []),

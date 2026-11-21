@@ -12,6 +12,7 @@
 // - Test orders (source contains "test=") are hidden unless asked for.
 
 import { giftLines, paidLines } from "./gifts";
+import { saleKindOf, SALE_LABELS, type SaleKind } from "./wholesale";
 import { orderTime } from "./order-time";
 import type { Order, OrderStatus } from "./data";
 import { products } from "./products";
@@ -65,6 +66,7 @@ export type Filters = {
   statuses: OrderStatus[]; // empty = every status
   province: string; // "" = all
   channel: "" | "web" | "team";
+  sale?: "" | SaleKind; // retail or wholesale (B2B)
   source: string; // "" = all, otherwise a sourceLabel()
   payment: "" | "paid" | "cod" | "deliveryPaid" | "free";
   method: "" | PayKey; // how it was paid: cash, Qi Card, ZainCash…
@@ -86,6 +88,7 @@ export const DEFAULT_FILTERS: Filters = {
   statuses: ["NEW", "CONFIRMED", "OUT_FOR_DELIVERY", "DELIVERED"], // sales leave out cancelled orders
   province: "",
   channel: "",
+  sale: "",
   source: "",
   payment: "",
   method: "",
@@ -102,6 +105,7 @@ export function activeFilterCount(f: Filters): number {
     (f.statuses.slice().sort().join() !== d.statuses.slice().sort().join() ? 1 : 0) +
     (f.province ? 1 : 0) +
     (f.channel ? 1 : 0) +
+    (f.sale ? 1 : 0) +
     (f.source ? 1 : 0) +
     (f.payment ? 1 : 0) +
     (f.method ? 1 : 0) +
@@ -296,6 +300,7 @@ export type Insights = {
   areas: Row[];
   sources: Row[];
   channels: Row[];
+  sales: Row[]; // retail vs wholesale
   payMethods: Row[]; // orders by how they were paid
   sizes: Row[]; // orders by number of jars
   hours: number[]; // orders per Baghdad hour 0–23
@@ -388,6 +393,7 @@ export function computeInsights(all: Order[], f: Filters, today: string): Insigh
     if (f.province && ((o.province ?? "") === f.province) === Boolean(not.province)) return false;
     if (f.channel === "web" && o.createdBy) return false;
     if (f.channel === "team" && !o.createdBy) return false;
+    if (f.sale && saleKindOf(o) !== f.sale) return false;
     if (f.source && (sourceLabel(o) === f.source) === Boolean(not.source)) return false;
     if (f.payment && paymentHit(o) === Boolean(not.payment)) return false;
     if (f.method && (payKeyOf(o) === f.method) === Boolean(not.method)) return false;
@@ -458,6 +464,7 @@ export function computeInsights(all: Order[], f: Filters, today: string): Insigh
   const areas = new Map<string, Row>();
   const sources = new Map<string, Row>();
   const channels = new Map<string, Row>();
+  const sales = new Map<string, Row>();
   const payMethods = new Map<string, Row>();
   const sizes = new Map<string, Row>();
   const hours = Array<number>(24).fill(0);
@@ -471,6 +478,7 @@ export function computeInsights(all: Order[], f: Filters, today: string): Insigh
     const src = sourceLabel(o);
     add(sources, src, src, p.jars, p.revenue);
     add(channels, o.createdBy ? "team" : "web", o.createdBy ? "أنشأه الفريق" : "من الموقع", p.jars, p.revenue);
+    add(sales, saleKindOf(o), SALE_LABELS[saleKindOf(o)], p.jars, p.revenue);
     add(payMethods, payKeyOf(o), PAY_KEY_LABELS[payKeyOf(o)], p.jars, p.revenue);
     const size = p.jars >= 5 ? "5+" : String(p.jars);
     add(sizes, size, p.jars >= 5 ? "5 علب أو أكثر" : p.jars === 1 ? "علبة واحدة" : p.jars === 2 ? "علبتان" : `${p.jars} علب`, p.jars, p.revenue);
@@ -502,6 +510,7 @@ export function computeInsights(all: Order[], f: Filters, today: string): Insigh
     areas: [...areas.values()].sort((a, b) => b.orders - a.orders || b.revenue - a.revenue),
     sources: rank(sources),
     channels: rank(channels),
+    sales: rank(sales),
     payMethods: rank(payMethods),
     sizes: [...sizes.values()].sort((a, b) => a.key.localeCompare(b.key)),
     hours,

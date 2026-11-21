@@ -288,6 +288,7 @@ export function AdminDashboard({
     });
   if (f.province) chips.push({ key: "pr", text: `المحافظة: ${bdn("province")}${f.province}`, clear: () => pick("province", "") });
   if (f.channel) chips.push({ key: "ch", text: f.channel === "web" ? "من الموقع" : "أنشأه الفريق", clear: () => set({ channel: "" }) });
+  if (f.sale) chips.push({ key: "sale", text: f.sale === "wholesale" ? "جملة" : "مفرد", clear: () => set({ sale: "" }) });
   if (f.source) chips.push({ key: "so", text: `المصدر: ${bdn("source")}${f.source}`, clear: () => pick("source", "") });
   if (f.payment)
     chips.push({
@@ -676,6 +677,12 @@ export function AdminDashboard({
           <h3 className="dash-sub">المصدر</h3>
           <BarList rows={rowsOf(ins.sources, f.source)} onPick={(key) => set({ source: f.source === key ? "" : key })} />
         </Card>
+
+        {ins.sales.some((r) => r.key === "wholesale") && (
+          <Card title="مفرد وجملة" sub="البيع للزبائن، والبيع للمحلات والشركات بسعر الجملة. اضغط واحداً لعرض أرقامه وحده.">
+            <BarList rows={rowsOf(ins.sales, f.sale ?? "")} onPick={(key) => set({ sale: f.sale === key ? "" : (key as Filters["sale"]) })} />
+          </Card>
+        )}
 
         <Card title="طريقة الدفع" sub="كيف دفع العملاء: نقداً للمندوب، أو مسبقاً بـ Qi Card وزين كاش، أو هدية.">
           <BarList rows={rowsOf(ins.payMethods, f.method)} onPick={(key) => set({ method: f.method === key ? "" : (key as Filters["method"]) })} />

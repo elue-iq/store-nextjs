@@ -28,6 +28,7 @@ import { AdminDashboard } from "./AdminDashboard";
 import { AdminOrderFilters } from "./AdminOrderFilters";
 import { activeFacets, clearFacet, EMPTY_FILTERS, facetChoices, loadFilters, passes, saveFilters, type OrderFilters, type Sort } from "./orderFilters";
 import { orderTime } from "@/lib/order-time";
+import { isWholesale } from "@/lib/wholesale";
 import { OrderRow, REVIEW_STATE_LABELS, baghdadDay, reviewState, shortTime, type ReviewState } from "./AdminOrderRow";
 import { buildCustomers, CustomerDetail, CustomerList, CustomersSummary } from "./AdminCustomers";
 import { jarsLabel } from "./AddToCart";
@@ -566,7 +567,7 @@ export function AdminView() {
     return (
       <div className="admin-screen">
         {pullEl}
-        {listHead("المنتجات", "حالة التوفر لكل نكهة")}
+        {listHead("المنتجات", "سعر الجملة وحالة التوفر لكل نكهة")}
         <AdminStock />
         {drawer}
       </div>
@@ -916,6 +917,17 @@ function OrderDetail({
     }
   }
 
+  async function saveInvoice() {
+    try {
+      const { buildInvoicePdf, invoiceFilename } = await import("@/lib/invoice");
+      const { downloadBlob } = await import("@/lib/receipt");
+      downloadBlob(await buildInvoicePdf(o), invoiceFilename(o.orderNumber));
+    } catch (err) {
+      console.error("invoice failed", err);
+      toast({ id: "pdf", tone: "attention", message: "تعذّر تجهيز الفاتورة الآن. حاول مجددًا." });
+    }
+  }
+
   if (editing) {
     return (
       <AdminOrderForm
@@ -1015,7 +1027,10 @@ function OrderDetail({
       <section className="order-detail__block order-customer">
         <button type="button" className="customer-link" onClick={onOpenCustomer}>
           <span>
-            <span className="order-detail__name">{o.name}</span>
+            <span className="order-detail__name">
+              {isWholesale(o) && <span className="sale-badge">جملة</span>}
+              {isWholesale(o) && o.businessName ? `${o.businessName} · ${o.name}` : o.name}
+            </span>
             <span className="order-detail__phone" dir="ltr">
               {local}
               {o.phone2 ? ` · ${formatIraqiMobile(o.phone2)}` : ""}
@@ -1036,6 +1051,9 @@ function OrderDetail({
           <SendOrderToCustomer order={o} compact />
           <button type="button" className="btn btn--quiet btn--small" onClick={() => void saveSummary()}>
             حفظ الصورة
+          </button>
+          <button type="button" className="btn btn--quiet btn--small" onClick={() => void saveInvoice()}>
+            فاتورة PDF
           </button>
         </div>
       </section>

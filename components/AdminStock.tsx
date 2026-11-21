@@ -5,6 +5,9 @@ import { products } from "@/lib/products";
 import { dataClient } from "@/lib/data";
 import { useToast } from "./Toast";
 import { useStock } from "./StockProvider";
+import { formatIQD } from "@/lib/site";
+import { cleanUnitPrice } from "@/lib/wholesale";
+import { loadWholesalePrice, saveWholesalePrice } from "@/lib/wholesale-admin";
 
 // The «المنتجات» screen of /admin: switch each flavor between in stock and sold out.
 // The shop reads this straight away; placeOrder refuses sold-out flavors.
@@ -43,6 +46,7 @@ export function AdminStock() {
 
   return (
     <section className="admin-section admin-section--screen">
+      <WholesalePrice />
       <p className="hint">
         بدّل حالة كل نكهة بين «متوفر» و«نفدت الكمية». يظهر التغيير في المتجر فورًا، ولا يقبل الموقع طلبًا لنكهة نفدت.
       </p>
@@ -81,5 +85,52 @@ export function AdminStock() {
         </ul>
       )}
     </section>
+  );
+}
+
+// The default wholesale (B2B) jar price: filled in on every new wholesale order, and can still
+// be changed on the order itself. Retail stays the site price.
+function WholesalePrice() {
+  const toast = useToast();
+  const [saved, setSaved] = useState<number | null>(null);
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    void loadWholesalePrice().then((p) => {
+      setSaved(p);
+      setText(String(p));
+    });
+  }, []);
+  const value = cleanUnitPrice(text);
+
+  async function save() {
+    if (!value || busy) return;
+    setBusy(true);
+    const ok = await saveWholesalePrice(value);
+    setBusy(false);
+    if (!ok) return toast({ id: "wholesale", tone: "attention", message: "تعذّر حفظ سعر الجملة. حاول مجددًا." });
+    setSaved(value);
+    toast({ id: "wholesale", message: `سعر الجملة صار ${formatIQD(value)} للعلبة.` });
+  }
+
+  return (
+    <div className="wholesale-price">
+      <h2>سعر الجملة</h2>
+      <p className="hint">ينكتب تلقائياً بكل طلب جملة جديد، وتگدر تغيّره بالطلب نفسه. سعر المفرد يبقى سعر الموقع.</p>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void save();
+        }}
+      >
+        <label className={text && !value ? "has-error" : undefined}>
+          سعر العلبة (دينار)
+          <input inputMode="numeric" dir="ltr" value={text} onChange={(e) => setText(e.target.value.replace(/[^\d]/g, ""))} disabled={saved === null} />
+        </label>
+        <button type="submit" className="btn" disabled={!value || value === saved || busy}>
+          حفظ
+        </button>
+      </form>
+    </div>
   );
 }

@@ -7,8 +7,9 @@ import { STATUS_LABELS, STATUS_ORDER, type Order, type OrderStatus } from "@/lib
 import { payKeyOf, PAY_KEY_LABELS, type PayKey } from "@/lib/site";
 import { products } from "@/lib/products";
 import { baghdadDay, reviewState, REVIEW_STATE_LABELS, type ReviewState } from "./AdminOrderRow";
+import { saleKindOf, SALE_LABELS, type SaleKind } from "@/lib/wholesale";
 
-export type FacetKey = "status" | "when" | "flavors" | "province" | "pay" | "courier" | "review";
+export type FacetKey = "status" | "when" | "sale" | "flavors" | "province" | "pay" | "courier" | "review";
 export type When = "today" | "yesterday" | "7d" | "30d";
 export type PayChoice = PayKey | "freeDelivery";
 export type Sort = "newest" | "oldest";
@@ -16,6 +17,7 @@ export type Sort = "newest" | "oldest";
 export type OrderFilters = {
   status: OrderStatus[];
   when: When[]; // one at most (the periods overlap)
+  sale: SaleKind[];
   flavors: string[];
   province: string[];
   pay: PayChoice[];
@@ -24,18 +26,19 @@ export type OrderFilters = {
   not: Partial<Record<FacetKey, boolean>>;
 };
 
-export const EMPTY_FILTERS: OrderFilters = { status: [], when: [], flavors: [], province: [], pay: [], courier: [], review: [], not: {} };
-export const FACETS: FacetKey[] = ["status", "when", "flavors", "province", "pay", "courier", "review"];
+export const EMPTY_FILTERS: OrderFilters = { status: [], when: [], sale: [], flavors: [], province: [], pay: [], courier: [], review: [], not: {} };
+export const FACETS: FacetKey[] = ["status", "when", "sale", "flavors", "province", "pay", "courier", "review"];
 export const FACET_TITLES: Record<FacetKey, string> = {
   status: "الحالة",
   when: "الفترة",
+  sale: "نوع البيع",
   flavors: "النكهة",
   province: "المحافظة",
   pay: "الدفع",
   courier: "التوصيل",
   review: "التقييم",
 };
-const SINGLE: Partial<Record<FacetKey, true>> = { when: true };
+const SINGLE: Partial<Record<FacetKey, true>> = { when: true, sale: true };
 export const isSingle = (k: FacetKey) => Boolean(SINGLE[k]);
 
 export const WHEN_LABELS: Record<When, string> = { today: "اليوم", yesterday: "أمس", "7d": "آخر 7 أيام", "30d": "آخر 30 يوماً" };
@@ -58,6 +61,8 @@ function has(o: Order, k: FacetKey, v: string, today: string): boolean {
       const ago = (n: number) => baghdadDay(new Date(Date.now() - n * 86_400_000).toISOString());
       return v === "today" ? day === today : v === "yesterday" ? day === ago(1) : day >= ago(v === "7d" ? 6 : 29);
     }
+    case "sale":
+      return saleKindOf(o) === v;
     case "flavors":
       // Every jar in the parcel counts, gifts included: «بدون جزر» = no carrot jar at all.
       return o.items.some((i) => i?.slug === v);
@@ -96,6 +101,7 @@ export function facetChoices(
   const options: Record<FacetKey, [string, string][]> = {
     status: STATUS_ORDER.map((s) => [s, STATUS_LABELS[s]]),
     when: (Object.keys(WHEN_LABELS) as When[]).map((w) => [w, WHEN_LABELS[w]]),
+    sale: (Object.keys(SALE_LABELS) as SaleKind[]).map((k) => [k, SALE_LABELS[k]]),
     flavors: products.map((p) => [p.slug, p.nameAr]),
     province: extra.provinces.map((p) => [p, p]),
     pay: PAY_ORDER.map((k) => [k, k === "freeDelivery" ? "توصيل مجاني (هدية)" : PAY_KEY_LABELS[k]]),
@@ -120,7 +126,7 @@ export function facetChoices(
 export function chipText(k: FacetKey, f: OrderFilters, labels: Map<string, string>): string {
   const names = (f[k] as string[]).map((v) => labels.get(`${k}:${v}`) ?? v);
   const list = names.length > 2 ? `${names.slice(0, 2).join("، ")} +${names.length - 2}` : names.join("، ");
-  return f.not[k] ? `بدون ${list}` : k === "when" || k === "province" || k === "flavors" ? list : `${FACET_TITLES[k]}: ${list}`;
+  return f.not[k] ? `بدون ${list}` : k === "when" || k === "province" || k === "flavors" || k === "sale" ? list : `${FACET_TITLES[k]}: ${list}`;
 }
 
 export function toggleChoice(f: OrderFilters, k: FacetKey, v: string): OrderFilters {

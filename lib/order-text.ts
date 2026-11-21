@@ -9,13 +9,14 @@ export type CartItem = { slug: string; qty: number };
 export type OrderLine = { product: Product; qty: number; subtotal: number };
 
 export const MAX_QTY_PER_LINE = 20;
+export const MAX_WHOLESALE_QTY = 500; // per flavor on a wholesale (B2B) order
 
-export function priceCart(items: CartItem[]): { lines: OrderLine[]; total: number } {
+export function priceCart(items: CartItem[], maxQty: number = MAX_QTY_PER_LINE): { lines: OrderLine[]; total: number } {
   const lines: OrderLine[] = [];
   for (const item of items) {
     const product = getProduct(item.slug);
     const qty = Math.floor(Number(item.qty));
-    if (!product || !Number.isFinite(qty) || qty < 1 || qty > MAX_QTY_PER_LINE) continue;
+    if (!product || !Number.isFinite(qty) || qty < 1 || qty > maxQty) continue;
     lines.push({ product, qty, subtotal: product.price * qty });
   }
   const total = lines.reduce((sum, l) => sum + l.subtotal, 0);
