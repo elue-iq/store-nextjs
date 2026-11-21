@@ -6426,3 +6426,100 @@ button:not(:disabled):active,
   display: block;
   font-size: 0.82em;
 }
+
+/* ---- Cart bar (components/CartBar.tsx): free-delivery progress + «عرض السلة» ---- */
+.cart-bar-space {
+  height: 9.5rem;
+}
+.cart-bar {
+  position: fixed;
+  z-index: 40;
+  inset-inline: 0;
+  bottom: 0;
+  display: grid;
+  gap: 0.55rem;
+  width: min(100%, 560px);
+  margin: 0 auto;
+  padding: 0.75rem var(--gutter) calc(0.75rem + env(safe-area-inset-bottom));
+  border-radius: 20px 20px 0 0;
+  background: var(--paper);
+  box-shadow: 0 -6px 24px rgb(59 42 35 / 0.14);
+  animation: cart-bar-in 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes cart-bar-in {
+  from { transform: translateY(100%); }
+}
+.free-progress {
+  display: grid;
+  gap: 0.4rem;
+}
+.free-progress p {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.92rem;
+  text-align: center;
+}
+.free-progress strong {
+  color: var(--terracotta);
+}
+.free-progress.is-done p {
+  color: var(--sage-deep, #4f5a40);
+  font-weight: 600;
+}
+.free-progress__steps {
+  display: grid;
+  grid-auto-columns: 1fr;
+  grid-auto-flow: column;
+  gap: 0.3rem;
+}
+.free-progress__steps i {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--sand);
+  transition: background-color 0.35s ease;
+}
+.free-progress__steps i.is-on {
+  background: var(--terracotta);
+}
+.free-progress.is-done .free-progress__steps i {
+  background: var(--sage-deep, #4f5a40);
+}
+.cart-bar__go {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-height: 3.3rem;
+  padding: 0 0.55rem;
+  padding-inline-end: 1.2rem;
+  border-radius: 999px;
+  background: var(--terracotta);
+  color: var(--cream);
+  font-weight: 600;
+  text-decoration: none;
+}
+.cart-bar__count {
+  display: grid;
+  place-items: center;
+  min-width: 2.3rem;
+  height: 2.3rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--cocoa) 45%, var(--terracotta));
+  font-variant-numeric: tabular-nums;
+}
+.cart-bar__label {
+  flex: 1;
+}
+.cart-bar__total {
+  white-space: nowrap;
+}
+/* On the cart page the same progress sits under the total. */
+.order-summary .free-progress,
+.order-lines + * .free-progress {
+  margin: 0.4rem 0 0.2rem;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cart-bar {
+    animation: none;
+  }
+}

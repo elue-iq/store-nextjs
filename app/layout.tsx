@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { CartBar } from "@/components/CartBar";
 // Fonts are self-hosted (no request to Google): Cairo for Arabic, Bodoni Moda for English display.
 import "@fontsource-variable/cairo/wght.css";
 import "@fontsource-variable/bodoni-moda/opsz.css";
@@ -69,6 +70,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <main>{children}</main>
                 <ChromeGate>
                   <Footer />
+                  <CartBar />
                 </ChromeGate>
               </CartProvider>
             </StockProvider>

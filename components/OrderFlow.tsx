@@ -18,7 +18,8 @@ import { DEFAULT_SLOT, type SlotKey } from "@/lib/delivery-slot";
 import { DeliveryFields, type DeliveryFieldsHandle } from "./DeliveryFields";
 import { buildWhatsAppText, priceCart, type CartItem } from "@/lib/order-text";
 import { formatIraqiMobile } from "@/lib/phone";
-import { collectStatement, formatIQD, freeDeliveryFor, freeDeliveryHint, site } from "@/lib/site";
+import { collectStatement, formatIQD, freeDeliveryFor, site } from "@/lib/site";
+import { FreeDeliveryProgress } from "./CartBar";
 import { fullAddress } from "@/lib/iraq";
 import { checkDelivery, cleanDelivery, ltr, phone2Error, type DeliveryInfo, type FieldErrors } from "@/lib/validate";
 import { dataClient, errorCode, errorDetail, errorFields } from "@/lib/data";
@@ -548,7 +549,7 @@ export function OrderFlow() {
           onRemove={() => cart.setCouponCode("-")}
         />
         <p className="order-pay">{collectStatement(total, false, freeDelivery ? "gift" : "driver")}</p>
-        {!freeDelivery && <p className="order-pay order-pay--free">{freeDeliveryHint(jarCount)}</p>}
+        {!freeDelivery && <FreeDeliveryProgress jars={jarCount} />}
         <p className="order-pay">{site.paymentNote}</p>
         <p className="order-pay">{site.courierNote}</p>
         <p className="order-pay">التوصيل لكل محافظات العراق.</p>
