@@ -6343,3 +6343,86 @@ button:not(:disabled):active,
   font-weight: 600;
   vertical-align: 0.15em;
 }
+
+/* ---- Products screen: availability, shown/hidden, discount per flavor ---- */
+.stock-list .stock-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 0.6rem;
+}
+.stock-list .stock-switch {
+  justify-self: start;
+}
+@media (max-width: 420px) {
+  .stock-list .stock-switch {
+    justify-self: stretch;
+  }
+}
+.stock-item.is-hidden {
+  border-style: dashed;
+  background: transparent;
+}
+.stock-item__tag {
+  display: inline-block;
+  width: fit-content;
+  margin-top: 0.15rem;
+  padding: 0 0.5rem;
+  border-radius: var(--radius-control);
+  background: var(--sand);
+  color: var(--terracotta);
+  font-size: 0.75rem;
+}
+.stock-discount {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+.stock-discount label {
+  display: grid;
+  gap: 0.2rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.stock-discount input {
+  width: 7rem;
+  min-height: 2.3rem;
+  padding: 0.2rem 0.6rem;
+  border: 1.5px solid var(--sand-deep);
+  border-radius: var(--radius-control);
+  background: #fff;
+  font: inherit;
+}
+.stock-discount small {
+  align-self: center;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* ---- A flavor's discount in the shop: old price crossed out, new price, «خصم» tag ---- */
+.has-discount del,
+.order-lines__price del {
+  color: var(--muted);
+  font-weight: 400;
+  text-decoration-thickness: 1.5px;
+}
+.has-discount strong {
+  color: var(--terracotta);
+}
+.price-off {
+  display: inline-block;
+  margin-inline-start: 0.45rem;
+  padding: 0 0.5rem;
+  border-radius: var(--radius-control);
+  background: var(--terracotta);
+  color: var(--cream);
+  font-size: 0.75em;
+  font-weight: 600;
+  vertical-align: 0.1em;
+  white-space: nowrap;
+}
+.order-lines__price del {
+  display: block;
+  font-size: 0.82em;
+}

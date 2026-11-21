@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Listed, ProductPrice } from "@/components/ProductPrice";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -98,7 +99,7 @@ export default async function ProductPage({ params }: Props) {
             <strong dir="ltr">{kcalText(product)} kcal</strong>
             <span>{kcalUnitAr(product)}</span>
           </p>
-          <p className="product__price">{formatIQD(product.price)} للعلبة</p>
+          <ProductPrice slug={product.slug} suffix=" للعلبة" className="product__price" />
           <PixelViewContent slug={product.slug} />
           <ProductBuyBox slug={product.slug} />
 
@@ -163,10 +164,12 @@ export default async function ProductPage({ params }: Props) {
         <h2>نكهات أخرى</h2>
         <div className="others__grid">
           {others.map((p) => (
-            <Link key={p.slug} href={`/products/${p.slug}`} className="others__item">
-              <JarLabel product={p} />
-              <span>{p.nameAr}</span>
-            </Link>
+            <Listed key={p.slug} slug={p.slug}>
+              <Link href={`/products/${p.slug}`} className="others__item">
+                <JarLabel product={p} />
+                <span>{p.nameAr}</span>
+              </Link>
+            </Listed>
           ))}
         </div>
       </section>

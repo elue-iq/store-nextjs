@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { Listed, ProductPrice } from "@/components/ProductPrice";
 import Link from "next/link";
 import { kcalText, nutNote, products, sharedPoints } from "@/lib/products";
 import { formatIQD, site, siteUrl } from "@/lib/site";
@@ -64,12 +65,14 @@ export default function Home() {
 
           <ul className="hero__flavors" aria-label="النكهات وسعرات القطعة">
             {products.map((p) => (
-              <li key={p.slug}>
-                <Link href={`/products/${p.slug}`} dir="ltr">
-                  <span>{p.nameEn}</span>
-                  <strong>{kcalText(p)} kcal</strong>
-                </Link>
-              </li>
+              <Listed key={p.slug} slug={p.slug}>
+                <li>
+                  <Link href={`/products/${p.slug}`} dir="ltr">
+                    <span>{p.nameEn}</span>
+                    <strong>{kcalText(p)} kcal</strong>
+                  </Link>
+                </li>
+              </Listed>
             ))}
           </ul>
         </div>
@@ -81,7 +84,8 @@ export default function Home() {
         </div>
         <div className="flavors__grid">
           {products.map((p, i) => (
-            <article key={p.slug} className="flavor">
+            <Listed key={p.slug} slug={p.slug}>
+            <article className="flavor">
               <Link href={`/products/${p.slug}`} className="flavor__visual" aria-label={`${p.nameAr}: التفاصيل`}>
                 <JarLabel product={p} preload={i < 2} />
               </Link>
@@ -89,10 +93,11 @@ export default function Home() {
                 <h3>
                   <Link href={`/products/${p.slug}`}>{p.nameAr}</Link>
                 </h3>
-                <p className="flavor__price">{formatIQD(p.price)}</p>
+                <ProductPrice slug={p.slug} className="flavor__price" />
               </div>
               <AddToCartButton slug={p.slug} />
             </article>
+            </Listed>
           ))}
         </div>
       </section>

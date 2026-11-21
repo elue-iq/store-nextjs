@@ -55,7 +55,7 @@ export const site = {
   // Delivery fee the customer pays the driver on top of the jars (Modon keeps it).
   deliveryFee: 5000,
   // Orders with at least this many jars get free delivery (ÉLUE pays the courier).
-  freeDeliveryMinJars: 4,
+  freeDeliveryMinJars: 3,
   // Public address used in links the server sends (Telegram).
   address: "https://elue-iq.com",
 };

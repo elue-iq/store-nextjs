@@ -46,7 +46,8 @@ export function OrderFlow() {
   const toast = useToast();
   const auth = useAuth();
   const stock = useStock();
-  const { lines, total: listTotal } = priceCart(cart.items);
+  // The jar price with the team's discount; the server prices the order the same way.
+  const { lines, total: listTotal } = priceCart(cart.items, undefined, stock.priceOf);
   const jarCount = lines.reduce((n, l) => n + l.qty, 0);
   const signedIn = auth.status === "signedIn";
   // Coupon: the one typed, else the affiliate link's own coupon ("-" = the customer removed it).
@@ -172,17 +173,20 @@ export function OrderFlow() {
   // Saved by itself right after ordering where a download is quiet (Android,
   // computers); on iPhone it needs a tap (share sheet → «حفظ الصورة»).
 
+  // Read through a ref: a settings refresh must not re-run the automatic save below.
+  const priceOfRef = useRef(stock.priceOf);
+  priceOfRef.current = stock.priceOf;
   const savePdf = useCallback(
     async (p: Placed, automatic: boolean) => {
       try {
-        const { lines: priced } = priceCart(p.items);
+        const { lines: priced } = priceCart(p.items, undefined, priceOfRef.current);
         const { saveOrderImage, isIOS } = await import("@/lib/receipt");
         if (automatic && isIOS()) return;
         const saved = await saveOrderImage(
           {
             ...p,
             items: [
-              ...priced.map((l) => ({ slug: l.product.slug, nameAr: l.product.nameAr, nameEn: l.product.nameEn, qty: l.qty, price: l.product.price })),
+              ...priced.map((l) => ({ slug: l.product.slug, nameAr: l.product.nameAr, nameEn: l.product.nameEn, qty: l.qty, price: l.price })),
               ...priceCart(p.gifts).lines.map((l) => ({ slug: l.product.slug, nameAr: l.product.nameAr, nameEn: l.product.nameEn, qty: l.qty, price: 0, gift: true })),
             ],
           },
@@ -461,7 +465,9 @@ export function OrderFlow() {
               <span className="order-lines__name">
                 {l.product.nameAr}
                 <small dir="ltr">{kcalText(l.product)} kcal {kcalUnitEn(l.product)}</small>
-                {!stock.isAvailable(l.product.slug) && <strong className="order-lines__soldout">نفدت الكمية حاليًا</strong>}
+                {!stock.isAvailable(l.product.slug) && (
+                  <strong className="order-lines__soldout">{stock.isHidden(l.product.slug) ? "غير متوفر حاليًا" : "نفدت الكمية حاليًا"}</strong>
+                )}
               </span>
               <span className="stepper stepper--small" role="group" aria-label={`كمية ${l.product.nameAr}`}>
                 <button type="button" onClick={() => changeQty(l.product.slug, l.product.nameAr, l.qty - 1)} aria-label="إنقاص الكمية">
@@ -472,7 +478,10 @@ export function OrderFlow() {
                   +
                 </button>
               </span>
-              <span className="order-lines__price">{formatIQD(l.subtotal)}</span>
+              <span className="order-lines__price">
+                {l.price < l.product.price && <del>{formatIQD(l.product.price * l.qty)}</del>}
+                {formatIQD(l.subtotal)}
+              </span>
             </li>
           ))}
           {giftItems.map((g) => {

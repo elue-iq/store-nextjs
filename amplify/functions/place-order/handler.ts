@@ -35,6 +35,7 @@ import { pendingReview } from "../../../lib/reviews";
 import { createPayment, getPaymentStatus, qiConfig, verifyNotification, type QiPayment } from "../../../lib/qi";
 import { GetFunctionUrlConfigCommand, LambdaClient } from "@aws-sdk/client-lambda";
 import { getProduct } from "../../../lib/products";
+import { catalogFrom, type Catalog } from "../../../lib/product-settings";
 import { cleanUnitPrice, isWholesale, WHOLESALE } from "../../../lib/wholesale";
 import { cleanGiftPicks, giftCampaignLive, giftLines, MANUAL_GIFT, paidLines, type GiftDrop, type GiftPick, type GiftQuote } from "../../../lib/gifts";
 import { countsAgainstCap, giftProblem, giftsUsed, offerOf, pickLive, reconcileGifts, rulesOf, setGiftUnits, type GiftProblem, type GiftRules } from "./gifts";
@@ -228,9 +229,11 @@ async function nextOrderNumber(): Promise<string> {
 }
 
 // Flavors the team has switched to «نفدت الكمية» on /admin.
-async function unavailableSlugs(): Promise<Set<string>> {
-  const { data } = await client.models.ProductSetting.list({ limit: 100 });
-  return new Set((data ?? []).filter((s) => !s.available).map((s) => s.slug));
+// Sold out, hidden and discounts per flavor (lib/product-settings.ts).
+async function productCatalog(): Promise<Catalog> {
+  const { data, errors } = await client.models.ProductSetting.list({ limit: 100 });
+  if (errors?.length) console.error("product settings failed", JSON.stringify(errors));
+  return catalogFrom(data);
 }
 
 function baghdadTime(d: Date): string {
@@ -475,12 +478,14 @@ async function placeOrderHandler(event: PlaceOrderEvent) {
     }
   }
   const items = Array.isArray(rawItems) ? (rawItems.slice(0, 10) as (CartItem & { price?: unknown })[]) : [];
-  const { lines } = priceCart(items, wholesale ? MAX_WHOLESALE_QTY : undefined);
+  const catalog = await productCatalog();
+  // Retail: the site price less the flavor's discount. Wholesale: the team's price (below).
+  const { lines } = priceCart(items, wholesale ? MAX_WHOLESALE_QTY : undefined, catalog.price);
   // The price each jar is sold at: the site price, or for wholesale the team's price.
   const unitPrice = new Map<string, number>();
   for (const l of lines) {
     if (!wholesale) {
-      unitPrice.set(l.product.slug, l.product.price);
+      unitPrice.set(l.product.slug, l.price);
       continue;
     }
     const typed = cleanUnitPrice(items.find((i) => i?.slug === l.product.slug)?.price);
@@ -522,8 +527,12 @@ async function placeOrderHandler(event: PlaceOrderEvent) {
   const commission = deal.campaign && !selfReferral ? commissionFor(jars, pricing.freeJars, deal.campaign.commissionPerJar) : 0;
 
   // The team may still take an order for a flavor marked sold out (e.g. stock on the way).
-  const soldOut = forCustomer ? new Set<string>() : await unavailableSlugs();
-  const missing = [...new Set([...lines.map((l) => l.product.slug), ...giftPicks.map((g) => g.slug)])].filter((slug) => soldOut.has(slug));
+  // The Instagram DM bot orders as the team but for a customer: it follows the shop's rules.
+  const botOrder = identity.sub === "ig-order";
+  const checkStock = !forCustomer || botOrder;
+  const missing = checkStock
+    ? [...new Set([...lines.map((l) => l.product.slug), ...giftPicks.map((g) => g.slug)])].filter((slug) => !catalog.available(slug))
+    : [];
   if (missing.length) throw new Error(`out_of_stock:${missing.join(",")}`);
 
   const customer = forCustomer ? await ensureCustomer(phone) : null;
@@ -1004,7 +1013,8 @@ async function quote(event: { identity: unknown; arguments: QuoteArgs }) {
       rawItems = [];
     }
   }
-  const { lines } = priceCart(Array.isArray(rawItems) ? (rawItems.slice(0, 10) as CartItem[]) : []);
+  const catalog = await productCatalog();
+  const { lines } = priceCart(Array.isArray(rawItems) ? (rawItems.slice(0, 10) as CartItem[]) : [], undefined, catalog.price);
   const jars = lines.reduce((n, l) => n + l.qty, 0);
   const history = phone ? await historyFor(phone) : null;
   const deal = await findDeal({
@@ -1016,7 +1026,7 @@ async function quote(event: { identity: unknown; arguments: QuoteArgs }) {
     useCredit: true,
   });
   const rule = deal.coupon ? ruleOf(deal.coupon) : null;
-  const p = priceOrder(lines.map((l) => ({ price: l.product.price, qty: l.qty })), rule, deal.credit);
+  const p = priceOrder(lines.map((l) => ({ price: l.price, qty: l.qty })), rule, deal.credit);
   // The gift offer for this cart: shown while jars are left; the customer's own limit is
   // checked once we know their number.
   const offer = await giftNow().catch((err) => (console.error("gift offer failed", err), null));
@@ -1195,6 +1205,8 @@ export const handler = async (event: unknown) => {
   if (field === "campaignVisit") return campaignVisit(event as Parameters<typeof campaignVisit>[0]);
   if (field === "campaignStats") return campaignStats(event as Parameters<typeof campaignStats>[0]);
   if (field === "giftOffer") return giftOffer();
+  // Direct call from the Instagram DM function only (not an AppSync field): the product settings.
+  if (field === "productSettings") return (await client.models.ProductSetting.list({ limit: 100 })).data ?? [];
   if (field === "giftAdmin") return giftAdmin(event as Parameters<typeof giftAdmin>[0]);
   try {
     return await placeOrderHandler(event as PlaceOrderEvent);

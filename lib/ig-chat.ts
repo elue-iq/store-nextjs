@@ -1,4 +1,5 @@
 import { products } from "./products";
+import type { Catalog } from "./product-settings";
 import { PROVINCES, isProvince } from "./iraq";
 import { nameError, areaError, addressError, phoneError } from "./validate";
 import { normalizeIraqiMobile } from "./phone";
@@ -41,16 +42,23 @@ const digits = (s: string) => s.replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥�
 const norm = (s: string) => s.replace(/[أإآ]/g, "ا").replace(/ى/g, "ي");
 export const isStart = (text: string) => START.test(norm(text.trim()));
 
-const label = (i: number) => products[i].nameAr;
+// The flavors offered in the chat: every flavor the shop shows (hidden ones are skipped).
+// `cat` = the team's product settings (lib/product-settings.ts); without it, every flavor at the site price.
+let cat: Catalog | undefined;
+const offered = () => products.filter((p) => !cat || cat.listed(p.slug));
+const label = (i: number) => offered()[i]?.nameAr ?? "";
 const askQty = (i: number): Reply => ({
   text: `كم علبة تريدون من ${label(i)}؟ اضغطوا رقم أو اكتبوه.`,
   quick: ["0", "1", "2"],
 });
 
-export const begin = (): Turn => ({
-  state: { step: { at: "qty", i: 0 }, qty: {} },
-  replies: [{ text: "أهلاً بيكم في ÉLUE 🤎 نسجّل طلبكم بخطوات سريعة. تقدرون تكتبون «إلغاء» بأي وقت." }, askQty(0)],
-});
+export function begin(catalog?: Catalog): Turn {
+  cat = catalog;
+  return {
+    state: { step: { at: "qty", i: 0 }, qty: {} },
+    replies: [{ text: "أهلاً بيكم في ÉLUE 🤎 نسجّل طلبكم بخطوات سريعة. تقدرون تكتبون «إلغاء» بأي وقت." }, askQty(0)],
+  };
+}
 
 export const notStarted = (): Turn => ({
   state: null,
@@ -58,8 +66,8 @@ export const notStarted = (): Turn => ({
 });
 
 function summary(s: ChatState): string {
-  const items = products.map((p) => ({ slug: p.slug, qty: s.qty[p.slug] ?? 0 })).filter((i) => i.qty);
-  const { lines, total } = priceCart(items);
+  const items = offered().map((p) => ({ slug: p.slug, qty: s.qty[p.slug] ?? 0 })).filter((i) => i.qty);
+  const { lines, total } = priceCart(items, undefined, cat?.price);
   const jars = lines.reduce((n, l) => n + l.qty, 0);
   const free = freeDeliveryFor(jars);
   const fmt = (n: number) => (Number(n) || 0).toLocaleString("en-US");
@@ -82,7 +90,8 @@ function matchProvince(raw: string): string | null {
   return PROVINCES.find((p) => norm(p) === n) ?? PROVINCES.find((p) => norm(p).includes(n) || n.includes(norm(p))) ?? null;
 }
 
-export function next(state: ChatState, input: string): Turn {
+export function next(state: ChatState, input: string, catalog?: Catalog): Turn {
+  cat = catalog;
   const text = input.trim();
   if (CANCEL.test(text)) {
     return { state: null, replies: [{ text: "تم إلغاء الطلب. إذا تحتاجون شي اكتبوا «اطلب» أو «أحچي ويا الفريق»." }] };
@@ -98,8 +107,9 @@ export function next(state: ChatState, input: string): Turn {
       const i = s.step.i;
       const n = Number(digits(text));
       if (!/^\d{1,2}$/.test(digits(text)) || !Number.isFinite(n)) return again(askQty(i), "اختاروا رقم من الأزرار أو اكتبوه (0 إلى 20).");
-      s.qty[products[i].slug] = Math.min(n, 20);
-      if (i + 1 < products.length) {
+      const flavor = offered()[i];
+      if (flavor) s.qty[flavor.slug] = Math.min(n, 20);
+      if (i + 1 < offered().length) {
         s.step = { at: "qty", i: i + 1 };
         return again(askQty(i + 1));
       }
@@ -171,7 +181,7 @@ export function next(state: ChatState, input: string): Turn {
           province: s.province!,
           area: s.area!,
           address: s.address!,
-          items: products.map((p) => ({ slug: p.slug, qty: s.qty[p.slug] ?? 0 })).filter((i) => i.qty),
+          items: offered().map((p) => ({ slug: p.slug, qty: s.qty[p.slug] ?? 0 })).filter((i) => i.qty),
         },
       };
     }
