@@ -155,6 +155,11 @@ const schema = a
         coupon: a.json().authorization((allow) => [allow.group("ADMINS")]), // the coupon's rule when it was used
         cashback: a.integer(), // credit the customer earns once this order is delivered
         creditUsed: a.integer(), // credit from earlier cashback spent on this order
+        // Loyalty reward used on this order (lib/rewards.ts): its points leave the balance while
+        // the order is live. The discount itself is in discount / couponLabel / coupon (rule).
+        pointsSpent: a.integer(),
+        rewardId: a.string(),
+        rewardTitle: a.string(),
         // Affiliate campaign that brought the order (link or its coupon), and the sponsor's commission. Team only.
         campaignId: a.string().authorization((allow) => [allow.group("ADMINS")]),
         campaignSlug: a.string().authorization((allow) => [allow.group("ADMINS")]),
@@ -309,6 +314,34 @@ const schema = a
 
     // Stock switch per flavor, set by the team on /admin. No row = available.
     // Everyone can read it (the shop shows «نفدت الكمية»); only ADMINS change it.
+    // Loyalty rewards customers buy with points (lib/rewards.ts). Anyone can read the list
+    // (the shop shows it); only the team edits it. The server checks every use.
+    Reward: a
+      .model({
+        title: a.string(), // empty = written from the kind and value
+        kind: a.string().required(), // ORDER_OFF | PRODUCT_OFF | FREE_PRODUCT | FREE_DELIVERY
+        points: a.integer().required(),
+        value: a.integer(), // dinars off (ORDER_OFF, PRODUCT_OFF)
+        slug: a.string(), // the flavor (PRODUCT_OFF, FREE_PRODUCT)
+        minJars: a.integer(),
+        active: a.boolean(),
+        startsAt: a.datetime(),
+        endsAt: a.datetime(),
+        sort: a.integer(),
+      })
+      .authorization((allow) => [allow.publicApiKey().to(["read"]), allow.authenticated().to(["read"]), allow.group("ADMINS")]),
+
+    // Points the team gives a customer by hand (or takes back: negative). By WhatsApp number.
+    PointsGrant: a
+      .model({
+        phone: a.string().required(),
+        points: a.integer().required(),
+        reason: a.string(),
+        createdBy: a.string(),
+      })
+      .secondaryIndexes((index) => [index("phone")])
+      .authorization((allow) => [allow.group("ADMINS")]),
+
     // Team-only prices, never shown to customers: the default wholesale jar price (lib/wholesale.ts).
     WholesaleSetting: a
       .model({
@@ -378,6 +411,8 @@ const schema = a
         orderDate: a.string(),
         // Team only: "WHOLESALE" = a B2B order; each item then carries its jar price (items[].price).
         saleType: a.string(),
+        // A loyalty reward to use on this order (Reward id). Replaces any discount code.
+        rewardId: a.string(),
         businessName: a.string(),
         // The customer pays now with Qi Card instead of cash to the driver.
         payOnline: a.boolean(),
@@ -415,9 +450,18 @@ const schema = a
     quote: a
       .query()
       // phone: the team pricing an order for this customer (ignored for anyone else).
-      .arguments({ items: a.json().required(), couponCode: a.string(), ref: a.string(), province: a.string(), phone: a.string() })
+      .arguments({ items: a.json().required(), couponCode: a.string(), ref: a.string(), province: a.string(), phone: a.string(), rewardId: a.string() })
       .returns(a.json())
       .authorization((allow) => [allow.publicApiKey(), allow.authenticated()])
+      .handler(a.handler.function(placeOrder)),
+
+    // The signed-in customer's points (earned, waiting, spent, given by the team, balance),
+    // or a customer's points for the team (phone). lib/loyalty.ts
+    myPoints: a
+      .query()
+      .arguments({ phone: a.string() })
+      .returns(a.json())
+      .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(placeOrder)),
 
     // The live gift campaign as the shop shows it (banner, flavors to choose from), or null.

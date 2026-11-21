@@ -50,6 +50,8 @@ export function buildOrderMessage(o: {
   creditUsed?: number | null;
   couponCode?: string | null;
   couponLabel?: string | null;
+  rewardTitle?: string | null; // loyalty reward used (lib/rewards.ts)
+  pointsSpent?: number | null;
   cashback?: number | null;
   campaignSlug?: string | null;
 }): string {

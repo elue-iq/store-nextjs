@@ -26,7 +26,8 @@ function useAddWithToast() {
     toast({
       id: "cart",
       message: qty > 1 ? `أضفنا ${name} إلى السلة (${jarsLabel(qty)}).` : `أضفنا ${name} إلى السلة.`,
-      action: withAction ? { label: "عرض السلة", href: "/order" } : undefined,
+      // The cart bar at the bottom already leads to the cart; the alert stays short.
+      action: withAction && !document.querySelector(".cart-bar") ? { label: "عرض السلة", href: "/order" } : undefined,
     });
   };
 }

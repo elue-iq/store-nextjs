@@ -36,6 +36,8 @@ import { createPayment, getPaymentStatus, qiConfig, verifyNotification, type QiP
 import { GetFunctionUrlConfigCommand, LambdaClient } from "@aws-sdk/client-lambda";
 import { getProduct } from "../../../lib/products";
 import { catalogFrom, type Catalog } from "../../../lib/product-settings";
+import { pointsSummary, type PointsSummary } from "../../../lib/loyalty";
+import { liveReward, rewardProblem, rewardProblemText, rewardRule, rewardTitle, sortRewards, type Reward } from "../../../lib/rewards";
 import { cleanUnitPrice, isWholesale, WHOLESALE } from "../../../lib/wholesale";
 import { cleanGiftPicks, giftCampaignLive, giftLines, MANUAL_GIFT, paidLines, type GiftDrop, type GiftPick, type GiftQuote } from "../../../lib/gifts";
 import { countsAgainstCap, giftProblem, giftsUsed, offerOf, pickLive, reconcileGifts, rulesOf, setGiftUnits, type GiftProblem, type GiftRules } from "./gifts";
@@ -277,15 +279,52 @@ async function campaignById(id: string | null | undefined): Promise<CampaignReco
   return data ?? null;
 }
 
-type History = { id: string; status: string; couponCode?: string | null; cashback?: number | null; creditUsed?: number | null; giftCampaignId?: string | null }[];
+type History = {
+  id: string;
+  status: string;
+  couponCode?: string | null;
+  cashback?: number | null;
+  creditUsed?: number | null;
+  giftCampaignId?: string | null;
+  total: number;
+  pointsSpent?: number | null;
+  saleType?: string | null;
+}[];
 
 // A customer's earlier orders (by WhatsApp number), for coupon limits and credit.
 async function historyFor(phone: string): Promise<History> {
   const { data } = await client.models.Order.listOrderByPhone(
     { phone },
-    { limit: 500, selectionSet: ["id", "status", "couponCode", "cashback", "creditUsed", "giftCampaignId"] },
+    { limit: 500, selectionSet: ["id", "status", "couponCode", "cashback", "creditUsed", "giftCampaignId", "total", "pointsSpent", "saleType"] },
   );
   return (data ?? []) as History;
+}
+
+// ---- Loyalty points and rewards (lib/loyalty.ts, lib/rewards.ts) -------------------------
+
+async function pointsOf(phone: string, history?: History): Promise<PointsSummary> {
+  const [orders, grants] = await Promise.all([
+    history ?? historyFor(phone),
+    client.models.PointsGrant.listPointsGrantByPhone({ phone }, { limit: 500, selectionSet: ["points"] }).then((r) => r.data ?? []),
+  ]);
+  return pointsSummary(orders, grants);
+}
+
+async function liveRewards(): Promise<Reward[]> {
+  const { data, errors } = await client.models.Reward.list({ limit: 200 });
+  if (errors?.length) console.error("rewards failed", JSON.stringify(errors));
+  return sortRewards((data ?? []).filter((r) => liveReward(r)));
+}
+
+const flavorName = (slug: string) => getProduct(slug)?.nameAr;
+
+// myPoints: the signed-in customer's points; the team may ask for a customer's (phone).
+async function myPoints(event: { identity: unknown; arguments: { phone?: string | null } }) {
+  const identity = event.identity as AppSyncIdentityCognito | null;
+  const isTeam = Boolean(identity && (identity.groups ?? []).includes("ADMINS"));
+  const phone = isTeam && event.arguments.phone ? normalizeIraqiMobile(String(event.arguments.phone)) : identity && "sub" in identity ? await customerPhone(identity) : null;
+  if (!phone) throw new Error("not_signed_in");
+  return JSON.stringify(await pointsOf(phone));
 }
 
 // Uses of a coupon by everyone: an atomic counter, refused once maxUses is reached.
@@ -506,18 +545,28 @@ async function placeOrderHandler(event: PlaceOrderEvent) {
   // Coupon, credit and affiliate campaign. A code that can't be used stops the order with
   // the reason (the checkout already showed it), so nobody pays more than they expected.
   const history = await historyFor(phone);
+  // A loyalty reward replaces any discount code: one discount per order.
+  const rewardId = wholesale ? "" : String(args.rewardId ?? "").trim();
+  let reward: Reward | null = null;
+  if (rewardId) {
+    reward = (await client.models.Reward.get({ id: rewardId })).data ?? null;
+    const balance = (await pointsOf(phone, history)).balance;
+    const problem = rewardProblem(reward, { now: new Date(), balance, lines: lines.map((l) => ({ slug: l.product.slug, qty: l.qty })) });
+    if (problem) throw new Error(`reward:${rewardProblemText(problem, reward, balance, flavorName)}`);
+  }
   const deal = await findDeal({
-    couponCode: wholesale ? "" : String(args.couponCode ?? ""),
+    couponCode: wholesale || reward ? "" : String(args.couponCode ?? ""),
     ref: wholesale ? "" : String(args.ref ?? ""),
     jars,
     phone,
     history,
     useCredit: !paid && !wholesale,
   });
-  if (!wholesale && deal.couponError && normalizeCode(args.couponCode)) throw new Error(`coupon:${deal.couponError}`);
-  const rule = deal.coupon ? ruleOf(deal.coupon) : null;
+  if (reward) deal.coupon = null; // not even the link's code: the reward is the discount
+  if (!wholesale && !reward && deal.couponError && normalizeCode(args.couponCode)) throw new Error(`coupon:${deal.couponError}`);
+  const rule = reward ? rewardRule(reward) : deal.coupon ? ruleOf(deal.coupon) : null;
   const pricing = priceOrder(
-    lines.map((l) => ({ price: priceOf(l.product.slug), qty: l.qty })),
+    lines.map((l) => ({ price: priceOf(l.product.slug), qty: l.qty, slug: l.product.slug })),
     rule,
     deal.credit,
   );
@@ -609,8 +658,11 @@ async function placeOrderHandler(event: PlaceOrderEvent) {
       subtotal: pricing.subtotal,
       discount: pricing.discount || null,
       couponCode: deal.coupon?.code ?? null,
-      couponLabel: rule ? couponLabel(rule) : null,
+      couponLabel: reward ? rewardTitle(reward, flavorName) : rule ? couponLabel(rule) : null,
       coupon: rule ? JSON.stringify(rule) : null,
+      pointsSpent: reward ? reward.points : null,
+      rewardId: reward?.id ?? null,
+      rewardTitle: reward ? rewardTitle(reward, flavorName) : null,
       cashback: pricing.cashback || null,
       creditUsed: pricing.creditUsed || null,
       campaignId: deal.campaign?.id ?? null,
@@ -829,6 +881,7 @@ async function notifyTeam(order: OrderRecord): Promise<boolean> {
     creditUsed: order.creditUsed ?? null,
     couponCode: order.couponCode ?? null,
     couponLabel: order.couponLabel ?? null,
+    rewardTitle: order.rewardTitle ? `${order.rewardTitle} · ${order.pointsSpent ?? 0} نقطة` : null,
     cashback: order.cashback ?? null,
     campaignSlug: order.campaignSlug ?? null,
   });
@@ -992,7 +1045,7 @@ async function qiConfirm(event: { identity: unknown; arguments: { orderNumber: s
 
 // ---- Checkout price, affiliate visits ---------------------------------------------
 
-type QuoteArgs = { items: unknown; couponCode?: string | null; ref?: string | null; province?: string | null; phone?: string | null };
+type QuoteArgs = { items: unknown; couponCode?: string | null; ref?: string | null; province?: string | null; phone?: string | null; rewardId?: string | null };
 
 async function quote(event: { identity: unknown; arguments: QuoteArgs }) {
   const identity = event.identity as AppSyncIdentityCognito | null;
@@ -1017,16 +1070,37 @@ async function quote(event: { identity: unknown; arguments: QuoteArgs }) {
   const { lines } = priceCart(Array.isArray(rawItems) ? (rawItems.slice(0, 10) as CartItem[]) : [], undefined, catalog.price);
   const jars = lines.reduce((n, l) => n + l.qty, 0);
   const history = phone ? await historyFor(phone) : null;
+  // Loyalty: the customer's balance and every live reward, with whether it works on this cart.
+  const points = phone && history ? await pointsOf(phone, history) : null;
+  const cartLines = lines.map((l) => ({ slug: l.product.slug, qty: l.qty }));
+  const now = new Date();
+  const rewards = points
+    ? (await liveRewards()).map((r) => {
+        const problem = rewardProblem(r, { now, balance: points.balance, lines: cartLines });
+        return {
+          id: r.id,
+          title: rewardTitle(r, flavorName),
+          points: r.points,
+          kind: r.kind,
+          ok: !problem,
+          reason: problem ? rewardProblemText(problem, r, points.balance, flavorName) : null,
+        };
+      })
+    : [];
+  const wanted = String(event.arguments.rewardId ?? "").trim();
+  const reward = wanted ? rewards.find((r) => r.id === wanted) ?? null : null;
+  const rewardRow = reward?.ok ? (await client.models.Reward.get({ id: reward.id })).data : null;
   const deal = await findDeal({
-    couponCode: String(event.arguments.couponCode ?? ""),
+    couponCode: rewardRow ? "" : String(event.arguments.couponCode ?? ""),
     ref: String(event.arguments.ref ?? ""),
     jars,
     phone,
     history,
     useCredit: true,
   });
-  const rule = deal.coupon ? ruleOf(deal.coupon) : null;
-  const p = priceOrder(lines.map((l) => ({ price: l.price, qty: l.qty })), rule, deal.credit);
+  if (rewardRow) deal.coupon = null;
+  const rule = rewardRow ? rewardRule(rewardRow) : deal.coupon ? ruleOf(deal.coupon) : null;
+  const p = priceOrder(lines.map((l) => ({ price: l.price, qty: l.qty, slug: l.product.slug })), rule, deal.credit);
   // The gift offer for this cart: shown while jars are left; the customer's own limit is
   // checked once we know their number.
   const offer = await giftNow().catch((err) => (console.error("gift offer failed", err), null));
@@ -1042,7 +1116,12 @@ async function quote(event: { identity: unknown; arguments: QuoteArgs }) {
     deliveryFee: p.freeDelivery ? 0 : site.deliveryFee,
     pay: p.total + (p.freeDelivery ? 0 : site.deliveryFee),
     credit: deal.credit,
-    coupon: deal.coupon
+    points: points ? { balance: points.balance, pending: points.pending } : null,
+    rewards,
+    reward: wanted ? (reward ? { id: reward.id, title: reward.title, points: reward.points, ok: reward.ok, error: reward.reason } : { id: wanted, ok: false, error: "هذه المكافأة غير متاحة حالياً." }) : null,
+    coupon: rewardRow
+      ? null
+      : deal.coupon
       ? { code: deal.coupon.code, label: couponLabel(rule!), ok: true, hint: deal.hint }
       : normalizeCode(event.arguments.couponCode) || deal.couponError
         ? { code: normalizeCode(event.arguments.couponCode), ok: false, error: deal.couponError, hint: deal.hint }
@@ -1202,6 +1281,7 @@ export const handler = async (event: unknown) => {
   const field = ev?.fieldName ?? ev?.info?.fieldName;
   if (field === "qiConfirm") return qiConfirm(event as Parameters<typeof qiConfirm>[0]);
   if (field === "quote") return quote(event as Parameters<typeof quote>[0]);
+  if (field === "myPoints") return myPoints(event as Parameters<typeof myPoints>[0]);
   if (field === "campaignVisit") return campaignVisit(event as Parameters<typeof campaignVisit>[0]);
   if (field === "campaignStats") return campaignStats(event as Parameters<typeof campaignStats>[0]);
   if (field === "giftOffer") return giftOffer();

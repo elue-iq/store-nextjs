@@ -15,6 +15,7 @@ const SOURCE_PARAMS = ["ref", "utm_source", "utm_medium", "utm_campaign", "utm_c
 // coupon (if any) is offered at checkout.
 const REF_KEY = "elue-ref-v1";
 const COUPON_KEY = "elue-coupon-v1";
+const REWARD_KEY = "elue-reward-v1"; // the loyalty reward picked for the next order
 const REF_DAYS = 30;
 type RefState = { ref: string; at: number; coupon?: { code: string; label: string } | null };
 
@@ -34,6 +35,8 @@ type CartContextValue = {
   refCoupon: { code: string; label: string } | null;
   couponCode: string;
   setCouponCode: (code: string) => void;
+  rewardId: string; // loyalty reward to use ("" = none)
+  setRewardId: (id: string) => void;
 };
 
 const CartContext = createContext<CartContextValue | null>(null);
@@ -61,6 +64,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
   const [refState, setRefState] = useState<RefState | null>(null);
   const [couponCode, setCoupon] = useState("");
+  const [rewardId, setReward] = useState("");
 
   useEffect(() => {
     setCart(read<CartState>(CART_KEY, {}));
@@ -78,6 +82,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }
 
     setCoupon(read<string>(COUPON_KEY, ""));
+    setReward(read<string>(REWARD_KEY, ""));
     const saved = read<RefState | null>(REF_KEY, null);
     const fresh = saved && Date.now() - saved.at < REF_DAYS * 86_400_000 ? saved : null;
     const linkRef = (params.get("ref") ?? "").trim().toLowerCase().slice(0, 40);
@@ -110,6 +115,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     write(COUPON_KEY, code);
     setCoupon(code);
   }, []);
+  const setRewardId = useCallback((id: string) => {
+    write(REWARD_KEY, id);
+    setReward(id);
+  }, []);
 
   const update = useCallback((fn: (prev: CartState) => CartState) => {
     setCart((prev) => {
@@ -130,6 +139,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       refCoupon: refState?.coupon ?? null,
       couponCode,
       setCouponCode,
+      rewardId,
+      setRewardId,
       add: (slug, qty = 1) =>
         update((prev) => ({ ...prev, [slug]: Math.min(MAX_QTY_PER_LINE, (prev[slug] ?? 0) + qty) })),
       setQty: (slug, qty) =>
@@ -147,7 +158,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         }),
       clear: () => update(() => ({})),
     };
-  }, [cart, ready, source, update, refState, couponCode, setCouponCode]);
+  }, [cart, ready, source, update, refState, couponCode, setCouponCode, rewardId, setRewardId]);
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }

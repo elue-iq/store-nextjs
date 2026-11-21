@@ -20,6 +20,7 @@ import { AdminBoxyFeed } from "./AdminBoxy";
 import { AdminPrep } from "./AdminPrep";
 import { AdminReviews } from "./AdminReviews";
 import { AdminCoupons } from "./AdminCoupons";
+import { AdminRewards } from "./AdminRewards";
 import { AdminAffiliates } from "./AdminAffiliates";
 import { AdminGifts } from "./AdminGifts";
 import { callGiftAdmin } from "@/lib/gift-admin";
@@ -58,7 +59,7 @@ function orderFromUrl(): string | null {
 // Which section the list screen shows (?view=dashboard etc.), so a refresh stays there.
 function viewFromUrl(): View {
   const v = new URLSearchParams(window.location.search).get("view");
-  return v === "dashboard" || v === "customers" || v === "products" || v === "delivery" || v === "reviews" || v === "prep" || v === "coupons" || v === "affiliates" || v === "gifts"
+  return v === "dashboard" || v === "customers" || v === "products" || v === "delivery" || v === "reviews" || v === "prep" || v === "coupons" || v === "rewards" || v === "affiliates" || v === "gifts"
     ? v
     : "orders";
 }
@@ -609,6 +610,17 @@ export function AdminView() {
     );
   }
 
+  if (view === "rewards") {
+    return (
+      <div className="admin-screen">
+        {pullEl}
+        {listHead("المكافآت والنقاط", "شنو يگدر يشتري العميل بنقاطه، ونقاط يدوية")}
+        <AdminRewards orders={orders} onOpenOrder={openOrder} />
+        {drawer}
+      </div>
+    );
+  }
+
   if (view === "gifts") {
     return (
       <div className="admin-screen">
@@ -1084,7 +1096,13 @@ function OrderDetail({
             {o.discount ? (
               <div className="is-off">
                 <dt>
-                  {o.couponLabel ?? "خصم"} · <span dir="ltr">{o.couponCode}</span>
+                  {o.rewardTitle ? (
+                    <>مكافأة النقاط: {o.rewardTitle} · {o.pointsSpent ?? 0} نقطة</>
+                  ) : (
+                    <>
+                      {o.couponLabel ?? "خصم"} · <span dir="ltr">{o.couponCode}</span>
+                    </>
+                  )}
                 </dt>
                 <dd>{minusIQD(o.discount)}</dd>
               </div>

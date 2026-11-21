@@ -13,7 +13,9 @@
 
 import { freeDeliveryFor, minusIQD } from "./site";
 
-export type CouponKind = "PERCENT" | "FIXED" | "FREE_DELIVERY" | "FREE_JARS" | "CASHBACK";
+export type CouponKind = "PERCENT" | "FIXED" | "FREE_DELIVERY" | "FREE_JARS" | "CASHBACK" | "PRODUCT_OFF" | "FREE_PRODUCT";
+// PRODUCT_OFF / FREE_PRODUCT are used by loyalty rewards (lib/rewards.ts): value off one jar
+// of `slug`, or one jar of `slug` free. Not offered as coupon kinds in the coupons screen.
 export const COUPON_KINDS: CouponKind[] = ["PERCENT", "FIXED", "FREE_DELIVERY", "FREE_JARS", "CASHBACK"];
 
 export const COUPON_KIND_LABELS: Record<CouponKind, string> = {
@@ -22,6 +24,8 @@ export const COUPON_KIND_LABELS: Record<CouponKind, string> = {
   FREE_DELIVERY: "توصيل مجاني",
   FREE_JARS: "علب مجانية (اشترِ واحصل)",
   CASHBACK: "كاش باك (رصيد للطلب الجاي)",
+  PRODUCT_OFF: "خصم على نكهة",
+  FREE_PRODUCT: "علبة مجانية من نكهة",
 };
 
 // The rule as stored on the order (a snapshot: later edits to the coupon don't change old orders).
@@ -33,6 +37,7 @@ export type CouponRule = {
   buyQty?: number | null;
   freeQty?: number | null;
   minJars?: number | null;
+  slug?: string | null; // PRODUCT_OFF / FREE_PRODUCT: the flavor
 };
 
 export type Coupon = CouponRule & {
@@ -46,7 +51,7 @@ export type Coupon = CouponRule & {
   campaignId?: string | null;
 };
 
-type Line = { price: number; qty: number };
+type Line = { price: number; qty: number; slug?: string };
 
 // Codes are typed by people: trim, drop spaces, Arabic-Indic digits to Latin, upper case.
 export function normalizeCode(raw: unknown): string {
@@ -88,6 +93,14 @@ export function couponEffect(rule: CouponRule | null | undefined, lines: Line[])
     }
     case "CASHBACK":
       return { ...NONE, cashback: Math.min(round250((subtotal * Math.min(value, 100)) / 100), cap) };
+    case "PRODUCT_OFF": {
+      const line = lines.find((l) => l.slug === rule.slug && l.qty > 0);
+      return line ? { ...NONE, discount: Math.min(value, line.price) } : NONE;
+    }
+    case "FREE_PRODUCT": {
+      const line = lines.find((l) => l.slug === rule.slug && l.qty > 0);
+      return line ? { ...NONE, discount: line.price, freeJars: 1 } : NONE;
+    }
     default:
       return NONE;
   }
@@ -111,6 +124,10 @@ export function couponLabel(rule: CouponRule): string {
     }
     case "CASHBACK":
       return `رصيد ${v}% لطلبكم الجاي${rule.maxDiscount ? ` (حتى ${iqd(rule.maxDiscount)})` : ""}`;
+    case "PRODUCT_OFF":
+      return `خصم ${iqd(v)} على علبة`;
+    case "FREE_PRODUCT":
+      return "علبة مجانية";
   }
 }
 
@@ -254,12 +271,16 @@ export type PricedOrder = {
   creditUsed?: number | null;
   couponCode?: string | null;
   couponLabel?: string | null;
+  rewardTitle?: string | null; // a loyalty reward (lib/rewards.ts) instead of a code
+  pointsSpent?: number | null;
 };
 
 // «خصم كود NOOR10 (خصم 10%): −1,500 د.ع» lines for messages; [] when there's no discount.
 export function discountLines(o: PricedOrder, fmt: (n: number) => string): string[] {
   const out: string[] = [];
-  if (o.discount) out.push(`خصم ${o.couponCode ?? ""}${o.couponLabel ? ` (${o.couponLabel})` : ""}: ${minusIQD(o.discount)}`.replace("خصم  ", "خصم "));
+  if (o.discount && o.rewardTitle) out.push(`مكافأة النقاط (${o.rewardTitle}): ${minusIQD(o.discount)}`);
+  else if (o.discount) out.push(`خصم ${o.couponCode ?? ""}${o.couponLabel ? ` (${o.couponLabel})` : ""}: ${minusIQD(o.discount)}`.replace("خصم  ", "خصم "));
+  if (o.rewardTitle && !o.discount) out.push(`مكافأة النقاط: ${o.rewardTitle}`);
   if (o.creditUsed) out.push(`من رصيدكم: ${minusIQD(o.creditUsed)}`);
   return out;
 }

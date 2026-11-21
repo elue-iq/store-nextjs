@@ -176,7 +176,7 @@ export function AdminOrderForm({
     enabled: !editing && !wholesale && Boolean(customerForQuote) && jarsPay === "cash",
   });
   const edited = priceOrder(
-    lines.map((l) => ({ price: l.price, qty: l.qty })),
+    lines.map((l) => ({ price: l.price, qty: l.qty, slug: l.product.slug })),
     wholesale ? null : savedRule,
     wholesale ? 0 : order?.creditUsed ?? 0,
   );
@@ -312,9 +312,14 @@ export function AdminOrderForm({
         // A coupon / credit on the order: the discount follows the new jars.
         // Wholesale has none: a retail order turned wholesale drops its discount and gives the credit back.
         if (wholesale) {
-          Object.assign(changes, { subtotal: total, ...(order.discount || order.creditUsed || order.cashback ? { discount: null, creditUsed: null, cashback: null } : {}) });
+          Object.assign(changes, {
+            subtotal: total,
+            ...(order.discount || order.creditUsed || order.cashback ? { discount: null, creditUsed: null, cashback: null } : {}),
+            // A loyalty reward goes back to the customer's points.
+            ...(order.pointsSpent ? { pointsSpent: null, rewardId: null, rewardTitle: null, coupon: null, couponLabel: null } : {}),
+          });
         } else if (savedRule || order.creditUsed || order.discount) {
-          const oldLines = paidLines(order.items).map((i) => ({ price: i.price, qty: i.qty }));
+          const oldLines = paidLines(order.items).map((i) => ({ price: i.price, qty: i.qty, slug: i.slug }));
           const oldFree = couponEffect(savedRule, oldLines).freeJars;
           const perJar = order.commission ? order.commission / Math.max(1, order.jars - oldFree) : 0;
           Object.assign(changes, {
