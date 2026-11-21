@@ -8,6 +8,7 @@ import { AdminStock } from "./AdminStock";
 import { AdminDrawer, type AdminView as View } from "./AdminDrawer";
 import { usePullToRefresh } from "./usePullToRefresh";
 import { ORDERS_REFRESH_EVENT } from "@/lib/ordersRefresh";
+import { changedSince, mergeOrders, readOrderCache, writeOrderCache } from "@/lib/orderCache";
 import { AdminOrderForm } from "./AdminOrderForm";
 import { AdminEatix } from "./AdminEatix";
 import { ReviewPanel, ReviewPrompt, SendOrderToCustomer } from "./SendOrderToCustomer";
@@ -24,7 +25,8 @@ import { AdminGifts } from "./AdminGifts";
 import { callGiftAdmin } from "@/lib/gift-admin";
 import { MANUAL_GIFT } from "@/lib/gifts";
 import { AdminDashboard } from "./AdminDashboard";
-import { NotToggle } from "./NotToggle";
+import { AdminOrderFilters } from "./AdminOrderFilters";
+import { activeFacets, clearFacet, EMPTY_FILTERS, facetChoices, loadFilters, passes, saveFilters, type OrderFilters, type Sort } from "./orderFilters";
 import { orderTime } from "@/lib/order-time";
 import { OrderRow, REVIEW_STATE_LABELS, baghdadDay, reviewState, shortTime, type ReviewState } from "./AdminOrderRow";
 import { buildCustomers, CustomerDetail, CustomerList, CustomersSummary } from "./AdminCustomers";
@@ -40,8 +42,6 @@ import { formatIQD, minusIQD, payKeyOf, PAY_KEY_LABELS, payMethodText, type PayK
 import { fullAddress } from "@/lib/iraq";
 import { products } from "@/lib/products";
 
-type Filter = "ALL" | OrderStatus;
-type Sort = "newest" | "oldest";
 
 // The admin works like a phone app: a compact list of orders, and tapping one
 // pushes its own screen (?order=<id>). Back works with the «رجوع» button,
@@ -84,6 +84,21 @@ async function loadAllOrders(): Promise<Order[]> {
   return all.sort(newestFirst);
 }
 
+// Only the orders changed since `since` (ISO, server time). The server still looks through every
+// order, but returns, and runs the team-only fields for, the changed ones only: one light request
+// instead of several heavy ones. Too many changes (the resolver cap) -> the caller reads everything.
+async function loadChangedSince(since: string): Promise<Order[]> {
+  const all: Order[] = [];
+  let nextToken: string | null | undefined;
+  do {
+    const res = await dataClient.models.Order.list({ filter: { updatedAt: { gt: since } }, limit: 1000, nextToken });
+    if (res.errors?.length) throw new Error(res.errors.map((e) => e.message).join(" | "));
+    all.push(...res.data);
+    nextToken = res.nextToken;
+  } while (nextToken);
+  return all;
+}
+
 export function AdminView() {
   const auth = useAuth();
   const toast = useToast();
@@ -94,19 +109,13 @@ export function AdminView() {
   const [failed, setFailed] = useState(false);
   // Shown on screen so a loading problem can be reported with a screenshot.
   const [loadError, setLoadError] = useState("");
-  const [filter, setFilter] = useState<Filter>("ALL");
-  const [sort, setSort] = useState<Sort>("newest");
+  const [{ f, sort }, setFS] = useState<{ f: OrderFilters; sort: Sort }>({ f: EMPTY_FILTERS, sort: "newest" });
+  const setF = useCallback((next: OrderFilters | ((cur: OrderFilters) => OrderFilters)) => setFS((cur) => ({ ...cur, f: typeof next === "function" ? next(cur.f) : next })), []);
+  const setSort = useCallback((sort: Sort) => setFS((cur) => ({ ...cur, sort })), []);
   const [query, setQuery] = useState("");
-  const [flavors, setFlavors] = useState<string[]>([]); // any of these flavors; empty = all
-  const [when, setWhen] = useState<"" | "today" | "yesterday" | "7d" | "30d">("");
-  const [province, setProvince] = useState("");
-  const [pay, setPay] = useState<"" | PayKey | "freeDelivery">("");
-  const [courier, setCourier] = useState(""); // "" = all, "none", "MODON", or a local courier's id
-  const [review, setReview] = useState<"" | ReviewState>(""); // delivered orders by review state
-  // «بدون»: a filter keeps every order EXCEPT what is chosen in it.
-  type NotKey = "flavors" | "status" | "when" | "province" | "pay" | "courier" | "review";
-  const [not, setNotAll] = useState<Partial<Record<NotKey, boolean>>>({});
-  const setNot = (k: NotKey, on: boolean) => setNotAll((cur) => ({ ...cur, [k]: on }));
+  // The filters survive going into an order and back, and a reload (this tab only).
+  useEffect(() => setFS(loadFilters()), []);
+  useEffect(() => saveFilters(f, sort), [f, sort]);
   const searchRef = useRef<HTMLInputElement>(null);
   const reviewDue = useMemo(() => (allOrders ?? []).filter((o) => reviewState(o) === "notAsked").length, [allOrders]);
   const [selected, setSelected] = useState<string | null>(null);
@@ -147,40 +156,76 @@ export function AdminView() {
   }, []);
 
   // ---- Live orders --------------------------------------------------------
+  // Opening: the list saved on this phone shows at once; then only what changed since is asked for
+  // (everything, the first time or after a week). New and changed orders then arrive live.
+  // Coming back to the app (or a server function changing orders) asks again for the changes only.
+
+  const ordersRef = useRef<Order[] | null>(null);
+  ordersRef.current = allOrders;
+  const user = auth.status === "signedIn" && auth.isAdmin ? auth.phone : "";
+
+  const refreshOrders = useCallback(async (): Promise<void> => {
+    const since = ordersRef.current ? changedSince(ordersRef.current) : null;
+    if (since) {
+      try {
+        const changed = await loadChangedSince(since);
+        setOrders((cur) => mergeOrders(cur ?? [], changed).sort(newestFirst));
+        return;
+      } catch (err) {
+        console.warn("changed-orders read failed, reading everything", err);
+      }
+    }
+    setOrders(await loadAllOrders());
+  }, []);
 
   useEffect(() => {
-    if (auth.status !== "signedIn" || !auth.isAdmin) return;
+    if (!user) return;
     let alive = true;
     const started = Date.now();
-    loadAllOrders()
-      .then((list) => alive && setOrders((prev) => prev ?? list))
+    const cached = readOrderCache(user);
+    if (cached) setOrders((prev) => prev ?? [...cached].sort(newestFirst));
+    ordersRef.current = ordersRef.current ?? cached;
+    refreshOrders()
+      .then(() => {
+        if (!alive) return;
+        setSynced(true);
+        setLoadError("");
+      })
       .catch((err) => {
         console.error("admin orders list failed", err);
         if (alive) setLoadError(`list: ${err instanceof Error ? err.message : String(err)}`);
       });
     const slow = setTimeout(() => {
-      if (alive) setLoadError((e) => e || `لم يصل رد من الخادم خلال ${Math.round((Date.now() - started) / 1000)} ثانية.`);
+      if (alive && !ordersRef.current) setLoadError((e) => e || `لم يصل رد من الخادم خلال ${Math.round((Date.now() - started) / 1000)} ثانية.`);
     }, 15_000);
-    const sub = dataClient.models.Order.observeQuery().subscribe({
-      next: ({ items, isSynced }) => {
-        // observeQuery's first, unsynced batch can be empty: keep the full list until it syncs.
-        if (isSynced || items.length) setOrders([...items].sort(newestFirst));
-        setSynced(isSynced);
-        setFailed(false);
-        setLoadError("");
-      },
-      error: (err) => {
-        console.error("admin orders failed", err);
-        setFailed(true);
-        setLoadError((e) => e || `live: ${JSON.stringify(err).slice(0, 300)}`);
-      },
-    });
+    const upsert = (o: Order) => alive && setOrders((cur) => (cur ? mergeOrders(cur, [o]).sort(newestFirst) : cur));
+    const onError = (err: unknown) => {
+      console.error("admin orders live failed", err);
+      if (!alive) return;
+      setFailed(true);
+      setLoadError((e) => e || `live: ${JSON.stringify(err).slice(0, 300)}`);
+    };
+    const subs = [
+      dataClient.models.Order.onCreate().subscribe({ next: upsert, error: onError }),
+      dataClient.models.Order.onUpdate().subscribe({ next: upsert, error: onError }),
+      dataClient.models.Order.onDelete().subscribe({
+        next: (o) => alive && setOrders((cur) => cur?.filter((x) => x.id !== o.id) ?? cur),
+        error: onError,
+      }),
+    ];
     return () => {
       alive = false;
       clearTimeout(slow);
-      sub.unsubscribe();
+      for (const s of subs) s.unsubscribe();
     };
-  }, [auth.status, auth.isAdmin]);
+  }, [user, refreshOrders]);
+
+  // Keep the list on this phone for the next visit (a moment after it settles).
+  useEffect(() => {
+    if (!user || !allOrders || !synced) return;
+    const t = setTimeout(() => writeOrderCache(user, allOrders), 800);
+    return () => clearTimeout(t);
+  }, [user, allOrders, synced]);
 
   // New orders while the app is open: a short alert, and a badge on the app icon.
   const seen = useRef<Set<string> | null>(null);
@@ -204,19 +249,19 @@ export function AdminView() {
     else nav.clearAppBadge?.().catch(() => {});
   }, [newCount]);
 
-  // Re-read every order now. Server functions (assign a courier, Modon, Eatix) and the courier
-  // app change orders without the live subscription noticing.
+  // Re-read the changed orders now. Server functions (assign a courier, Modon, Eatix) and the
+  // courier app change orders without the live subscription noticing.
   const reloadOrders = useCallback(async () => {
     try {
-      setOrders(await loadAllOrders());
+      await refreshOrders();
     } catch (err) {
       console.error("orders refresh failed", err);
     }
-  }, []);
+  }, [refreshOrders]);
 
   useEffect(() => {
-    if (auth.status !== "signedIn" || !auth.isAdmin) return;
-    let last = 0;
+    if (!user) return;
+    let last = Date.now(); // the first read is already running
     const run = () => {
       if (Date.now() - last < 1500) return;
       last = Date.now();
@@ -231,7 +276,7 @@ export function AdminView() {
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", run);
     };
-  }, [auth.status, auth.isAdmin, reloadOrders]);
+  }, [user, reloadOrders]);
 
   // The team always uses WhatsApp Business. On Android a wa.me link asks "WhatsApp or WhatsApp Business?",
   // so inside /admin those links open WhatsApp Business directly (falling back to the normal link if it is missing).
@@ -282,82 +327,51 @@ export function AdminView() {
 
   const customers = useMemo(() => buildCustomers(orders ?? []), [orders]);
 
-  // Every filter except the flavor one, so each flavor chip can show how many orders it
-  // would give with the other filters as they are now.
-  const matches = useCallback(
-    (o: Order, q: string, qDigits: string): boolean => {
-      // «hit === not»: the order is left out (not chosen when «فقط», chosen when «بدون»).
-      const out = (k: NotKey, hit: boolean) => hit === Boolean(not[k]);
-      if (filter !== "ALL" && out("status", o.status === filter)) return false;
-      if (pay && out("pay", pay === "freeDelivery" ? Boolean(o.freeDelivery && !o.deliveryPaid) : payKeyOf(o) === pay)) return false;
-      if (province && out("province", o.province === province)) return false;
-      if (review && out("review", reviewState(o) === review)) return false;
-      if (when) {
-        const day = baghdadDay(orderTime(o));
-        const ago = (n: number) => baghdadDay(new Date(Date.now() - n * 86_400_000).toISOString());
-        if (out("when", when === "today" ? day === today : when === "yesterday" ? day === ago(1) : day >= ago(when === "7d" ? 6 : 29))) return false;
-      }
-      if (courier) {
-        const mine =
-          o.modonQr || o.courierKind === "MODON"
-            ? "MODON"
-            : o.boxyUid || o.courierKind === "BOXY"
-              ? "BOXY"
-              : o.courierKind === "LOCAL" && o.courierId
-                ? o.courierId
-                : "none";
-        if (out("courier", courier === "LOCAL" ? Boolean(o.courierKind === "LOCAL" && o.courierId) : mine === courier)) return false;
-      }
-      if (!q) return true;
-      return (
-        o.orderNumber.toLowerCase().includes(q) ||
-        (o.cashierOrderId ?? "").toLowerCase().includes(q) ||
-        // Modon's order number (on the sticker) and its internal id.
-        (o.modonQr ?? "").toLowerCase().includes(q) ||
-        (o.modonId ?? "").toLowerCase().includes(q) ||
-        (o.boxyCode ?? "").toLowerCase().includes(q) ||
-        // The payment's transaction number, and the courier's name.
-        (o.payRef ?? "").toLowerCase().includes(q) ||
-        (o.courierName ?? "").toLowerCase().includes(q) ||
-        o.name.toLowerCase().includes(q) ||
-        fullAddress(o).toLowerCase().includes(q) ||
-        (qDigits.length >= 3 && o.phone.includes(qDigits))
-      );
-    },
-    [filter, pay, province, when, courier, review, today, not],
-  );
-
-  const { shown, flavorCounts, jarsOfPicked } = useMemo(() => {
-    const q = toLatinDigits(query).trim().toLowerCase();
-    const qDigits = q.replace(/\D/g, "").replace(/^0+/, "");
-    const base = (orders ?? []).filter((o) => matches(o, q, qDigits));
-    const counts: Record<string, number> = {};
-    for (const o of base) for (const slug of new Set(o.items.map((i) => i?.slug))) if (slug) counts[slug] = (counts[slug] ?? 0) + 1;
-    // Every jar in the parcel counts, gifts included: «بدون جزر» = no carrot jar at all.
-    const list = flavors.length ? base.filter((o) => o.items.some((i) => i && flavors.includes(i.slug)) !== Boolean(not.flavors)) : base;
-    const jars = flavors.length && !not.flavors
-      ? list.reduce((n, o) => n + o.items.reduce((m, i) => m + (i && flavors.includes(i.slug) ? i.qty : 0), 0), 0)
-      : list.reduce((n, o) => n + o.jars, 0);
-    // With «بدون», each flavor chip counts the orders WITHOUT it.
-    if (not.flavors) for (const p of products) counts[p.slug] = base.length - (counts[p.slug] ?? 0);
-    return { shown: sort === "newest" ? list : [...list].reverse(), flavorCounts: counts, jarsOfPicked: jars };
-  }, [orders, query, sort, flavors, matches, not.flavors]);
-
   const provinces = useMemo(
     () => [...new Set((orders ?? []).map((o) => o.province).filter((p): p is string => Boolean(p)))].sort((a, b) => a.localeCompare(b, "ar")),
     [orders],
   );
-  const extraFilters = [flavors.length > 0, when !== "", province !== "", pay !== "", courier !== "", review !== "", filter !== "ALL", query.trim() !== ""].filter(Boolean).length;
+  // Local couriers that have orders, for the delivery filter.
+  const courierOptions = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const o of orders ?? []) if (o.courierKind === "LOCAL" && o.courierId) seen.set(o.courierId, o.courierName ?? "—");
+    return [...seen.entries()];
+  }, [orders]);
+
+  // The search box: order number, cashier / Modon / Boxy numbers, payment number, courier, name, address, phone.
+  const searched = useMemo(() => {
+    const q = toLatinDigits(query).trim().toLowerCase();
+    const qDigits = q.replace(/\D/g, "").replace(/^0+/, "");
+    if (!q) return orders ?? [];
+    return (orders ?? []).filter(
+      (o) =>
+        o.orderNumber.toLowerCase().includes(q) ||
+        (o.cashierOrderId ?? "").toLowerCase().includes(q) ||
+        (o.modonQr ?? "").toLowerCase().includes(q) ||
+        (o.modonId ?? "").toLowerCase().includes(q) ||
+        (o.boxyCode ?? "").toLowerCase().includes(q) ||
+        (o.payRef ?? "").toLowerCase().includes(q) ||
+        (o.courierName ?? "").toLowerCase().includes(q) ||
+        o.name.toLowerCase().includes(q) ||
+        fullAddress(o).toLowerCase().includes(q) ||
+        (qDigits.length >= 3 && o.phone.includes(qDigits)),
+    );
+  }, [orders, query]);
+
+  const { shown, jarsOfPicked } = useMemo(() => {
+    const list = searched.filter((o) => passes(o, f, today));
+    const jars =
+      f.flavors.length && !f.not.flavors
+        ? list.reduce((n, o) => n + o.items.reduce((m, i) => m + (i && f.flavors.includes(i.slug) ? i.qty : 0), 0), 0)
+        : list.reduce((n, o) => n + o.jars, 0);
+    return { shown: sort === "newest" ? list : [...list].reverse(), jarsOfPicked: jars };
+  }, [searched, f, sort, today]);
+  const choices = useMemo(() => facetChoices(searched, f, today, { provinces, couriers: courierOptions }), [searched, f, today, provinces, courierOptions]);
+
+  const extraFilters = activeFacets(f).length + (query.trim() ? 1 : 0);
   const clearFilters = () => {
-    setFilter("ALL");
-    setReview("");
-    setFlavors([]);
-    setWhen("");
-    setProvince("");
-    setPay("");
-    setCourier("");
+    setF(EMPTY_FILTERS);
     setQuery("");
-    setNotAll({});
   };
 
   // Orders for the label PDF: the local-courier orders shown, minus cancelled ones.
@@ -382,12 +396,6 @@ export function AdminView() {
     }
   }
 
-  // Local couriers that have orders, for the delivery filter.
-  const courierOptions = useMemo(() => {
-    const seen = new Map<string, string>();
-    for (const o of orders ?? []) if (o.courierKind === "LOCAL" && o.courierId) seen.set(o.courierId, o.courierName ?? "—");
-    return [...seen.entries()];
-  }, [orders]);
 
   // ---- Access -------------------------------------------------------------
 
@@ -661,7 +669,7 @@ export function AdminView() {
   return (
     <div className="admin-screen">
       {pullEl}
-      {listHead("لوحة الطلبات", synced ? "مباشر: تظهر الطلبات الجديدة تلقائيًا" : "جارٍ تحميل الطلبات…")}
+      {listHead("لوحة الطلبات", synced ? "مباشر: تظهر الطلبات الجديدة تلقائيًا" : orders ? "جارٍ التحديث…" : "جارٍ تحميل الطلبات…")}
 
       <dl className="admin-stats">
         <div>
@@ -732,120 +740,7 @@ export function AdminView() {
             </button>
           </span>
         </form>
-        <div className="admin-filters admin-flavors" role="group" aria-label="فلترة حسب النكهة">
-          <button
-            type="button"
-            aria-pressed={flavors.length === 0}
-            onClick={() => {
-              setFlavors([]);
-              setNot("flavors", false);
-            }}
-          >
-            كل النكهات
-          </button>
-          {flavors.length > 0 && <NotToggle on={Boolean(not.flavors)} onChange={(on) => setNot("flavors", on)} what="النكهة" />}
-          {products.map((p) => (
-            <button
-              key={p.slug}
-              type="button"
-              aria-pressed={flavors.includes(p.slug)}
-              onClick={() => setFlavors((cur) => (cur.includes(p.slug) ? cur.filter((x) => x !== p.slug) : [...cur, p.slug]))}
-            >
-              {p.nameAr}
-              <span>{flavorCounts[p.slug] ?? 0}</span>
-            </button>
-          ))}
-        </div>
-        <div className="admin-tools__row">
-          <div className="admin-filters" role="group" aria-label="فلترة حسب الحالة">
-            {(["ALL", ...STATUS_ORDER] as Filter[]).map((f) => (
-              <span key={f} style={{ display: "contents" }}>
-                <button
-                  type="button"
-                  aria-pressed={filter === f}
-                  onClick={() => {
-                    setFilter(f);
-                    if (f === "ALL") setNot("status", false);
-                  }}
-                >
-                  {f === "ALL" ? "الكل" : STATUS_LABELS[f]}
-                  <span>{f === "ALL" ? (orders?.length ?? 0) : stats.counts[f]}</span>
-                </button>
-                {f === "ALL" && filter !== "ALL" && <NotToggle on={Boolean(not.status)} onChange={(on) => setNot("status", on)} what="الحالة" />}
-              </span>
-            ))}
-          </div>
-          <div className="admin-tools__selects">
-            <span className={`admin-select-not${not.when ? " is-not" : ""}`}>
-              {when && <NotToggle on={Boolean(not.when)} onChange={(on) => setNot("when", on)} what="الفترة" />}
-              <select className="admin-sort" value={when} onChange={(e) => { if (!e.target.value) setNot("when", false); setWhen(e.target.value as typeof when); }} aria-label="الفترة">
-              <option value="">كل الأوقات</option>
-              <option value="today">اليوم</option>
-              <option value="yesterday">أمس</option>
-              <option value="7d">آخر 7 أيام</option>
-              <option value="30d">آخر 30 يوماً</option>
-            </select>
-            </span>
-            <span className={`admin-select-not${not.province ? " is-not" : ""}`}>
-              {province && <NotToggle on={Boolean(not.province)} onChange={(on) => setNot("province", on)} what="المحافظة" />}
-              <select className="admin-sort" value={province} onChange={(e) => { if (!e.target.value) setNot("province", false); setProvince(e.target.value); }} aria-label="المحافظة">
-              <option value="">كل المحافظات</option>
-              {provinces.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
-            </span>
-            <span className={`admin-select-not${not.pay ? " is-not" : ""}`}>
-              {pay && <NotToggle on={Boolean(not.pay)} onChange={(on) => setNot("pay", on)} what="طريقة الدفع" />}
-              <select className="admin-sort" value={pay} onChange={(e) => { if (!e.target.value) setNot("pay", false); setPay(e.target.value as typeof pay); }} aria-label="طريقة الدفع">
-              <option value="">كل طرق الدفع</option>
-              {(["cod", "QI", "ZAINCASH", "OTHER", "GIFT", "unknown"] as PayKey[]).map((k) => (
-                <option key={k} value={k}>
-                  {PAY_KEY_LABELS[k]}
-                </option>
-              ))}
-              <option value="freeDelivery">توصيل مجاني (هدية)</option>
-            </select>
-            </span>
-            <span className={`admin-select-not${not.courier ? " is-not" : ""}`}>
-              {courier && <NotToggle on={Boolean(not.courier)} onChange={(on) => setNot("courier", on)} what="شركة التوصيل" />}
-              <select className="admin-sort" value={courier} onChange={(e) => { if (!e.target.value) setNot("courier", false); setCourier(e.target.value); }} aria-label="شركة التوصيل">
-              <option value="">كل شركات التوصيل</option>
-              <option value="MODON">مدن Express</option>
-              <option value="BOXY">بوكسي</option>
-              {courierOptions.length > 0 && <option value="LOCAL">كل التوصيل المحلي</option>}
-              {courierOptions.map(([id, name]) => (
-                <option key={id} value={id}>
-                  {name}
-                </option>
-              ))}
-              <option value="none">بلا شركة توصيل</option>
-            </select>
-            </span>
-            <span className={`admin-select-not${not.review ? " is-not" : ""}`}>
-              {review && <NotToggle on={Boolean(not.review)} onChange={(on) => setNot("review", on)} what="التقييم" />}
-              <select className="admin-sort" value={review} onChange={(e) => { if (!e.target.value) setNot("review", false); setReview(e.target.value as typeof review); }} aria-label="التقييم">
-              <option value="">كل التقييمات</option>
-              {(["notAsked", "waiting", "reviewed"] as ReviewState[]).map((r) => (
-                <option key={r} value={r}>
-                  {REVIEW_STATE_LABELS[r]} ({(orders ?? []).filter((o) => reviewState(o) === r).length})
-                </option>
-              ))}
-            </select>
-            </span>
-            <select className="admin-sort" value={sort} onChange={(e) => setSort(e.target.value as Sort)} aria-label="الترتيب">
-              <option value="newest">الأحدث أولًا</option>
-              <option value="oldest">الأقدم أولًا</option>
-            </select>
-          </div>
-          {labelOrders.length > 0 && (
-            <button type="button" className="btn btn--ghost admin-labels" disabled={labelBusy} onClick={() => void downloadLabels()}>
-              {labelBusy ? "جارٍ تجهيز الملصقات…" : `تحميل ملصقات التوصيل المحلي (${labelOrders.length}) PDF`}
-            </button>
-          )}
-        </div>
+        <AdminOrderFilters f={f} onChange={setF} sort={sort} onSort={setSort} choices={choices} total={searched.length} shown={shown.length} />
       </div>
 
       {(failed || (loadError && orders === null)) && (
@@ -863,18 +758,23 @@ export function AdminView() {
       {orders && (
         <p className="admin-summary" aria-live="polite">
           <strong>{shown.length}</strong> طلب · <strong>{jarsOfPicked}</strong> علبة
-          {flavors.length > 0 &&
-            (not.flavors ? " · بدون " : " من ") + flavors.map((f) => products.find((p) => p.slug === f)?.nameAr ?? f).join(not.flavors ? " و" : " + ")}
+          {f.flavors.length > 0 &&
+            (f.not.flavors ? " · بدون " : " من ") + f.flavors.map((s) => products.find((p) => p.slug === s)?.nameAr ?? s).join(f.not.flavors ? " و" : " + ")}
           {extraFilters > 0 && (
             <button type="button" className="link-button" onClick={clearFilters}>
               مسح الفلاتر ({extraFilters})
             </button>
           )}
+          {labelOrders.length > 0 && (
+            <button type="button" className="link-button admin-labels" disabled={labelBusy} onClick={() => void downloadLabels()}>
+              {labelBusy ? "جارٍ تجهيز الملصقات…" : `ملصقات التوصيل المحلي (${labelOrders.length}) PDF`}
+            </button>
+          )}
         </p>
       )}
 
-      {orders && review !== "notAsked" && reviewDue > 0 && (
-        <button type="button" className="review-due" onClick={() => (setReview("notAsked"), setFilter("ALL"))}>
+      {orders && !(f.review.length === 1 && f.review[0] === "notAsked" && !f.not.review) && reviewDue > 0 && (
+        <button type="button" className="review-due" onClick={() => setF((cur) => ({ ...clearFacet(cur, "status"), review: ["notAsked"], not: { ...cur.not, status: false, review: false } }))}>
           <span>{reviewDue === 1 ? "طلب مُسلّم ما انطلب تقييمه" : `${reviewDue} طلبات مُسلّمة ما انطلب تقييمها`}</span>
           <strong>عرض ←</strong>
         </button>
@@ -885,7 +785,7 @@ export function AdminView() {
       <ul className="order-rows">
         {shown.map((o) => (
           <li key={o.id}>
-            <OrderRow order={o} today={today} onOpen={openOrder} flavors={flavors} />
+            <OrderRow order={o} today={today} onOpen={openOrder} flavors={f.not.flavors ? [] : f.flavors} />
           </li>
         ))}
       </ul>

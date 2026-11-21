@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { clearOrderCache } from "@/lib/orderCache";
 import { Amplify } from "aws-amplify";
 import { fetchAuthSession, getCurrentUser } from "aws-amplify/auth";
 import { Hub } from "aws-amplify/utils";
@@ -112,6 +113,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = useCallback(async () => {
     writeCache(null);
+    clearOrderCache();
     await logOut();
     await refresh();
   }, [refresh]);
