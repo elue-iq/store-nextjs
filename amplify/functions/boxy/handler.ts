@@ -4,8 +4,8 @@ import { generateClient } from "aws-amplify/data";
 import { getAmplifyDataClientConfig } from "@aws-amplify/backend/function/runtime";
 import { env } from "$amplify/env/boxy";
 import type { Schema } from "../../data/resource";
-import { BOXY_PROVINCE, boxyArea, boxyCollect, boxyErrorText, boxyProducts, boxyText, boxyTrack, statusFromBoxy, type BoxyRegion } from "../../../lib/boxy";
-import { parseTrackEvents, suggestRegion, type TrackEvent } from "../../../lib/modon";
+import { BOXY_PROVINCE, boxyCollect, boxyErrorText, boxyProducts, boxyTrack, statusFromBoxy, type BoxyRegion } from "../../../lib/boxy";
+import { parseTrackEvents, type TrackEvent } from "../../../lib/modon";
 import { site } from "../../../lib/site";
 import { timingSafeEqual } from "node:crypto";
 
@@ -63,7 +63,9 @@ async function call(path: string, init: RequestInit = {}): Promise<{ ok: boolean
   return { ok: res.ok && (reply.status ?? "success") === "success", http: res.status, reply, raw: clone };
 }
 
-function fail(r: { http: number; reply: Reply }, what: string): never {
+// Boxy's whole reply goes to the log (its message alone, e.g. «حدث خطأ ما», is not enough to find the cause).
+function fail(r: { http: number; reply: Reply }, what: string, body?: unknown): never {
+  console.error(`boxy ${what} refused`, JSON.stringify({ http: r.http, reply: r.reply, body }).slice(0, 4000));
   throw new Error(`boxy_${what}:${boxyErrorText(r.reply, r.http).slice(0, 300)}`);
 }
 
@@ -103,8 +105,8 @@ function orderBody(o: Order, regionName: string, cooled = true): Record<string, 
     saved_pick_up_address_uid: env.BOXY_PICKUP_UID,
     size: SIZE,
     contact: {
-      full_name: boxyText(o.name),
-      address_text: [o.province, o.area, o.address].map(boxyText).filter(Boolean).join(" - ").slice(0, 250),
+      full_name: o.name,
+      address_text: [o.province, o.area, o.address].filter(Boolean).join(" - ").slice(0, 250),
       phone: o.phone,
       secondary_phone: o.phone2 ?? null,
       email: FALLBACK_EMAIL,
@@ -123,7 +125,7 @@ const noCold = new Set<string>();
 const coldKey = (o: Order, region: string) => `${BOXY_PROVINCE[o.province ?? ""] ?? ""}|${region.trim().toLowerCase()}`;
 const coldRefused = (r: { reply: Reply }) => /مبرد|temperature|cool|refrigerat|chill/i.test(String(r.reply.message ?? "") + JSON.stringify(r.reply.errors ?? ""));
 
-async function sendOnce(path: string, method: "POST" | "PATCH", o: Order, regionName: string) {
+async function sendOrder(path: string, method: "POST" | "PATCH", o: Order, regionName: string) {
   const key = coldKey(o, regionName);
   if (!noCold.has(key)) {
     const r = await call(path, { method, body: JSON.stringify(orderBody(o, regionName, true)) });
@@ -133,40 +135,6 @@ async function sendOnce(path: string, method: "POST" | "PATCH", o: Order, region
   }
   const r = await call(path, { method, body: JSON.stringify(orderBody(o, regionName, false)) });
   return { r, cooled: false };
-}
-
-// Boxy's catch-all reply («حدث خطأ ما»): no field to fix, so another area may go through.
-const genericError = (r: { http: number; reply: Reply }) =>
-  r.http >= 500 || /حدث خطأ|something went wrong|server error|unexpected/i.test(String(r.reply.message ?? ""));
-
-function logRefusal(o: Order, region: string, r: { http: number; reply: Reply }) {
-  console.error("boxy refused the order", o.orderNumber, JSON.stringify({ region, http: r.http, reply: r.reply }).slice(0, 2000));
-}
-
-// The area in Boxy's own list to try when Boxy can't take the typed one: the best match,
-// or the province's only area. The customer's full address still goes in address_text.
-async function listedRegion(o: Order, used: string): Promise<string | null> {
-  const list = await regions(o.province ?? "").catch(() => [] as BoxyRegion[]);
-  if (!list.length || list.some((r) => r.name === used)) return null;
-  const pick = suggestRegion(list, boxyText(o.area), boxyText(o.address)) ?? (list.length === 1 ? list[0] : null);
-  return pick && pick.name !== used ? pick.name : null;
-}
-
-// Sends the order (create or edit). The area goes as its name only, in Latin digits; if
-// Boxy answers with its catch-all error, the order is sent once more with Boxy's listed area.
-async function sendOrder(path: string, method: "POST" | "PATCH", o: Order, typed: string) {
-  const region = boxyArea(typed);
-  const first = await sendOnce(path, method, o, region);
-  if (first.r.ok) return { ...first, region };
-  logRefusal(o, region, first.r);
-  if (!genericError(first.r)) return { ...first, region };
-  const other = await listedRegion(o, region);
-  if (!other) return { ...first, region };
-  console.log("boxy: trying again with Boxy's listed area", o.orderNumber, other);
-  const second = await sendOnce(path, method, o, other);
-  if (second.r.ok) return { ...second, region: other };
-  logRefusal(o, other, second.r);
-  return { ...(genericError(second.r) ? first : second), region };
 }
 
 // ---- Orders ---------------------------------------------------------------------
@@ -305,13 +273,11 @@ async function createAtBoxy(o: Order, regionName: string, regionId?: number | nu
   let fee: number | null = null;
   let track: string | null = null;
   let cooled = true;
-  let region = boxyArea(regionName);
   if (PRODUCTION) {
     const sent = await sendOrder("/orders/request", "POST", o, regionName);
     const r = sent.r;
     cooled = sent.cooled;
-    region = sent.region;
-    if (!r.ok) fail(r, "send");
+    if (!r.ok) fail(r, "send", orderBody(o, regionName, cooled));
     const order = ((r.reply.object as { order?: BoxyOrder } | undefined)?.order ?? {}) as BoxyOrder;
     if (!order.uid) fail(r, "send");
     uid = order.uid!;
@@ -329,8 +295,8 @@ async function createAtBoxy(o: Order, regionName: string, regionId?: number | nu
     boxyStatus: "new",
     boxyStatusTitle: "طلب جديد لدى بوكسي",
     boxyNote: null,
-    boxyRegionId: region === boxyArea(regionName) ? (regionId ?? null) : null,
-    boxyRegionName: region,
+    boxyRegionId: regionId ?? null,
+    boxyRegionName: regionName,
     boxyCooled: cooled,
     boxySentAt: now,
     boxyUpdatedAt: now,
@@ -339,7 +305,7 @@ async function createAtBoxy(o: Order, regionName: string, regionId?: number | nu
     trackEta: null,
     ...(o.status === "NEW" ? { status: "CONFIRMED" as const } : {}),
   });
-  return { ok: true, code, link: track, fee, cooled, region, collect: boxyCollect(o as Parameters<typeof boxyCollect>[0]) };
+  return { ok: true, code, link: track, fee, cooled, collect: boxyCollect(o as Parameters<typeof boxyCollect>[0]) };
 }
 
 // ---- Admin actions --------------------------------------------------------------
@@ -389,7 +355,6 @@ async function adminAction(args: {
       const name = String(args.regionName ?? o.boxyRegionName ?? "").trim();
       if (!name) throw new Error("missing_region");
       let cooled: boolean | null = null;
-      let region = boxyArea(name);
       if (PRODUCTION) {
         const b = await fetchBoxy(o.boxyUid);
         if (b === "gone" || cancelledAtBoxy(b)) {
@@ -398,18 +363,17 @@ async function adminAction(args: {
           return { ...(await createAtBoxy(o, name, args.regionId)), recreated: true };
         }
         const sent = await sendOrder(`/orders/${encodeURIComponent(o.boxyUid)}`, "PATCH", o, name);
-        if (!sent.r.ok) fail(sent.r, "update");
+        if (!sent.r.ok) fail(sent.r, "update", orderBody(o, name, sent.cooled));
         cooled = sent.cooled;
-        region = sent.region;
       }
       await client.models.Order.update({
         id: o.id,
-        boxyRegionName: region,
+        boxyRegionName: name,
         ...(cooled === null ? {} : { boxyCooled: cooled }),
-        ...(args.regionId && region === boxyArea(name) ? { boxyRegionId: args.regionId } : {}),
+        ...(args.regionId ? { boxyRegionId: args.regionId } : {}),
         boxyUpdatedAt: new Date().toISOString(),
       });
-      return { ok: true, region };
+      return { ok: true };
     }
 
     case "cancel": {

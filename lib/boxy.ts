@@ -4,24 +4,9 @@
 import { deliveryPayOf, site } from "./site";
 import { modonCollect } from "./modon";
 import { spreadDiscount } from "./coupons";
-import { toLatinDigits } from "./phone";
 
-// Text for Boxy's form: Latin digits (customers often type ٩١٠), single spaces.
-export const boxyText = (s: string | null | undefined): string =>
-  toLatinDigits(String(s ?? "")).replace(/[‎‏‪-‮]/g, "").replace(/\s+/g, " ").trim();
-
-// The area for Boxy's region field: the area's name only. House, alley or block numbers
-// («رقم دار ٩١٠», «زقاق 12», «م 845») belong in the address, which Boxy gets in full anyway.
-// Numbers that are part of an area's name («شارع 52», «14 رمضان») stay.
-const NUMBER_WORDS = "رقم|دار|الدار|بيت|البيت|منزل|المنزل|زقاق|الزقاق|محلة|محله|م|ز|د|قطعة|عمارة|شقة|بناية|طابق|no\\.?|house";
-const NUMBERED = new RegExp(`(?<!\\p{L})(?:(?:${NUMBER_WORDS})(?!\\p{L})\\s*[:.#\\-/]?\\s*)+\\d[\\d\\s/\\-.]*`, "giu");
-export function boxyArea(s: string | null | undefined): string {
-  const text = boxyText(s);
-  const area = text.replace(NUMBERED, " ").replace(/[\s\-–،,.:/#]+$/g, "").replace(/^[\s\-–،,.:/#]+/g, "").replace(/\s+/g, " ").trim();
-  return area.length >= 2 ? area : text;
-}
-
-// A Boxy error reply as one short line: the message plus any field errors.
+// A Boxy error reply as one short line: the message plus any field errors and, for a
+// server-side failure, the HTTP status (Boxy's catch-all «حدث خطأ ما» says nothing else).
 export function boxyErrorText(reply: { message?: unknown; errors?: unknown }, http: number): string {
   const flat = (v: unknown): string[] =>
     v == null ? [] : typeof v === "string" ? [v] : Array.isArray(v) ? v.flatMap(flat) : typeof v === "object" ? Object.values(v as Record<string, unknown>).flatMap(flat) : [String(v)];
@@ -108,9 +93,9 @@ export function boxyProducts(o: {
 }): { title: string; price: number; quantity: number }[] {
   const paid = Boolean(o.paid);
   const all = (o.items ?? []).filter((i): i is NonNullable<typeof i> => Boolean(i));
-  const jars = all.filter((i) => !i.gift).map((i) => ({ title: boxyText(i.nameAr) || "ترافل ÉLUE", price: paid ? 0 : Math.round(i.price), quantity: i.qty }));
+  const jars = all.filter((i) => !i.gift).map((i) => ({ title: String(i.nameAr ?? "ترافل ÉLUE"), price: paid ? 0 : i.price, quantity: i.qty }));
   // Gift jars travel in the same parcel: listed at 0, so the total stays what the driver collects.
-  const gifts = all.filter((i) => i.gift).map((i) => ({ title: `${boxyText(i.nameAr) || "ترافل ÉLUE"} (هدية)`, price: 0, quantity: i.qty }));
+  const gifts = all.filter((i) => i.gift).map((i) => ({ title: `${String(i.nameAr ?? "ترافل ÉLUE")} (هدية)`, price: 0, quantity: i.qty }));
   // A coupon or credit: the jars' prices are lowered so they add up to the order's total.
   const goods = jars.reduce((n, l) => n + l.price * l.quantity, 0);
   const lines = [...(paid ? jars : spreadDiscount(jars, goods - o.total)), ...gifts];

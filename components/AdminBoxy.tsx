@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { requestOrdersRefresh } from "@/lib/ordersRefresh";
 import { useToast } from "./Toast";
 import { dataClient, type Order } from "@/lib/data";
-import { BOXY_PROVINCE, boxyArea, boxyCollect, type BoxyRegion } from "@/lib/boxy";
+import { BOXY_PROVINCE, boxyCollect, type BoxyRegion } from "@/lib/boxy";
 import { collectBreakdown, normalizeArabic, suggestRegion } from "@/lib/modon";
 import { deliveryPayOf, formatIQD, site } from "@/lib/site";
 
@@ -109,7 +109,7 @@ export function AdminBoxy({ order: o }: { order: Order }) {
   const hasProvince = Boolean(BOXY_PROVINCE[o.province ?? ""]);
   const [regions, setRegions] = useState<BoxyRegion[] | null>(null);
   const [regionsError, setRegionsError] = useState("");
-  const [regionText, setRegionText] = useState(o.boxyRegionName || boxyArea(o.area));
+  const [regionText, setRegionText] = useState(o.boxyRegionName || o.area || "");
   const [confirmSend, setConfirmSend] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -173,17 +173,13 @@ export function AdminBoxy({ order: o }: { order: Order }) {
     setConfirmCancel(false);
     if (!error && action === "update") setEditing(false);
     if (error) return toast({ id: "boxy", tone: "attention", message: error });
-    // Boxy refused the typed area, so the order went with an area from Boxy's own list.
-    const otherArea = typeof data?.region === "string" && chosen && data.region !== boxyArea(chosen.name) ? data.region : "";
-    const areaNote = otherArea ? ` بوكسي ما قبل المنطقة المكتوبة، فأُرسل بمنطقة «${otherArea}» من قائمتهم، والعنوان الكامل وصلهم كما كتبه العميل.` : "";
     if (data?.cooled === false) {
       return toast({
         id: "boxy",
         tone: "attention",
-        message: `أُرسل بدون تبريد: بوكسي ما يوصّل المبرد لهذه المنطقة حالياً. نبّهوا العميل يحط الطلب بالبراد أول ما يستلمه.${areaNote}`,
+        message: "أُرسل بدون تبريد: بوكسي ما يوصّل المبرد لهذه المنطقة حالياً. نبّهوا العميل يحط الطلب بالبراد أول ما يستلمه.",
       });
     }
-    if (otherArea) return toast({ id: "boxy", tone: "attention", message: `${ok}${areaNote}` });
     toast({ id: "boxy", message: data?.recreated ? "كان الطلب ملغى في بوكسي، فأُرسل إليهم من جديد." : ok });
   }
 
