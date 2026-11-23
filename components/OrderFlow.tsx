@@ -43,6 +43,10 @@ type Placed = DeliveryInfo & {
   note: string;
 };
 
+// Qi Card on the live site: off until Qi activates our terminal (every live attempt so far
+// was refused with «qi_9: Unknown terminal»). Still offered on the test site.
+const QI_LIVE_HOSTS = ["elue-iq.com", "www.elue-iq.com"];
+
 export function OrderFlow() {
   const cart = useCart();
   const toast = useToast();
@@ -98,9 +102,12 @@ export function OrderFlow() {
   const giftReady = giftPicked.every(Boolean);
   // [{slug, qty}] for the order: the same flavor twice becomes one line of two.
   const giftItems: CartItem[] = [...new Set(giftPicked.filter(Boolean))].map((slug) => ({ slug, qty: giftPicked.filter((s) => s === slug).length }));
-  // Pay now with Qi Card.
+  // Pay now with Qi Card (see QI_LIVE_HOSTS).
   const [payOnline, setPayOnline] = useState(false);
-  const onlineOk = true;
+  const [onlineOk, setOnlineOk] = useState(false);
+  useEffect(() => {
+    setOnlineOk(!QI_LIVE_HOSTS.includes(window.location.hostname));
+  }, []);
   // Inside Baghdad the customer sees the delivery window (6–10 pm, else next day) and must accept it.
   const [slot, setSlot] = useState<SlotKey>(DEFAULT_SLOT);
   const [slotDate, setSlotDate] = useState("");

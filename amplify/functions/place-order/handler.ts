@@ -208,8 +208,11 @@ async function checkCustomerLimits(owner: string, isTeam: boolean) {
     const waiting = pendingReview(orders);
     if (waiting) throw new Error(`review_required:${waiting.orderNumber}`);
   }
+  // A Qi payment that never opened (or was walked away from) is not an order the customer
+  // placed: it doesn't count towards the daily limit.
+  const failedPayment = (o: (typeof orders)[number]) => o.status === "CANCELLED" && o.qiStatus === "FAILED" && !o.paid;
   const dayAgo = new Date(Date.now() - 24 * 3600_000).toISOString();
-  if (orders.filter((o) => o.createdAt > dayAgo).length >= ORDER_RULES.maxOrdersPer24h) {
+  if (orders.filter((o) => o.createdAt > dayAgo && !failedPayment(o)).length >= ORDER_RULES.maxOrdersPer24h) {
     throw new Error("too_many_orders");
   }
 }
