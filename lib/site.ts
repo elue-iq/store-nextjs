@@ -10,6 +10,12 @@ export const site = {
   instagramHandle: "@elue.iq",
   // Shown on the order page. Change it if you start taking online payments.
   paymentNote: "الدفع نقداً عند الاستلام",
+  // Qi Card gateway (the customer pays on Qi's page). Off: Qi refuses our terminal
+  // («qi_9: Unknown terminal»). Turn on once Qi activates it.
+  qiGateway: false,
+  // Meanwhile the customer can transfer to ÉLUE's Qi Card account and send the receipt
+  // on WhatsApp; the team then marks the order paid.
+  qiTransfer: { account: "9327909439", holder: "SADEQ ALI" },
   // Printed on every courier label (note), sent to Telegram, and shown to the customer.
   courierNote: "يرجى التأكد من الطلب عند الاستلام",
   // A customer must review their latest delivered order before ordering again

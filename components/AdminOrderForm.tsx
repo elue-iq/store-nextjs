@@ -35,10 +35,14 @@ type JarsPay = "cash" | "prepaid" | "gift";
 export function AdminOrderForm({
   order,
   prefill,
+  markTransferPaid,
   onDone,
   onCancel,
 }: {
   order?: Order;
+  // The customer's Qi Card transfer arrived: open with the order set as paid by Qi Card
+  // (jars, and the delivery fee unless it is free); the team only types the transfer number.
+  markTransferPaid?: boolean;
   // New order for a known customer: start from their latest order's contact and address.
   prefill?: Order;
   onDone: (orderNumber: string) => void;
@@ -70,18 +74,21 @@ export function AdminOrderForm({
   const [cashier, setCashier] = useState(order?.cashierOrderId ?? "");
   // The jars: cash to the driver, paid in advance (Qi Card, ZainCash…), or a free gift from ÉLUE.
   const [jarsPay, setJarsPay] = useState<JarsPay>(
-    order?.paid ? (order.payMethod === "GIFT" || order.paidNote === "هدية" ? "gift" : "prepaid") : "cash",
+    order?.paid ? (order.payMethod === "GIFT" || order.paidNote === "هدية" ? "gift" : "prepaid") : markTransferPaid ? "prepaid" : "cash",
   );
   const paid = jarsPay !== "cash";
   // How it was paid in advance (shared by the jars and the delivery fee) and its transaction number.
   const [method, setMethod] = useState<PayMethod | "">(
-    order?.payMethod === "QI" || order?.payMethod === "ZAINCASH" || order?.payMethod === "OTHER" ? order.payMethod : "",
+    order?.payMethod === "QI" || order?.payMethod === "ZAINCASH" || order?.payMethod === "OTHER" ? order.payMethod : markTransferPaid ? "QI" : "",
   );
   const [payRef, setPayRef] = useState(order?.payRef ?? "");
   const [other, setOther] = useState(order?.paidNote && order.paidNote !== "هدية" ? order.paidNote : "");
   const [payErrors, setPayErrors] = useState<{ method?: string; payRef?: string; other?: string }>({});
   // The delivery fee: paid to the driver, already paid by the customer, or a gift from ÉLUE.
-  const [deliveryPay, setDeliveryPay] = useState<DeliveryPay>(order ? deliveryPayOf(order) : "driver");
+  const [deliveryPay, setDeliveryPay] = useState<DeliveryPay>(() => {
+    const now = order ? deliveryPayOf(order) : "driver";
+    return markTransferPaid && now === "driver" ? "prepaid" : now;
+  });
   const prepaidSomething = jarsPay === "prepaid" || deliveryPay === "prepaid";
   // Inside Baghdad the customer must have accepted the 6–10 pm delivery window.
   const [slot, setSlot] = useState<SlotKey>(isSlotKey(order?.deliverySlot) ? order.deliverySlot : DEFAULT_SLOT);
@@ -761,6 +768,7 @@ export function AdminOrderForm({
                   value={payRef}
                   onChange={(e) => setPayRef(e.target.value)}
                   dir="ltr"
+                  autoFocus={markTransferPaid}
                   maxLength={80}
                   placeholder="رقم التتبع الذي يظهر للعميل بعد الدفع"
                   aria-invalid={payErrors.payRef ? true : undefined}

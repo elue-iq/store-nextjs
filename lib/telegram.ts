@@ -44,6 +44,7 @@ export function buildOrderMessage(o: {
   payRef?: string | null; // transaction / transfer number
   freeDelivery?: boolean | null; // ÉLUE covers the delivery fee (gift)
   deliveryPaid?: boolean | null; // customer already paid the delivery fee
+  payTransfer?: boolean | null; // will transfer to ÉLUE's Qi Card account (receipt on WhatsApp)
   // Coupon / credit / affiliate (lib/coupons.ts).
   subtotal?: number | null;
   discount?: number | null;
@@ -87,6 +88,7 @@ export function buildOrderMessage(o: {
     o.couponCode && !o.discount ? `الكود: ${ltr(escapeHtml(o.couponCode))}${o.couponLabel ? ` (${escapeHtml(o.couponLabel)})` : ""}` : null,
     o.campaignSlug ? `الحملة: ${ltr(escapeHtml(o.campaignSlug))}` : null,
     special.length ? `<b>${special.join(" · ")}</b>` : null,
+    o.payTransfer && !o.paid ? `<b>💳 اختار التحويل على حساب كي: ${formatIQD(o.total + (delivery === "driver" ? site.deliveryFee : 0))}. بانتظار صورة التحويل على واتساب.</b>` : null,
     `<b>يستلم المندوب من العميل: ${formatIQD(collect)}</b>`,
     collectStatement(o.total, Boolean(o.paid), delivery),
     o.paid || delivery !== "driver" ? null : site.paymentNote,

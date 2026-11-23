@@ -40,7 +40,7 @@ import { heardLabel } from "@/lib/attribution";
 import { dataClient, newestFirst, STATUS_LABELS, STATUS_ORDER, type Order, type OrderStatus } from "@/lib/data";
 import { formatIraqiMobile, toLatinDigits } from "@/lib/phone";
 import { slotText } from "@/lib/delivery-slot";
-import { formatIQD, minusIQD, payKeyOf, PAY_KEY_LABELS, payMethodText, type PayKey } from "@/lib/site";
+import { deliveryPayOf, formatIQD, minusIQD, payKeyOf, PAY_KEY_LABELS, payMethodText, site, type PayKey } from "@/lib/site";
 import { fullAddress } from "@/lib/iraq";
 import { products } from "@/lib/products";
 
@@ -856,6 +856,8 @@ function OrderDetail({
   const toast = useToast();
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
+  // Opened from «وصل التحويل»: the edit form starts as paid by Qi Card.
+  const [markTransfer, setMarkTransfer] = useState(false);
   const [cashier, setCashier] = useState(o.cashierOrderId ?? "");
   const cashierChanged = cashier.trim() !== (o.cashierOrderId ?? "");
 
@@ -944,9 +946,14 @@ function OrderDetail({
     return (
       <AdminOrderForm
         order={o}
-        onCancel={() => setEditing(false)}
+        markTransferPaid={markTransfer}
+        onCancel={() => {
+          setEditing(false);
+          setMarkTransfer(false);
+        }}
         onDone={() => {
           setEditing(false);
+          setMarkTransfer(false);
           window.scrollTo({ top: 0 });
         }}
       />
@@ -1147,6 +1154,26 @@ function OrderDetail({
           </p>
         )}
         <div className="order-detail__pay">
+          {o.payTransfer && !o.paid && o.status !== "CANCELLED" && (
+            <div className="panel-note order-detail__transfer">
+              <p>
+                <strong>اختار العميل التحويل على حساب كي: {formatIQD(o.total + (deliveryPayOf(o) === "driver" ? site.deliveryFee : 0))}</strong>
+                <br />
+                بانتظار صورة التحويل على واتساب. إذا ما وصل التحويل، المندوب يستلم نقداً كالعادة.
+              </p>
+              <button
+                type="button"
+                className="btn btn--small"
+                onClick={() => {
+                  setMarkTransfer(true);
+                  setEditing(true);
+                  window.scrollTo({ top: 0 });
+                }}
+              >
+                وصل التحويل: سجّله مدفوع
+              </button>
+            </div>
+          )}
           <p className="order-detail__paid">
             {payKeyOf(o) === "GIFT" ? "هدية من ÉLUE: العلب مجاناً" : o.paid ? "ثمن العلب مدفوع مسبقاً" : "ثمن العلب نقداً عند الاستلام"}
           </p>

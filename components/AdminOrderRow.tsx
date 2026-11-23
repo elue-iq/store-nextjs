@@ -109,6 +109,7 @@ export function OrderRow({
   const meta: { text: string; warn?: boolean; key: string }[] = [
     ...(isWholesale(o) ? [{ key: "sale", text: o.businessName ? `جملة · ${o.businessName}` : "جملة" }] : []),
     ...(slot ? [{ key: "slot", text: slot }] : []),
+    ...(o.payTransfer && !o.paid && o.status !== "CANCELLED" ? [{ key: "transfer", text: "بانتظار تحويل كي", warn: true }] : []),
     ...(money ? [{ key: "pay", ...money }] : []),
     ...(o.couponCode ? [{ key: "coupon", text: o.couponCode }] : []),
     ...(o.giftUnits ? [{ key: "gift", text: `هدية × ${o.giftUnits}` }] : []),

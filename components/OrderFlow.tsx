@@ -20,6 +20,7 @@ import { DeliveryFields, type DeliveryFieldsHandle } from "./DeliveryFields";
 import { buildWhatsAppText, priceCart, type CartItem } from "@/lib/order-text";
 import { formatIraqiMobile } from "@/lib/phone";
 import { collectStatement, formatIQD, freeDeliveryFor, site } from "@/lib/site";
+import { QiTransferBox } from "./QiTransfer";
 import { FreeDeliveryProgress } from "./CartBar";
 import { fullAddress } from "@/lib/iraq";
 import { checkDelivery, cleanDelivery, ltr, phone2Error, type DeliveryInfo, type FieldErrors } from "@/lib/validate";
@@ -41,11 +42,9 @@ type Placed = DeliveryInfo & {
   total: number;
   phone: string;
   note: string;
+  // Paying by transfer to ÉLUE's Qi Card account: the amount to transfer (jars + delivery).
+  transfer?: number | null;
 };
-
-// Qi Card on the live site: off until Qi activates our terminal (every live attempt so far
-// was refused with «qi_9: Unknown terminal»). Still offered on the test site.
-const QI_LIVE_HOSTS = ["elue-iq.com", "www.elue-iq.com"];
 
 export function OrderFlow() {
   const cart = useCart();
@@ -102,12 +101,11 @@ export function OrderFlow() {
   const giftReady = giftPicked.every(Boolean);
   // [{slug, qty}] for the order: the same flavor twice becomes one line of two.
   const giftItems: CartItem[] = [...new Set(giftPicked.filter(Boolean))].map((slug) => ({ slug, qty: giftPicked.filter((s) => s === slug).length }));
-  // Pay now with Qi Card (see QI_LIVE_HOSTS).
+  // Pay now on Qi's page (site.qiGateway), or, while that is off, by transfer to ÉLUE's
+  // Qi Card account with the receipt on WhatsApp (site.qiTransfer).
+  const onlineOk = site.qiGateway;
   const [payOnline, setPayOnline] = useState(false);
-  const [onlineOk, setOnlineOk] = useState(false);
-  useEffect(() => {
-    setOnlineOk(!QI_LIVE_HOSTS.includes(window.location.hostname));
-  }, []);
+  const [payTransfer, setPayTransfer] = useState(false);
   // Inside Baghdad the customer sees the delivery window (6–10 pm, else next day) and must accept it.
   const [slot, setSlot] = useState<SlotKey>(DEFAULT_SLOT);
   const [slotDate, setSlotDate] = useState("");
@@ -277,6 +275,7 @@ export function OrderFlow() {
         deliverySlot: inBaghdad ? slot : undefined,
         deliveryDate: inBaghdad && slotDate ? slotDate : undefined,
         payOnline: onlineOk && payOnline ? true : undefined,
+        payTransfer: !onlineOk && payTransfer ? true : undefined,
         couponCode: !rewardId && quote?.coupon?.ok ? quote.coupon.code : undefined,
         rewardId: rewardId && quote?.reward?.ok ? rewardId : undefined,
         ref: cart.ref || undefined,
@@ -305,7 +304,14 @@ export function OrderFlow() {
         return;
       }
       if (data?.orderNumber) {
-        setPlaced({ ...snapshot, gifts: given, giftNote: (data.giftNote as GiftDrop | null) ?? null, orderNumber: data.orderNumber, createdAt: data.createdAt });
+        setPlaced({
+          ...snapshot,
+          gifts: given,
+          giftNote: (data.giftNote as GiftDrop | null) ?? null,
+          orderNumber: data.orderNumber,
+          createdAt: data.createdAt,
+          transfer: !onlineOk && payTransfer ? charged : null,
+        });
         pixelPurchase(tracked, charged, data.orderNumber);
         setStep("sent");
         cart.clear();
@@ -389,6 +395,7 @@ export function OrderFlow() {
         <p className="order-result__id">
           رقم الطلب <strong dir="ltr">{placed.orderNumber}</strong>
         </p>
+        {placed.transfer ? <QiTransferBox amount={placed.transfer} orderNumber={placed.orderNumber} /> : null}
         {placed.giftNote ? (
           <p className="order-result__gift is-dropped" role="alert">
             {GIFT_DROP_TEXT[placed.giftNote] ?? GIFT_DROP_TEXT.changed}
@@ -713,19 +720,33 @@ export function OrderFlow() {
             )}
 
             {inBaghdad && <SlotPicker id="slot-accept" slot={slot} date={slotDate} onSlot={setSlot} onDate={setSlotDate} />}
-            {onlineOk && (
-              <fieldset className="pay-choice">
-                <legend>طريقة الدفع</legend>
-                <label className="check">
-                  <input type="radio" name="pay" checked={!payOnline} onChange={() => setPayOnline(false)} />
-                  الدفع نقدًا عند الاستلام
-                </label>
+            <fieldset className="pay-choice">
+              <legend>طريقة الدفع</legend>
+              <label className="check">
+                <input
+                  type="radio"
+                  name="pay"
+                  checked={!payOnline && !payTransfer}
+                  onChange={() => {
+                    setPayOnline(false);
+                    setPayTransfer(false);
+                  }}
+                />
+                الدفع نقدًا عند الاستلام
+              </label>
+              {onlineOk ? (
                 <label className="check">
                   <input type="radio" name="pay" checked={payOnline} onChange={() => setPayOnline(true)} />
                   الدفع الآن ببطاقة كي (Qi Card)
                 </label>
-              </fieldset>
-            )}
+              ) : (
+                <label className="check">
+                  <input type="radio" name="pay" checked={payTransfer} onChange={() => setPayTransfer(true)} />
+                  تحويل على حساب كي (Qi Card)
+                </label>
+              )}
+              {!onlineOk && payTransfer && <QiTransferBox amount={total + (freeDelivery ? 0 : site.deliveryFee)} />}
+            </fieldset>
             <label className="check">
               <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
               أوافق أستلم عروض ELUE على واتساب
@@ -747,7 +768,13 @@ export function OrderFlow() {
               </p>
             )}
             <button type="submit" className="btn btn--full" disabled={busy || soldOutLines.length > 0 || Boolean(openOrder)}>
-              {busy ? "جارٍ إرسال الطلب…" : onlineOk && payOnline ? `الدفع الآن · ${formatIQD(total + (freeDelivery ? 0 : site.deliveryFee))}` : `تأكيد الطلب · ${formatIQD(total)}`}
+              {busy
+                ? "جارٍ إرسال الطلب…"
+                : onlineOk && payOnline
+                  ? `الدفع الآن · ${formatIQD(total + (freeDelivery ? 0 : site.deliveryFee))}`
+                  : !onlineOk && payTransfer
+                    ? `تأكيد الطلب · ${formatIQD(total + (freeDelivery ? 0 : site.deliveryFee))}`
+                    : `تأكيد الطلب · ${formatIQD(total)}`}
             </button>
           </form>
         )}
