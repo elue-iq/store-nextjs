@@ -4,7 +4,7 @@ import { generateClient } from "aws-amplify/data";
 import { getAmplifyDataClientConfig } from "@aws-amplify/backend/function/runtime";
 import { env } from "$amplify/env/boxy";
 import type { Schema } from "../../data/resource";
-import { BOXY_PROVINCE, boxyCollect, boxyProducts, boxyTrack, statusFromBoxy, type BoxyRegion } from "../../../lib/boxy";
+import { BOXY_PROVINCE, boxyCollect, boxyErrorText, boxyProducts, boxyTrack, statusFromBoxy, type BoxyRegion } from "../../../lib/boxy";
 import { parseTrackEvents, type TrackEvent } from "../../../lib/modon";
 import { site } from "../../../lib/site";
 import { timingSafeEqual } from "node:crypto";
@@ -63,9 +63,10 @@ async function call(path: string, init: RequestInit = {}): Promise<{ ok: boolean
   return { ok: res.ok && (reply.status ?? "success") === "success", http: res.status, reply, raw: clone };
 }
 
-function fail(r: { http: number; reply: Reply }, what: string): never {
-  const msg = String(r.reply.message ?? `HTTP ${r.http}`).slice(0, 300);
-  throw new Error(`boxy_${what}:${msg}`);
+// Boxy's whole reply goes to the log (its message alone, e.g. «حدث خطأ ما», is not enough to find the cause).
+function fail(r: { http: number; reply: Reply }, what: string, body?: unknown): never {
+  console.error(`boxy ${what} refused`, JSON.stringify({ http: r.http, reply: r.reply, body }).slice(0, 4000));
+  throw new Error(`boxy_${what}:${boxyErrorText(r.reply, r.http).slice(0, 300)}`);
 }
 
 type RegionRow = { uid: string; province_code: string; area_name: string; zaeem_area_id: number };
@@ -276,7 +277,7 @@ async function createAtBoxy(o: Order, regionName: string, regionId?: number | nu
     const sent = await sendOrder("/orders/request", "POST", o, regionName);
     const r = sent.r;
     cooled = sent.cooled;
-    if (!r.ok) fail(r, "send");
+    if (!r.ok) fail(r, "send", orderBody(o, regionName, cooled));
     const order = ((r.reply.object as { order?: BoxyOrder } | undefined)?.order ?? {}) as BoxyOrder;
     if (!order.uid) fail(r, "send");
     uid = order.uid!;
@@ -362,7 +363,7 @@ async function adminAction(args: {
           return { ...(await createAtBoxy(o, name, args.regionId)), recreated: true };
         }
         const sent = await sendOrder(`/orders/${encodeURIComponent(o.boxyUid)}`, "PATCH", o, name);
-        if (!sent.r.ok) fail(sent.r, "update");
+        if (!sent.r.ok) fail(sent.r, "update", orderBody(o, name, sent.cooled));
         cooled = sent.cooled;
       }
       await client.models.Order.update({

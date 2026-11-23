@@ -4,6 +4,7 @@ import Link from "next/link";
 import { itemNameAr } from "@/lib/gifts";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { QiTransferBox } from "./QiTransfer";
 import { useAuth } from "./AuthProvider";
 import { useCart } from "./CartProvider";
 import { useStock } from "./StockProvider";
@@ -59,6 +60,8 @@ const CUSTOMER_FIELDS = [
   "rewardId",
   "rewardTitle",
   "saleType",
+  // Paying by transfer to ÉLUE's Qi Card account (receipt on WhatsApp).
+  "payTransfer",
   // Delivery tracking (from the courier's updates).
   "trackStatus",
   "trackEta",
@@ -400,9 +403,13 @@ function MyOrderDetail({ order: o }: { order: Order }) {
             {o.status === "DELIVERED" ? `أضفنا ${formatIQD(o.cashback)} لرصيدكم.` : `تنضاف ${formatIQD(o.cashback)} لرصيدكم بعد التسليم.`}
           </p>
         ) : null}
-        <p className="order-detail__muted">
-          {collectStatement(o.total, Boolean(o.paid), deliveryPayOf(o))}
-        </p>
+        {o.payTransfer && !o.paid && o.status !== "CANCELLED" && o.status !== "DELIVERED" ? (
+          <QiTransferBox amount={o.total + (deliveryPayOf(o) === "driver" ? site.deliveryFee : 0)} orderNumber={o.orderNumber} />
+        ) : (
+          <p className="order-detail__muted">
+            {collectStatement(o.total, Boolean(o.paid), deliveryPayOf(o))}
+          </p>
+        )}
         <p className="order-detail__muted">{site.courierNote}</p>
         <p className="order-detail__muted">{site.coldNote.text}</p>
         {o.status !== "CANCELLED" && (

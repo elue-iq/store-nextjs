@@ -5,6 +5,18 @@ import { deliveryPayOf, site } from "./site";
 import { modonCollect } from "./modon";
 import { spreadDiscount } from "./coupons";
 
+// A Boxy error reply as one short line: the message plus any field errors and, for a
+// server-side failure, the HTTP status (Boxy's catch-all «حدث خطأ ما» says nothing else).
+export function boxyErrorText(reply: { message?: unknown; errors?: unknown }, http: number): string {
+  const flat = (v: unknown): string[] =>
+    v == null ? [] : typeof v === "string" ? [v] : Array.isArray(v) ? v.flatMap(flat) : typeof v === "object" ? Object.values(v as Record<string, unknown>).flatMap(flat) : [String(v)];
+  const details = flat(reply.errors).map((t) => t.trim()).filter(Boolean).slice(0, 3).join("، ");
+  let msg = typeof reply.message === "string" ? reply.message.trim() : "";
+  if (details && !msg.includes(details)) msg = msg ? `${msg} (${details})` : details;
+  if (!msg) return `HTTP ${http}`;
+  return http >= 500 ? `${msg} [HTTP ${http}]` : msg;
+}
+
 // Boxy's province codes (docs: Provinces & Regions). Halabja is served from Sulaymaniyah.
 export const BOXY_PROVINCE: Record<string, string> = {
   بغداد: "BGD",

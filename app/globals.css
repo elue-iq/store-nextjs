@@ -6692,3 +6692,15 @@ button:not(:disabled):active,
   background: var(--cream);
   color: var(--terracotta);
 }
+
+/* Paying by transfer to ÉLUE's Qi Card account (components/QiTransfer.tsx). */
+.qi-transfer { display: grid; gap: 8px; padding: 12px 14px; border-radius: var(--radius-panel, 12px); background: #fff4ee; border: 1px solid var(--line, #d9cfc2); }
+.qi-transfer p { margin: 0; }
+.qi-transfer__title { font-size: 1.05rem; }
+.qi-transfer__account { margin: 0; display: grid; gap: 6px; }
+.qi-transfer__account div { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.qi-transfer__account dt { color: var(--ink-soft, #7a6a5c); font-size: 0.9rem; }
+.qi-transfer__account dd { margin: 0; display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 1.05rem; letter-spacing: 0.02em; }
+.qi-transfer__note { font-size: 0.88rem; color: var(--ink-soft, #7a6a5c); }
+.order-result .qi-transfer { text-align: start; margin: 4px 0; }
+.order-detail__transfer { display: grid; gap: 8px; }

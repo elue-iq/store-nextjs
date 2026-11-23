@@ -176,6 +176,9 @@ const schema = a
         // (CREATED = waiting for the customer to pay, SUCCESS, FAILED). The customer can read the state.
         qiPaymentId: a.string().authorization((allow) => [allow.group("ADMINS")]),
         qiStatus: a.string(),
+        // The customer chose to transfer to ÉLUE's Qi Card account (site.qiTransfer) and send
+        // the receipt on WhatsApp. Until the team marks the order paid, the driver collects cash.
+        payTransfer: a.boolean(),
         // Eatix (cashier device copy of the order). Team only.
         eatixId: a.string().authorization((allow) => [allow.group("ADMINS")]),
         eatixStatus: a.string().authorization((allow) => [allow.group("ADMINS")]), // SENT | SIMULATED | FAILED | OFF | CANCELLED
@@ -416,6 +419,7 @@ const schema = a
         businessName: a.string(),
         // The customer pays now with Qi Card instead of cash to the driver.
         payOnline: a.boolean(),
+        payTransfer: a.boolean(),
         // Discount code, and the affiliate campaign the customer came from (?ref=…).
         couponCode: a.string(),
         ref: a.string(),

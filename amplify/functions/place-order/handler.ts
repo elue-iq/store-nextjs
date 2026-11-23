@@ -208,8 +208,11 @@ async function checkCustomerLimits(owner: string, isTeam: boolean) {
     const waiting = pendingReview(orders);
     if (waiting) throw new Error(`review_required:${waiting.orderNumber}`);
   }
+  // A Qi payment that never opened (or was walked away from) is not an order the customer
+  // placed: it doesn't count towards the daily limit.
+  const failedPayment = (o: (typeof orders)[number]) => o.status === "CANCELLED" && o.qiStatus === "FAILED" && !o.paid;
   const dayAgo = new Date(Date.now() - 24 * 3600_000).toISOString();
-  if (orders.filter((o) => o.createdAt > dayAgo).length >= ORDER_RULES.maxOrdersPer24h) {
+  if (orders.filter((o) => o.createdAt > dayAgo && !failedPayment(o)).length >= ORDER_RULES.maxOrdersPer24h) {
     throw new Error("too_many_orders");
   }
 }
@@ -473,7 +476,10 @@ async function placeOrderHandler(event: PlaceOrderEvent) {
   }
   const slotAccepted = Boolean(args.slotAccepted);
   // The customer pays now with Qi Card (customers only; the team records prepaid orders by hand).
-  const online = !isTeam && Boolean(args.payOnline);
+  // Pays on Qi's page: only while the gateway is on (site.qiGateway).
+  const online = !isTeam && site.qiGateway && Boolean(args.payOnline);
+  // Pays by transfer to ÉLUE's Qi Card account (receipt on WhatsApp; the team marks it paid).
+  const transfer = !isTeam && !online && Boolean(args.payTransfer);
   const qi = qiConfig(env as unknown as Record<string, string>);
   if (online && !qi) throw new Error("pay_unavailable");
   const { name, province, area, address } = cleanDelivery({
@@ -685,6 +691,7 @@ async function placeOrderHandler(event: PlaceOrderEvent) {
       createdBy: forCustomer ? callerPhone : null,
       owner,
       ...(online ? { qiStatus: "CREATED" } : {}),
+      ...(transfer ? { payTransfer: true } : {}),
       });
     const created = await (async () => {
       if (deal.coupon && !(await takeCouponUse(deal.coupon.code, deal.coupon.maxUses))) {
@@ -876,6 +883,7 @@ async function notifyTeam(order: OrderRecord): Promise<boolean> {
     payRef: order.payRef ?? null,
     freeDelivery: Boolean(order.freeDelivery),
     deliveryPaid: Boolean(order.deliveryPaid),
+    payTransfer: Boolean(order.payTransfer),
     subtotal: order.subtotal ?? null,
     discount: order.discount ?? null,
     creditUsed: order.creditUsed ?? null,
