@@ -8,6 +8,11 @@ export const site = {
   whatsappDisplay: "0771 633 5533",
   instagramUrl: "https://www.instagram.com/elue.iq",
   instagramHandle: "@elue.iq",
+  // More accounts for the links page (/links, where the jar's QR leads). Empty = not shown;
+  // paste the profile link to add it.
+  tiktokUrl: "",
+  tiktokHandle: "",
+  linkedinUrl: "",
   // Shown on the order page. Change it if you start taking online payments.
   paymentNote: "الدفع نقداً عند الاستلام",
   // Qi Card gateway (the customer pays on Qi's page). Off: Qi refuses our terminal

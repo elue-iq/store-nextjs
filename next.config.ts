@@ -24,11 +24,16 @@ const nextConfig: NextConfig = {
   // Short links for Instagram stories and bios, e.g. /hazelnut -> /products/hazelnut.
   // Query strings pass through, so /hazelnut?ref=story still records the source.
   async redirects() {
-    return slugs.map((slug) => ({
-      source: `/${slug}`,
-      destination: `/products/${slug}`,
-      permanent: false,
-    }));
+    return [
+      // The QR printed on the jar: elue-iq.com/q. Never rename it (it is printed); point it
+      // elsewhere here instead. Orders after a scan are saved with utm_source "jar".
+      { source: "/q", destination: "/links?utm_source=jar&utm_medium=qr", permanent: false },
+      ...slugs.map((slug) => ({
+        source: `/${slug}`,
+        destination: `/products/${slug}`,
+        permanent: false,
+      })),
+    ];
   },
 };
 

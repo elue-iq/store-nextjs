@@ -7,6 +7,10 @@ export default function sitemap(): MetadataRoute.Sitemap {
   return [
     { url: `${base}/`, changeFrequency: "weekly", priority: 1 },
     { url: `${base}/reviews`, changeFrequency: "daily", priority: 0.6 },
+    { url: `${base}/nutrition`, changeFrequency: "monthly", priority: 0.6 },
+    ...products
+      .filter((p) => p.nutrition)
+      .map((p) => ({ url: `${base}/nutrition/${p.slug}`, changeFrequency: "monthly" as const, priority: 0.5 })),
     ...products.map((p) => ({
       url: `${base}/products/${p.slug}`,
       changeFrequency: "weekly" as const,

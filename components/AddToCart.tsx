@@ -16,7 +16,7 @@ export function jarsLabel(n: number): string {
   return `${n} علبة`;
 }
 
-function useAddWithToast() {
+export function useAddWithToast() {
   const { add } = useCart();
   const toast = useToast();
   return (slug: string, qty: number, withAction = true) => {
