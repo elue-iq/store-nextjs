@@ -17,6 +17,9 @@ export function Footer() {
             <Link href="/reviews">تقييمات الزبائن</Link>
           </li>
           <li>
+            <Link href="/nutrition">السعرات والمكونات</Link>
+          </li>
+          <li>
             <a href={`https://wa.me/${site.whatsappNumber}`} target="_blank" rel="noopener noreferrer">
               واتساب <span dir="ltr">{site.whatsappDisplay}</span>
             </a>

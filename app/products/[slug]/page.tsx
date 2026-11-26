@@ -132,7 +132,8 @@ export default async function ProductPage({ params }: Props) {
                   sizes="(max-width: 700px) 100vw, 480px"
                 />
                 <figcaption>
-                  الحصة 3 حبات ({n.servingG} غ)، والحبة الواحدة {n.pieceG} غ. القيم تقديرية من مكونات الوصفة.
+                  الحصة 3 حبات ({n.servingG} غ)، والحبة الواحدة {n.pieceG} غ. القيم تقديرية من مكونات الوصفة.{" "}
+                  <Link href="/nutrition">قارنوا السعرات بين كل النكهات</Link>
                 </figcaption>
               </figure>
             </>

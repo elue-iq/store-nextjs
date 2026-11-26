@@ -100,6 +100,11 @@ export default function Home() {
             </Listed>
           ))}
         </div>
+        <p className="flavors__nutrition">
+          <Link href="/nutrition" className="btn btn--quiet">
+            السعرات والمكونات لكل نكهة
+          </Link>
+        </p>
       </section>
 
       <section className="section story">
