@@ -25,6 +25,8 @@ import { MAX_WHOLESALE_QTY, priceCart, type CartItem } from "../../../lib/order-
 import { checkDelivery, cleanDelivery } from "../../../lib/validate";
 import { normalizeIraqiMobile } from "../../../lib/phone";
 import { buildOrderMessage, sendToTelegram } from "../../../lib/telegram";
+import { newOrderPush, type PushMessage } from "../../../lib/push";
+import { sendPush } from "./push";
 import { eatixConfig, eatixFields, sendOrder, toEatixOrder } from "../../../lib/eatix";
 import { OPEN_STATUSES, ORDER_RULES } from "../../../lib/order-rules";
 import { freeDeliveryFor, needsPayRef, site } from "../../../lib/site";
@@ -847,6 +849,8 @@ type OrderRecord = Schema["Order"]["type"];
 // Telegram, the Eatix cashier copy and the customer's WhatsApp confirmation. Used when an
 // order is placed, or (Qi Card) when its payment is confirmed. Returns whether Telegram got it.
 async function notifyTeam(order: OrderRecord): Promise<boolean> {
+  // The team's phones (web push) are notified alongside everything below.
+  const pushing = pushToTeam(newOrderPush(order));
   const previous = await client.models.Order.listOrderByPhone({ phone: order.phone }, { limit: 2, selectionSet: ["id"] });
   const returning = (previous.data ?? []).some((o) => o.id !== order.id);
   const sold = paidLines(order.items);
@@ -919,7 +923,42 @@ async function notifyTeam(order: OrderRecord): Promise<boolean> {
   } else if (!order.createdBy) {
     console.log("DEV order, WhatsApp confirmation skipped");
   }
+  await pushing;
   return telegramSent;
+}
+
+// ---- Team notifications (web push) -----------------------------------------------
+// Every phone that turned them on in the admin app (PushSub). Each copy of the site (live,
+// dev) has its own list, so the test copy only reaches phones that turned it on there.
+// Best effort: never throws.
+async function pushTargets(endpoint?: string) {
+  const { data } = endpoint
+    ? await client.models.PushSub.listPushSubByEndpoint({ endpoint })
+    : await client.models.PushSub.list({ limit: 500 });
+  return (data ?? []).map((s) => ({ id: s.id, endpoint: s.endpoint, p256dh: s.p256dh, authKey: s.authKey }));
+}
+
+async function pushToTeam(msg: PushMessage, endpoint?: string) {
+  try {
+    const targets = await pushTargets(endpoint);
+    if (!targets.length) return { sent: 0, failed: 0, gone: [] as string[], none: true };
+    const r = await sendPush(targets, msg);
+    // Phones that turned notifications off or were reset: forget them.
+    await Promise.all(r.gone.map((id) => client.models.PushSub.delete({ id }).catch(() => null)));
+    return r;
+  } catch (err) {
+    console.error("push to team crashed", (err as Error).message);
+    return { sent: 0, failed: 1, gone: [] as string[] };
+  }
+}
+
+// pushTest: «تجربة» in the admin app sends one notification to that phone.
+async function pushTest(event: { arguments: { endpoint: string } }) {
+  const r = await pushToTeam(
+    { title: "إشعارات ÉLUE شغّالة", body: "هيج راح توصلكم الطلبات الجديدة على هذا الجهاز.", url: "/admin", tag: "test" },
+    event.arguments.endpoint,
+  );
+  return JSON.stringify(r);
 }
 
 // ---- Qi Card payments -----------------------------------------------------------
@@ -1290,6 +1329,7 @@ export const handler = async (event: unknown) => {
   if (field === "qiConfirm") return qiConfirm(event as Parameters<typeof qiConfirm>[0]);
   if (field === "quote") return quote(event as Parameters<typeof quote>[0]);
   if (field === "myPoints") return myPoints(event as Parameters<typeof myPoints>[0]);
+  if (field === "pushTest") return pushTest(event as Parameters<typeof pushTest>[0]);
   if (field === "campaignVisit") return campaignVisit(event as Parameters<typeof campaignVisit>[0]);
   if (field === "campaignStats") return campaignStats(event as Parameters<typeof campaignStats>[0]);
   if (field === "giftOffer") return giftOffer();

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import { AdminView } from "@/components/AdminView";
 import { AdminInstall } from "@/components/AdminInstall";
+import { AdminPush } from "@/components/AdminPush";
 import { Logo } from "@/components/Logo";
 
 export const metadata: Metadata = {
@@ -25,7 +26,10 @@ export default function AdminPage() {
         <Link href="/admin" className="admin-bar__brand" aria-label="لوحة الطلبات">
           <Logo className="admin-bar__logo" />
         </Link>
-        <AdminInstall />
+        <div className="admin-bar__tools">
+          <AdminInstall />
+          <AdminPush />
+        </div>
       </header>
       <section className="panel-page panel-page--wide admin-page">
         <AdminView />

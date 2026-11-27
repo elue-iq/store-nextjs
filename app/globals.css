@@ -6782,3 +6782,14 @@ button:not(:disabled):active,
 
 /* Website links to the nutrition page (home flavors, product page). */
 .flavors__nutrition { display: flex; justify-content: center; margin-top: 18px; }
+
+/* Admin bar tools: install + new-order notifications (components/AdminPush.tsx). */
+.admin-bar__tools { display: flex; align-items: center; gap: 8px; }
+.admin-push { position: relative; }
+.admin-push__bell { width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--sand-deep); border-radius: 999px; background: var(--paper); color: var(--muted); cursor: pointer; position: relative; }
+.admin-push__bell--on { color: var(--terracotta); border-color: var(--terracotta); }
+.admin-push__bell--on::after { content: ""; position: absolute; top: 9px; inset-inline-end: 10px; width: 8px; height: 8px; border-radius: 999px; background: var(--sage-deep); box-shadow: 0 0 0 2px var(--paper); }
+.admin-push__panel { position: absolute; top: calc(100% + 8px); inset-inline-end: 0; z-index: 30; width: min(300px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: 16px; background: var(--paper); border: 1px solid var(--sand); box-shadow: 0 10px 30px rgba(59, 42, 35, 0.18); text-align: start; }
+.admin-push__panel p { margin: 0; font-size: 14px; line-height: 1.7; color: var(--ink); }
+.admin-push__actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.admin-push__note { color: var(--muted) !important; font-size: 13px !important; }
