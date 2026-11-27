@@ -345,6 +345,19 @@ const schema = a
       .secondaryIndexes((index) => [index("phone")])
       .authorization((allow) => [allow.group("ADMINS")]),
 
+    // A team phone that turned on new-order notifications in the admin app (web push,
+    // lib/push.ts): the browser's push address and keys. place-order notifies every row.
+    PushSub: a
+      .model({
+        endpoint: a.string().required(),
+        p256dh: a.string().required(),
+        authKey: a.string().required(),
+        device: a.string(), // "iPhone", "Android"… to tell phones apart
+        addedBy: a.string(), // who turned it on (WhatsApp number)
+      })
+      .secondaryIndexes((index) => [index("endpoint")])
+      .authorization((allow) => [allow.group("ADMINS")]),
+
     // Team-only prices, never shown to customers: the default wholesale jar price (lib/wholesale.ts).
     WholesaleSetting: a
       .model({
@@ -461,6 +474,14 @@ const schema = a
 
     // The signed-in customer's points (earned, waiting, spent, given by the team, balance),
     // or a customer's points for the team (phone). lib/loyalty.ts
+    // Sends a test notification to one team phone (by its push address). The team only.
+    pushTest: a
+      .mutation()
+      .arguments({ endpoint: a.string().required() })
+      .returns(a.json())
+      .authorization((allow) => [allow.group("ADMINS")])
+      .handler(a.handler.function(placeOrder)),
+
     myPoints: a
       .query()
       .arguments({ phone: a.string() })
