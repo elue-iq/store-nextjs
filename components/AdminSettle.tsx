@@ -9,9 +9,16 @@ import { requestOrdersRefresh } from "@/lib/ordersRefresh";
 import { formatIQD } from "@/lib/site";
 import { baghdadDay } from "./AdminOrderRow";
 import { orderTime } from "@/lib/order-time";
+import { courierFee, feesOf, netFromCourier } from "@/lib/delivery-money";
+import { toLatinDigits } from "@/lib/phone";
 
 // «تسوية المندوب»: when a courier comes back, pick him and see everything he took in one
 // list: tick what was delivered (or came back) and confirm all at once, then settle the cash.
+// Settling: the company hands over what it collected minus its fee for each order
+// (lib/delivery-money); a far order's fee can be changed right in the list. The amount is
+// recorded on each order (courierSettledAmount), so the accounts add up to what was received.
+// Boxy and Modon are settled the same way when they pay out.
+const FEE_CHOICES = [3000, 4000, 5000, 6000, 7000];
 const MODON = "MODON";
 const BOXY = "BOXY";
 
@@ -51,9 +58,27 @@ export function AdminSettle({ orders, onOpenOrder }: { orders: Order[] | null; o
   const mine = useMemo(() => (key ? (orders ?? []).filter((o) => inGroup(o, key)) : []), [orders, key]);
   const withHim = mine.filter((o) => o.status !== "DELIVERED").sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   const isLocal = key !== "" && key !== MODON && key !== BOXY;
-  const toSettle = isLocal ? mine.filter((o) => o.status === "DELIVERED" && !o.courierSettledAt).sort((a, b) => a.createdAt.localeCompare(b.createdAt)) : [];
+  const toSettle = mine.filter((o) => o.status === "DELIVERED" && !o.courierSettledAt).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const fees = feesOf(couriers);
+  const feeOf = (o: Order) => courierFee(o, fees).fee;
+  const netOf = (o: Order) => netFromCourier(o, fees);
+  const unknownFee = (list: Order[]) => list.filter((o) => feeOf(o) === null).length;
+  // Earlier receipts from this company: one line per time the team pressed «استلمنا».
+  const history = useMemo(() => {
+    const byTime = new Map<string, { at: string; count: number; amount: number }>();
+    for (const o of mine) {
+      if (!o.courierSettledAt) continue;
+      const h = byTime.get(o.courierSettledAt) ?? { at: o.courierSettledAt, count: 0, amount: 0 };
+      h.count += 1;
+      h.amount += typeof o.courierSettledAmount === "number" ? o.courierSettledAmount : (netFromCourier(o, fees) ?? collectAmount(o));
+      byTime.set(o.courierSettledAt, h);
+    }
+    return [...byTime.values()].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 8);
+  }, [mine, fees]);
 
   const sum = (list: Order[]) => list.reduce((n, o) => n + collectAmount(o), 0);
+  const sumFees = (list: Order[]) => list.reduce((n, o) => n + (feeOf(o) ?? 0), 0);
+  const sumNet = (list: Order[]) => list.reduce((n, o) => n + (netOf(o) ?? collectAmount(o)), 0);
   const pick = (list: Order[], set: Set<string>) => list.filter((o) => set.has(o.id));
   const outPicked = pick(withHim, out);
   const cashPicked = pick(toSettle, cash);
@@ -79,7 +104,9 @@ export function AdminSettle({ orders, onOpenOrder }: { orders: Order[] | null; o
         what === "delivered"
           ? { id: o.id, status: "DELIVERED", trackStatus: "تم التوصيل", editedBy: auth.phone, editedAt: now }
           : what === "settled"
-            ? { id: o.id, courierSettledAt: now }
+            ? // The fee is frozen on the order with the amount, so a later change to the
+              // company's default fee doesn't rewrite what was received.
+              { id: o.id, courierSettledAt: now, courierSettledAmount: netOf(o) ?? collectAmount(o), deliveryCost: feeOf(o) }
             : {
                 id: o.id,
                 status: "CONFIRMED",
@@ -108,7 +135,7 @@ export function AdminSettle({ orders, onOpenOrder }: { orders: Order[] | null; o
         : what === "delivered"
           ? `سُجّل تسليم ${done} طلب.`
           : what === "settled"
-            ? `سُجّل استلام المبلغ لـ ${done} طلب.`
+            ? `سُجّل استلام ${formatIQD(sumNet(list))} عن ${done} طلب.`
             : `رجع ${done} طلب إلى المخزن بدون تسليم.`,
     });
   }
@@ -131,6 +158,59 @@ export function AdminSettle({ orders, onOpenOrder }: { orders: Order[] | null; o
       </button>
     </li>
   );
+
+  async function setFee(o: Order, value: number | null) {
+    const { errors } = await dataClient.models.Order.update({ id: o.id, deliveryCost: value, editedBy: auth.phone, editedAt: new Date().toISOString() });
+    if (errors?.length) return toast({ id: "fee", tone: "attention", message: "ما انحفظت الأجرة. جرّبوا مرة ثانية." });
+    requestOrdersRefresh();
+  }
+
+  const settleRow = (o: Order) => {
+    const fee = feeOf(o);
+    const net = netOf(o);
+    const own = typeof o.deliveryCost === "number";
+    const base = courierFee({ ...o, deliveryCost: null }, fees).fee; // the company's usual fee
+    return (
+      <li key={o.id} className={cash.has(o.id) ? "settle__row is-on" : "settle__row"}>
+        <label>
+          <input type="checkbox" checked={cash.has(o.id)} onChange={() => toggle(cash, o.id, setCash)} />
+          <span className="settle__main">
+            <strong dir="ltr">{o.orderNumber}</strong> · {o.name}
+            <small>
+              {[o.area, age(o)].filter(Boolean).join(" · ")} · يجمع {formatIQD(collectAmount(o))}
+            </small>
+          </span>
+          <span className="settle__amount">{net === null ? "—" : net < 0 ? `ندفع ${formatIQD(-net)}` : formatIQD(net)}</span>
+        </label>
+        <span className="settle__fee">
+          الأجرة
+          <select
+            aria-label={`أجرة التوصيل للطلب ${o.orderNumber}`}
+            value={own ? String(fee) : base === null ? "" : "default"}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === "default") void setFee(o, null);
+              else if (v === "other") {
+                const typed = Number(toLatinDigits(window.prompt("أجرة هذا الطلب بالدينار") ?? "").replace(/[^\d]/g, ""));
+                if (typed > 0 && typed <= 100000) void setFee(o, typed);
+              } else if (v) void setFee(o, Number(v));
+            }}
+          >
+            {base === null ? <option value="">غير محددة</option> : <option value="default">{formatIQD(base)} (الأساسية)</option>}
+            {[...FEE_CHOICES, ...(own && !FEE_CHOICES.includes(fee as number) ? [fee as number] : [])].map((v) => (
+              <option key={v} value={String(v)}>
+                {formatIQD(v)}
+              </option>
+            ))}
+            <option value="other">مبلغ آخر…</option>
+          </select>
+        </span>
+        <button type="button" className="link-button" onClick={() => onOpenOrder(o.orderNumber)}>
+          فتح
+        </button>
+      </li>
+    );
+  };
 
   return (
     <section className="settle" aria-label="تسوية المندوب">
@@ -204,44 +284,62 @@ export function AdminSettle({ orders, onOpenOrder }: { orders: Order[] | null; o
               ))}
           </div>
 
-          {isLocal ? (
-            <div className="settle__block">
-              <div className="settle__head">
-                <h3>مسلَّم وبانتظار استلام المبلغ ({toSettle.length})</h3>
-                {toSettle.length > 0 && (
-                  <button type="button" className="link-button" onClick={() => toggleAll(toSettle, cash, setCash)}>
-                    {toSettle.every((o) => cash.has(o.id)) ? "إلغاء التحديد" : "حدد الكل"}
-                  </button>
-                )}
-              </div>
-              {toSettle.length === 0 ? <p className="hint">لا مبالغ بانتظار الاستلام منه.</p> : <ul>{toSettle.map((o) => row(o, cash, setCash))}</ul>}
+          <div className="settle__block">
+            <div className="settle__head">
+              <h3>مسلَّم وبانتظار استلام المبلغ ({toSettle.length})</h3>
               {toSettle.length > 0 && (
-                <p className="settle__sum">
-                  عليه لـ ÉLUE {formatIQD(sum(toSettle))}
-                  {cashPicked.length > 0 && <> · المحدد {cashPicked.length} طلب = {formatIQD(sum(cashPicked))}</>}
-                </p>
+                <button type="button" className="link-button" onClick={() => toggleAll(toSettle, cash, setCash)}>
+                  {toSettle.every((o) => cash.has(o.id)) ? "إلغاء التحديد" : "حدد الكل"}
+                </button>
               )}
-              {cashPicked.length > 0 &&
-                (confirm === "settled" ? (
-                  <div className="settle__confirm">
-                    <p>تأكيد: استلمت {formatIQD(sum(cashPicked))} من المندوب عن {cashPicked.length} طلب.</p>
-                    <button type="button" className="btn btn--full" disabled={busy} onClick={() => void run(cashPicked, "settled")}>
-                      {busy ? "جارٍ الحفظ…" : "تأكيد استلام المبلغ"}
-                    </button>
-                    <button type="button" className="link-button" onClick={() => setConfirm(null)}>
-                      تراجع
-                    </button>
-                  </div>
-                ) : (
-                  <div className="settle__actions">
-                    <button type="button" className="btn" onClick={() => setConfirm("settled")}>
-                      استلمت المبلغ ({cashPicked.length})
-                    </button>
-                  </div>
-                ))}
             </div>
-          ) : (
-            <p className="hint">التحصيل يكون عبر الشركة نفسها، والحالات تتحدّث تلقائياً.</p>
+            {!isLocal && <p className="hint">لما تحوّل الشركة المبلغ: حددوا الطلبات اللي بالكشف واضغطوا «استلمنا».</p>}
+            {toSettle.length === 0 ? <p className="hint">لا مبالغ بانتظار الاستلام.</p> : <ul>{toSettle.map(settleRow)}</ul>}
+            {toSettle.length > 0 && (
+              <p className="settle__sum">
+                عليهم لـ ÉLUE {formatIQD(sumNet(toSettle))}
+                {unknownFee(toSettle) > 0 && <> · {unknownFee(toSettle)} طلب بدون أجرة محددة</>}
+              </p>
+            )}
+            {cashPicked.length > 0 && (
+              <p className="settle__calc">
+                المحدد {cashPicked.length} طلب: جمعوا {formatIQD(sum(cashPicked))} − أجورهم {formatIQD(sumFees(cashPicked))} = <strong>{formatIQD(sumNet(cashPicked))}</strong>
+              </p>
+            )}
+            {cashPicked.length > 0 &&
+              (unknownFee(cashPicked) > 0 ? (
+                <p className="order-card__warn">حددوا أجرة التوصيل للطلبات المحددة أولاً (أو الأجرة الافتراضية للشركة من «شركات التوصيل»).</p>
+              ) : confirm === "settled" ? (
+                <div className="settle__confirm">
+                  <p>تأكيد: استلمنا {formatIQD(sumNet(cashPicked))} عن {cashPicked.length} طلب.</p>
+                  <button type="button" className="btn btn--full" disabled={busy} onClick={() => void run(cashPicked, "settled")}>
+                    {busy ? "جارٍ الحفظ…" : "تأكيد استلام المبلغ"}
+                  </button>
+                  <button type="button" className="link-button" onClick={() => setConfirm(null)}>
+                    تراجع
+                  </button>
+                </div>
+              ) : (
+                <div className="settle__actions">
+                  <button type="button" className="btn" onClick={() => setConfirm("settled")}>
+                    استلمنا {formatIQD(sumNet(cashPicked))}
+                  </button>
+                </div>
+              ))}
+          </div>
+
+          {history.length > 0 && (
+            <div className="settle__block">
+              <h3>آخر الاستلامات</h3>
+              <ul className="settle__history">
+                {history.map((h) => (
+                  <li key={h.at}>
+                    <span>{baghdadDay(h.at)} · {h.count} طلب</span>
+                    <strong>{formatIQD(h.amount)}</strong>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </>
       )}

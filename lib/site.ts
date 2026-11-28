@@ -8,6 +8,10 @@ export const site = {
   whatsappDisplay: "0771 633 5533",
   instagramUrl: "https://www.instagram.com/elue.iq",
   instagramHandle: "@elue.iq",
+  // Telegram alerts to the team (new orders, low reviews). Off: Telegram is blocked in Iraq;
+  // the team gets notifications on their phones instead (admin app bell, lib/push.ts).
+  // true = send to Telegram too.
+  telegramAlerts: false,
   // More accounts for the links page (/links, where the jar's QR leads). Empty = not shown;
   // paste the profile link to add it.
   tiktokUrl: "",

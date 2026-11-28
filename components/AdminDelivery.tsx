@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AdminModon, callModon } from "./AdminModon";
+import { AdminDeliveryFee } from "./AdminDeliveryFee";
 import { AdminBoxy, callBoxy } from "./AdminBoxy";
 import { requestOrdersRefresh } from "@/lib/ordersRefresh";
 import { useToast } from "./Toast";
@@ -441,6 +442,8 @@ export function AdminDelivery({ order: o, onOpenCouriers }: { order: Order; onOp
             </button>
           ))}
       </section>
+
+      <AdminDeliveryFee order={o} couriers={couriers} />
 
       {pickedModon && <AdminModon order={o} />}
       {pickedBoxy && <AdminBoxy order={o} />}

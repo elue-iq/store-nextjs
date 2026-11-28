@@ -6793,3 +6793,58 @@ button:not(:disabled):active,
 .admin-push__panel p { margin: 0; font-size: 14px; line-height: 1.7; color: var(--ink); }
 .admin-push__actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .admin-push__note { color: var(--muted) !important; font-size: 13px !important; }
+
+/* The bell's notifications list (components/AdminInbox.tsx) and the settings screen. */
+.admin-push__count { position: absolute; top: -4px; inset-inline-end: -4px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px; background: var(--terracotta); color: var(--paper); font-size: 12px; font-weight: 700; line-height: 20px; text-align: center; box-shadow: 0 0 0 2px var(--paper); }
+.admin-inbox { width: min(340px, calc(100vw - 32px)); max-height: min(70vh, 520px); overflow-y: auto; padding: 12px; }
+.admin-inbox__head { display: flex; align-items: center; justify-content: space-between; padding: 2px 4px 4px; }
+.admin-inbox__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.admin-inbox__item { width: 100%; display: flex; flex-direction: column; gap: 2px; padding: 10px; border: 0; border-radius: 12px; background: transparent; color: var(--ink); font: inherit; text-align: start; cursor: pointer; }
+.admin-inbox__item:hover, .admin-inbox__item:focus-visible { background: var(--cream); }
+.admin-inbox__item--new { background: #f3e0d6; }
+.admin-inbox__title { display: flex; justify-content: space-between; gap: 8px; font-weight: 700; font-size: 14px; }
+.admin-inbox__time { font-weight: 400; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.admin-inbox__body { font-size: 13px; color: var(--muted); line-height: 1.6; }
+.admin-settings { display: flex; flex-direction: column; gap: 12px; }
+.admin-settings__card { display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: 16px; background: var(--paper); border: 1px solid var(--sand); }
+.admin-settings__card h2 { margin: 0; font-size: 17px; }
+.admin-settings__card p { margin: 0; line-height: 1.7; }
+.admin-settings__on { display: inline-block; padding: 0 10px; margin-inline-end: 4px; border-radius: 999px; background: var(--sage); color: var(--sage-deep); font-weight: 700; font-size: 13px; }
+
+/* Delivery money: per-order fee (AdminDeliveryFee), settlement rows (AdminSettle). */
+.delivery-fee__rows { margin: 0 0 10px; display: flex; flex-direction: column; gap: 6px; }
+.delivery-fee__rows > div { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.delivery-fee__rows dt { color: var(--muted); }
+.delivery-fee__rows dd { margin: 0; display: flex; flex-direction: column; align-items: flex-end; font-weight: 600; }
+.delivery-fee__rows dd small { font-weight: 400; font-size: 12px; color: var(--muted); }
+.delivery-fee__net { padding-top: 6px; border-top: 1px solid var(--sand); }
+.delivery-fee__net dt, .delivery-fee__net dd { color: var(--ink); font-weight: 800; }
+.delivery-fee__edit { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.delivery-fee__chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.delivery-fee__chips .chip { min-height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--sand-deep); background: var(--paper); font: inherit; cursor: pointer; }
+.delivery-fee__chips .chip.is-on { background: var(--terracotta); border-color: var(--terracotta); color: var(--paper); }
+.delivery-fee__custom { display: flex; gap: 6px; }
+.delivery-fee__custom input { width: 130px; }
+.settle__fee { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+.settle__fee select { font: inherit; font-size: 13px; min-height: 36px; border-radius: 10px; border: 1px solid var(--sand-deep); background: var(--paper); padding: 0 8px; }
+.settle__calc { margin: 6px 0; font-size: 14px; }
+.settle__history { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.settle__history li { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-top: 1px solid var(--sand); }
+.courier-fee { color: var(--muted); }
+.courier-fee--missing { color: var(--terracotta); font-weight: 600; }
+
+/* Dashboard «الحسابات» (delivery money included). */
+.dash-accounts { margin: 16px 0; padding: 16px; border-radius: 18px; background: var(--paper); border: 1px solid var(--sand); }
+.dash-accounts h2 { margin: 0 0 10px; font-size: 18px; }
+.dash-accounts__cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 8px 24px; }
+.dash-accounts dl { margin: 0; }
+.dash-accounts__row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 8px 0; border-top: 1px solid var(--sand); }
+.dash-accounts__row dt { display: flex; flex-direction: column; color: var(--muted); }
+.dash-accounts__row dt small { font-size: 12px; }
+.dash-accounts__row dd { margin: 0; font-weight: 700; white-space: nowrap; }
+.dash-accounts__row--strong dt, .dash-accounts__row--strong dd { color: var(--ink); font-weight: 800; font-size: 1.05em; }
+.dash-accounts__notes { margin: 10px 0 0; padding-inline-start: 18px; color: var(--terracotta); font-size: 13px; line-height: 1.7; }
+/* Settlement rows wrap: amount on the first line, the fee and «فتح» under it on a phone. */
+.settle__row { flex-wrap: wrap; min-width: 0; }
+.settle__row label { min-width: 0; flex: 1 1 240px; }
+.settle__row .settle__fee { margin-inline-start: 32px; }

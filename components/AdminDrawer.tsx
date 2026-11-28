@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 
-export type AdminView = "orders" | "dashboard" | "customers" | "products" | "delivery" | "reviews" | "prep" | "coupons" | "rewards" | "affiliates" | "gifts";
+export type AdminView = "orders" | "dashboard" | "customers" | "products" | "delivery" | "reviews" | "prep" | "coupons" | "rewards" | "affiliates" | "gifts" | "settings";
 
 // The admin's side menu (opens from the ☰ button). One tap to any section, so the
 // order list stays about orders only.
@@ -70,6 +70,7 @@ export function AdminDrawer({
         {item("rewards", "المكافآت والنقاط")}
         {item("gifts", "حملات الهدايا")}
         {item("affiliates", "الشركاء والعمولات")}
+        {item("settings", "الإعدادات")}
         <button type="button" className="admin-drawer__item admin-drawer__item--primary" onClick={onNewOrder}>
           <span>+ طلب جديد لعميل</span>
         </button>

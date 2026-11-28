@@ -898,7 +898,7 @@ async function notifyTeam(order: OrderRecord): Promise<boolean> {
     campaignSlug: order.campaignSlug ?? null,
   });
   // The dev copy never messages the team's Telegram group.
-  const telegramSent = PRODUCTION ? await sendToTelegram(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_CHAT_ID, message) : false;
+  const telegramSent = PRODUCTION && site.telegramAlerts ? await sendToTelegram(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_CHAT_ID, message) : false;
   if (!PRODUCTION) console.log("DEV order, Telegram skipped:\n" + message);
   if (telegramSent) await client.models.Order.update({ id: order.id, telegramSent: true });
 

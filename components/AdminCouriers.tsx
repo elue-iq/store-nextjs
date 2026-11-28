@@ -5,12 +5,13 @@ import { useToast } from "./Toast";
 import { callDispatch } from "./AdminDelivery";
 import { dataClient, type Courier, type Order } from "@/lib/data";
 import { chatIdError, collectAmount } from "@/lib/dispatch";
+import { receivedOf, type CourierFees } from "@/lib/delivery-money";
 import { formatIQD } from "@/lib/site";
-import { formatIraqiMobile, normalizeIraqiMobile } from "@/lib/phone";
+import { formatIraqiMobile, normalizeIraqiMobile, toLatinDigits } from "@/lib/phone";
 import { chatUrl } from "@/lib/share";
 
-type Draft = { id: string; name: string; chatId: string; phone: string; note: string };
-const EMPTY: Draft = { id: "", name: "", chatId: "", phone: "", note: "" };
+type Draft = { id: string; name: string; chatId: string; phone: string; note: string; fee: string };
+const EMPTY: Draft = { id: "", name: "", chatId: "", phone: "", note: "", fee: "" };
 
 // «شركات التوصيل» in /admin: the local couriers / delivery companies. Each has its own
 // Telegram chat (a channel or group the ÉLUE bot is a member of). An order given to a
@@ -19,7 +20,7 @@ export function AdminCouriers({ orders, onOpenOrder }: { orders: Order[] | null;
   const toast = useToast();
   const [list, setList] = useState<Courier[] | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
-  const [errors, setErrors] = useState<{ name?: string; chatId?: string; phone?: string }>({});
+  const [errors, setErrors] = useState<{ name?: string; chatId?: string; phone?: string; fee?: string }>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [bot, setBot] = useState<string | null | undefined>(undefined);
@@ -43,6 +44,10 @@ export function AdminCouriers({ orders, onOpenOrder }: { orders: Order[] | null;
     if (!draft) return;
     const found: typeof errors = {};
     if (draft.name.trim().length < 2) found.name = "اكتب اسم شركة التوصيل.";
+    // Their usual fee per delivery (internal; the customer still sees 5,000).
+    const feeText = toLatinDigits(draft.fee).replace(/[^\d]/g, "");
+    const fee = feeText ? Number(feeText) : null;
+    if (fee !== null && (fee < 0 || fee > 100000)) found.fee = "اكتب الأجرة بالدينار، مثل 3000.";
     const idErr = chatIdError(draft.chatId);
     if (idErr) found.chatId = idErr;
     // The courier's own WhatsApp number (for logging in to /courier); optional, never shared by two.
@@ -52,7 +57,7 @@ export function AdminCouriers({ orders, onOpenOrder }: { orders: Order[] | null;
     setErrors(found);
     if (Object.keys(found).length) return;
     setBusy("save");
-    const values = { name: draft.name.trim(), telegramChatId: draft.chatId.trim(), phone, note: draft.note.trim() || null };
+    const values = { name: draft.name.trim(), telegramChatId: draft.chatId.trim(), phone, note: draft.note.trim() || null, fee };
     const { errors: gql } = draft.id
       ? await dataClient.models.Courier.update({ id: draft.id, ...values })
       : await dataClient.models.Courier.create({ ...values, active: true });
@@ -111,6 +116,12 @@ export function AdminCouriers({ orders, onOpenOrder }: { orders: Order[] | null;
         الاسم
         <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} maxLength={60} placeholder="مثل: تيم الفهود" />
         {errors.name && <span className="field-error">{errors.name}</span>}
+      </label>
+      <label className={errors.fee ? "has-error" : undefined}>
+        أجرة التوصيل للطلب (د.ع)
+        <input value={draft.fee} onChange={(e) => setDraft({ ...draft, fee: e.target.value })} inputMode="numeric" dir="ltr" maxLength={7} placeholder="3000" />
+        <small className="hint">اللي تاخذه الشركة من كل طلب. الزبون يبقى يشوف 5,000، والفرق ربح إلنا. للمناطق البعيدة تقدرون تغيرونها على الطلب نفسه.</small>
+        {errors.fee && <span className="field-error">{errors.fee}</span>}
       </label>
       <label className={errors.chatId ? "has-error" : undefined}>
         رقم قناة تيليغرام (أو @اسم القناة)
@@ -194,6 +205,9 @@ export function AdminCouriers({ orders, onOpenOrder }: { orders: Order[] | null;
               {c.active === false && <small> · موقوفة</small>}
               <span dir="ltr">{c.telegramChatId}</span>
               {c.phone && <small dir="ltr">{formatIraqiMobile(c.phone)} · يدخل تطبيق المندوب</small>}
+              <small className={c.fee == null ? "courier-fee courier-fee--missing" : "courier-fee"}>
+                {c.fee == null ? "أجرة التوصيل غير محددة: حددوها حتى تطلع الحسابات صحيحة" : `أجرة التوصيل: ${formatIQD(c.fee)} للطلب`}
+              </small>
               {c.note && <small>{c.note}</small>}
               <CourierAccount courier={c} orders={orders} onOpenOrder={onOpenOrder} />
             </div>
@@ -202,7 +216,7 @@ export function AdminCouriers({ orders, onOpenOrder }: { orders: Order[] | null;
                 type="button"
                 className="btn btn--quiet btn--small"
                 disabled={busy !== null}
-                onClick={() => (setErrors({}), setDraft({ id: c.id, name: c.name, chatId: c.telegramChatId, phone: c.phone ?? "", note: c.note ?? "" }))}
+                onClick={() => (setErrors({}), setDraft({ id: c.id, name: c.name, chatId: c.telegramChatId, phone: c.phone ?? "", note: c.note ?? "", fee: c.fee != null ? String(c.fee) : "" }))}
               >
                 تعديل
               </button>
@@ -247,26 +261,34 @@ function CourierAccount({ courier, orders, onOpenOrder }: { courier: Courier; or
   const mine = (orders ?? []).filter((o) => o.courierKind === "LOCAL" && o.courierId === courier.id && o.status !== "CANCELLED");
   if (orders === null) return null;
   if (mine.length === 0) return <small>لا طلبات مسندة له بعد.</small>;
+  const fees: CourierFees = new Map(courier.fee != null ? [[courier.id, courier.fee]] : []);
   const withHim = mine.filter((o) => o.status !== "DELIVERED");
-  const done = mine.filter((o) => o.status === "DELIVERED");
-  const sum = (list: Order[]) => list.reduce((n, o) => n + collectAmount(o), 0);
+  const owed = mine.filter((o) => o.status === "DELIVERED" && !o.courierSettledAt);
+  const settled = mine.filter((o) => o.status === "DELIVERED" && o.courierSettledAt);
+  // What he hands over: collected minus his fee (lib/delivery-money).
+  const net = (list: Order[]) => list.reduce((n, o) => n + (receivedOf(o, fees) ?? collectAmount(o)), 0);
   const row = (o: Order) => (
     <li key={o.id}>
       <button type="button" className="link-button" onClick={() => onOpenOrder(o.orderNumber)}>
         <span dir="ltr">{o.orderNumber}</span> · {o.name}
       </button>
       <span>
-        {formatIQD(collectAmount(o))} · {o.status === "DELIVERED" ? "مسلَّم" : o.status === "OUT_FOR_DELIVERY" ? "في الطريق" : "بانتظار التوصيل"}
+        {formatIQD(receivedOf(o, fees) ?? collectAmount(o))} ·{" "}
+        {o.status === "DELIVERED" ? (o.courierSettledAt ? "مستلم" : "مسلَّم، ما استلمنا") : o.status === "OUT_FOR_DELIVERY" ? "في الطريق" : "بانتظار التوصيل"}
       </span>
     </li>
   );
   return (
     <div className="courier-account">
       <p>
-        <strong>عنده:</strong> {withHim.length} طلب · يجمع {formatIQD(sum(withHim))}
+        <strong>عنده:</strong> {withHim.length} طلب · يجمع {formatIQD(withHim.reduce((n, o) => n + collectAmount(o), 0))}
       </p>
       <p>
-        <strong>مسلَّم:</strong> {done.length} طلب · عليه لـ ÉLUE {formatIQD(sum(done))}
+        <strong>عليه لـ ÉLUE:</strong> {owed.length} طلب مسلَّم · {formatIQD(net(owed))}
+        {courier.fee == null && owed.length > 0 && " (بدون خصم أجرته: حددوها)"}
+      </p>
+      <p>
+        <strong>استلمنا منه:</strong> {settled.length} طلب · {formatIQD(net(settled))}
       </p>
       <details>
         <summary>كل الطلبات ({mine.length})</summary>

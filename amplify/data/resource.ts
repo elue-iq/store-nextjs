@@ -134,8 +134,13 @@ const schema = a
         courierKind: a.string().authorization((allow) => [allow.group("ADMINS")]),
         courierId: a.string().authorization((allow) => [allow.group("ADMINS")]),
         courierName: a.string().authorization((allow) => [allow.group("ADMINS")]), // name when assigned
-        // When the team received this order's cash from the local courier (courier settlement).
+        // When the team received this order's cash from the delivery company (settlement), and
+        // how much (what the driver collected minus the company's fee; lib/delivery-money.ts).
         courierSettledAt: a.string().authorization((allow) => [allow.group("ADMINS")]),
+        courierSettledAmount: a.integer().authorization((allow) => [allow.group("ADMINS")]),
+        // The delivery company's fee for this order when it differs from the usual one (a far
+        // area). Internal: the customer still sees site.deliveryFee. Empty = the company's default.
+        deliveryCost: a.integer().authorization((allow) => [allow.group("ADMINS")]),
         courierSentAt: a.datetime().authorization((allow) => [allow.group("ADMINS")]),
         courierStatus: a.string().authorization((allow) => [allow.group("ADMINS")]), // SENT | FAILED
         courierError: a.string().authorization((allow) => [allow.group("ADMINS")]),
@@ -221,6 +226,8 @@ const schema = a
         phone: a.string(),
         active: a.boolean(),
         note: a.string(),
+        // What this courier/company keeps per delivery (IQD), unless the order says otherwise.
+        fee: a.integer(),
       })
       .authorization((allow) => [allow.group("ADMINS")]),
 

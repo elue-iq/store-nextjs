@@ -4,10 +4,12 @@ import { useEffect, useState } from "react";
 import { useAuth } from "./AuthProvider";
 import { dataClient } from "@/lib/data";
 import { vapidKeyBytes } from "@/lib/push";
+import { site } from "@/lib/site";
 
-// The bell in the admin bar: turns new-order notifications on or off on this phone (web push).
-// iPhone: only inside the admin app opened from the Home Screen (Apple's rule), and only after
-// a tap; Android: in the browser too.
+// Settings (admin menu › الإعدادات): new-order notifications on this phone (web push): turn
+// them on, send a test, turn them off. iPhone: only inside the admin app opened from the Home
+// Screen (Apple's rule), and only after a tap; Android: in the browser too.
+// The bell in the top bar (AdminInbox) lists the notifications.
 type State = "loading" | "unsupported" | "ios-install" | "denied" | "off" | "on";
 
 const isIos = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.userAgent.includes("Macintosh") && navigator.maxTouchPoints > 1);
@@ -50,10 +52,9 @@ async function forget(endpoint: string) {
   await Promise.all((data ?? []).map((s) => dataClient.models.PushSub.delete({ id: s.id })));
 }
 
-export function AdminPush() {
+export function AdminSettings() {
   const auth = useAuth();
   const [state, setState] = useState<State>("loading");
-  const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
 
@@ -141,52 +142,44 @@ export function AdminPush() {
   }
 
   return (
-    <div className="admin-push">
-      <button
-        type="button"
-        className={`admin-push__bell${state === "on" ? " admin-push__bell--on" : ""}`}
-        aria-label="إشعارات الطلبات"
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-      >
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15L6 16z" />
-          <path d="M10 20a2 2 0 0 0 4 0" />
-        </svg>
-      </button>
-      {open && (
-        <div className="admin-push__panel" role="dialog" aria-label="إشعارات الطلبات">
-          <strong>إشعارات الطلبات الجديدة</strong>
-          {state === "loading" && <p>لحظة…</p>}
-          {state === "on" && (
-            <>
-              <p>شغّالة على هذا الجهاز: كل طلب جديد يوصلكم إشعار.</p>
-              <div className="admin-push__actions">
-                <button type="button" className="btn btn--small" disabled={busy} onClick={() => void test()}>
-                  تجربة
-                </button>
-                <button type="button" className="btn btn--small btn--quiet" disabled={busy} onClick={() => void turnOff()}>
-                  إيقاف
-                </button>
-              </div>
-            </>
-          )}
-          {state === "off" && (
-            <>
-              <p>فعّلوها حتى يوصلكم إشعار بكل طلب جديد على هذا الجهاز.</p>
-              <button type="button" className="btn btn--small" disabled={busy} onClick={() => void turnOn()}>
-                فعّلوا الإشعارات
+    <div className="admin-settings">
+      <section className="admin-settings__card" aria-labelledby="push-title">
+        <h2 id="push-title">إشعارات الطلبات على هذا الجهاز</h2>
+        {state === "loading" && <p>لحظة…</p>}
+        {state === "on" && (
+          <>
+            <p>
+              <span className="admin-settings__on">شغّالة</span> كل طلب جديد وكل تقييم منخفض يوصلكم إشعار، وتلگونها بالجرس فوق.
+            </p>
+            <div className="admin-push__actions">
+              <button type="button" className="btn btn--small" disabled={busy} onClick={() => void test()}>
+                تجربة
               </button>
-            </>
-          )}
-          {state === "ios-install" && (
-            <p>على الآيفون: ثبّتوا لوحة الطلبات على الشاشة الرئيسية (مشاركة ← إضافة إلى الشاشة الرئيسية)، افتحوها من هناك، وبعدها فعّلوا الإشعارات.</p>
-          )}
-          {state === "denied" && <p>الإشعارات مرفوضة لهذا الموقع. فعّلوها من إعدادات الجهاز، وبعدها ارجعوا هنا.</p>}
-          {state === "unsupported" && <p>هذا المتصفح ما يدعم الإشعارات. جرّبوا Chrome على أندرويد، أو لوحة الطلبات من الشاشة الرئيسية على الآيفون.</p>}
-          {note && <p className="admin-push__note">{note}</p>}
-        </div>
-      )}
+              <button type="button" className="btn btn--small btn--quiet" disabled={busy} onClick={() => void turnOff()}>
+                إيقاف
+              </button>
+            </div>
+          </>
+        )}
+        {state === "off" && (
+          <>
+            <p>فعّلوها حتى يوصلكم إشعار بكل طلب جديد على هذا الجهاز.</p>
+            <button type="button" className="btn btn--small" disabled={busy} onClick={() => void turnOn()}>
+              فعّلوا الإشعارات
+            </button>
+          </>
+        )}
+        {state === "ios-install" && (
+          <p>على الآيفون: ثبّتوا لوحة الطلبات على الشاشة الرئيسية (مشاركة ← إضافة إلى الشاشة الرئيسية)، افتحوها من هناك، وبعدها فعّلوا الإشعارات.</p>
+        )}
+        {state === "denied" && <p>الإشعارات مرفوضة لهذا الموقع. فعّلوها من إعدادات الجهاز، وبعدها ارجعوا هنا.</p>}
+        {state === "unsupported" && <p>هذا المتصفح ما يدعم الإشعارات. جرّبوا Chrome على أندرويد، أو لوحة الطلبات من الشاشة الرئيسية على الآيفون.</p>}
+        {note && <p className="admin-push__note">{note}</p>}
+      </section>
+      <section className="admin-settings__card" aria-labelledby="tg-title">
+        <h2 id="tg-title">تيليغرام</h2>
+        <p>{site.telegramAlerts ? "الطلبات توصل لمجموعة التيليغرام هم." : "متوقف (محظور بالعراق). الطلبات توصل بإشعارات الأجهزة بداله."}</p>
+      </section>
     </div>
   );
 }
