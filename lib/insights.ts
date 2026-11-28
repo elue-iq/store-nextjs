@@ -4,7 +4,11 @@
 //
 // Definitions (shown on the dashboard too):
 // - A day is a Baghdad calendar day (UTC+3, Iraq has no daylight saving).
-// - Sales = the jars' value (order total). Delivery is paid to the courier and is not included.
+// - Sales = the jars' value (order total). Delivery is paid to the courier and is not included;
+//   the delivery money (what customers paid for it, the companies' fees, what they handed
+//   over) is in `accounts` (lib/delivery-money.ts).
+// - A parcel the delivery company brought back (Boxy return) counts as cancelled.
+// - A flavor's sales are its lines' share of the order total (after any discount).
 // - With a flavor filter, sales and jars count only that flavor's lines; the order
 //   count is the orders that contain it.
 // - A customer is a WhatsApp number. An order is from a "new" customer when that
@@ -19,6 +23,7 @@ import { products } from "./products";
 import { formatIraqiMobile } from "./phone";
 import { PAY_KEY_LABELS, payKeyOf, site, type PayKey } from "./site";
 import { heardLabel } from "./attribution";
+import { accountsOf, courierFee, isReturned, type Accounts, type CourierFees } from "./delivery-money";
 
 // ---- Days ----------------------------------------------------------------------
 
@@ -227,6 +232,14 @@ export function isGift(o: Order): boolean {
   return payKeyOf(o) === "GIFT";
 }
 
+// A line's share of what the order was sold for: line value × (order total ÷ all lines), so
+// a coupon or reward discount is shared by the flavors and they add up to the total.
+function lineRevenue(o: Order, l: { qty: number; price: number }): number {
+  if (isGift(o)) return 0;
+  const all = lines(o).reduce((n, x) => n + x.qty * x.price, 0);
+  return all > 0 ? (l.qty * l.price * o.total) / all : 0;
+}
+
 export function partOf(o: Order, flavors: string[]): { jars: number; revenue: number } {
   const gift = isGift(o);
   if (!flavors.length) return { jars: o.jars, revenue: gift ? 0 : o.total };
@@ -235,9 +248,9 @@ export function partOf(o: Order, flavors: string[]): { jars: number; revenue: nu
   for (const l of lines(o)) {
     if (!flavors.includes(l.slug)) continue;
     jars += l.qty;
-    revenue += gift ? 0 : l.qty * l.price;
+    revenue += lineRevenue(o, l);
   }
-  return { jars, revenue };
+  return { jars, revenue: Math.round(revenue) };
 }
 
 // For each order: was it the customer's first order that wasn't cancelled?
@@ -277,7 +290,7 @@ export type Kpis = {
   prepaid: number; // jars paid in advance
   deliveryPrepaid: number; // delivery fee paid in advance by the customer
   freeDelivery: number; // delivery as a gift from ÉLUE
-  freeDeliveryCost: number; // courier fees we covered (known once sent to Modon)
+  freeDeliveryCost: number; // courier fees we covered for free deliveries (where the fee is known)
   gifts: number; // orders given away (not revenue)
   giftValue: number; // what they would have cost
 };
@@ -309,9 +322,10 @@ export type Insights = {
   types: Map<string, "new" | "returning">;
   repeatRate: { repeat: number; of: number }; // every customer, all time
   testCount: number;
+  accounts: Accounts; // delivery money and what the companies handed over (the filtered orders)
 };
 
-function kpisOf(list: Order[], flavors: string[], types: Map<string, "new" | "returning">): Kpis {
+function kpisOf(list: Order[], flavors: string[], types: Map<string, "new" | "returning">, fees: CourierFees): Kpis {
   let revenue = 0;
   let jars = 0;
   let delivered = 0;
@@ -338,7 +352,7 @@ function kpisOf(list: Order[], flavors: string[], types: Map<string, "new" | "re
     if (o.deliveryPaid) deliveryPrepaid += 1;
     if (o.freeDelivery && !o.deliveryPaid && o.status !== "CANCELLED") {
       freeDelivery += 1;
-      freeDeliveryCost += o.modonFee ?? 0;
+      freeDeliveryCost += courierFee(o, fees).fee ?? 0;
     }
   }
   return {
@@ -373,7 +387,10 @@ function add(map: Map<string, Row>, key: string, label: string, jars: number, re
   map.set(key, r);
 }
 
-export function computeInsights(all: Order[], f: Filters, today: string): Insights {
+export function computeInsights(input: Order[], f: Filters, today: string, fees: CourierFees = new Map()): Insights {
+  // A parcel brought back by the delivery company is not a sale: it counts as cancelled here.
+  const all = input.map((o) => (isReturned(o) && o.status !== "CANCELLED" ? { ...o, status: "CANCELLED" as OrderStatus } : o));
+  const original = new Map(input.map((o) => [o.id, o]));
   const types = customerTypes(all);
   const testCount = all.filter(isTest).length;
   const real = f.showTests ? all : all.filter((o) => !isTest(o));
@@ -451,7 +468,7 @@ export function computeInsights(all: Order[], f: Filters, today: string): Insigh
       const r = flavorMap.get(l.slug) ?? { key: l.slug, label: l.nameAr, orders: 0, jars: 0, revenue: 0 };
       r.orders += 1;
       r.jars += l.qty;
-      r.revenue += isGift(o) ? 0 : l.qty * l.price;
+      r.revenue += Math.round(lineRevenue(o, l));
       flavorMap.set(l.slug, r);
     }
   }
@@ -499,8 +516,8 @@ export function computeInsights(all: Order[], f: Filters, today: string): Insigh
     range: cur,
     prevRange: prev,
     orders: list,
-    kpis: kpisOf(list, focus, types),
-    prev: prevList ? kpisOf(prevList, focus, types) : null,
+    kpis: kpisOf(list, focus, types, fees),
+    prev: prevList ? kpisOf(prevList, focus, types, fees) : null,
     cancelled: cancelledOf(period),
     prevCancelled: prevPeriod ? cancelledOf(prevPeriod) : null,
     statuses: ALL_STATUSES.map((s) => statusMap.get(s)!),
@@ -518,6 +535,11 @@ export function computeInsights(all: Order[], f: Filters, today: string): Insigh
     topCustomers: [...customers.values()].sort((a, b) => b.revenue - a.revenue || b.orders - a.orders).slice(0, 5),
     types,
     repeatRate: { repeat, of: counted.size },
+    // With the real statuses, so returned parcels are counted as such.
+    accounts: accountsOf(
+      period.filter((o) => statusOk(o) || isReturned(original.get(o.id) ?? o)).map((o) => original.get(o.id) ?? o),
+      fees,
+    ),
     testCount,
   };
 }

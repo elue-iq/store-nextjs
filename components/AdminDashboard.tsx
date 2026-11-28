@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { OrderRow } from "./AdminOrderRow";
 import { NotToggle } from "./NotToggle";
-import { STATUS_LABELS, type Order, type OrderStatus } from "@/lib/data";
+import { dataClient, STATUS_LABELS, type Courier, type Order, type OrderStatus } from "@/lib/data";
+import { feesOf, type Accounts as AccountsData } from "@/lib/delivery-money";
 import { products } from "@/lib/products";
 import { formatIQD, PAY_KEY_LABELS, type PayKey } from "@/lib/site";
 import { formatIraqiMobile } from "@/lib/phone";
@@ -237,7 +238,15 @@ export function AdminDashboard({
 
   const today = todayBaghdad();
   const all = useMemo(() => orders ?? [], [orders]);
-  const ins = useMemo(() => computeInsights(all, f, today), [all, f, today]);
+  // The delivery companies' default fees (Courier.fee), for the delivery money.
+  const [couriers, setCouriers] = useState<Courier[] | null>(null);
+  useEffect(() => {
+    dataClient.models.Courier.list({ limit: 100 })
+      .then(({ data }) => setCouriers(data))
+      .catch(() => setCouriers([]));
+  }, []);
+  const fees = useMemo(() => feesOf(couriers), [couriers]);
+  const ins = useMemo(() => computeInsights(all, f, today, fees), [all, f, today, fees]);
 
   // Choices for the selects: only values that exist in the orders.
   const choices = useMemo(() => {
@@ -549,7 +558,7 @@ export function AdminDashboard({
         <StatTile
           label="توصيل مجاني (هدية)"
           value={n0(k.freeDelivery)}
-          sub={k.freeDeliveryCost ? `تكلفة علينا ${formatIQD(k.freeDeliveryCost)}` : k.freeDelivery ? "التكلفة تظهر بعد الإرسال إلى مدن" : undefined}
+          sub={k.freeDeliveryCost ? `تكلفة علينا ${formatIQD(k.freeDeliveryCost)}` : k.freeDelivery ? "التكلفة تظهر بعد تحديد أجرة شركة التوصيل" : undefined}
         />
         {k.gifts > 0 && (
           <StatTile label="هدايا" value={n0(k.gifts)} sub={`قيمتها ${formatIQD(k.giftValue)} · غير محسوبة في الإيراد`} />
@@ -561,6 +570,8 @@ export function AdminDashboard({
         />
       </dl>
       {p && <p className="dash-vs">الأسهم {vsText}.</p>}
+
+      <Accounts a={ins.accounts} />
 
       <div className="dash-grid">
         <Card
@@ -795,5 +806,48 @@ export function AdminDashboard({
         </Card>
       </div>
     </div>
+  );
+}
+
+// «الحسابات»: the period's money, delivery included (lib/delivery-money.ts). The customer
+// pays 5,000 for delivery; the delivery company keeps its own fee; the difference is ours.
+function Accounts({ a }: { a: AccountsData }) {
+  const line = (label: string, value: number, opts: { minus?: boolean; strong?: boolean; sub?: string } = {}) => (
+    <div className={opts.strong ? "dash-accounts__row dash-accounts__row--strong" : "dash-accounts__row"}>
+      <dt>
+        {label}
+        {opts.sub && <small>{opts.sub}</small>}
+      </dt>
+      <dd>{opts.minus && value > 0 ? `− ${formatIQD(value)}` : value < 0 ? `− ${formatIQD(-value)}` : formatIQD(value)}</dd>
+    </div>
+  );
+  return (
+    <section className="dash-accounts" aria-labelledby="accounts-title">
+      <h2 id="accounts-title">الحسابات</h2>
+      <div className="dash-accounts__cols">
+        <dl>
+          {line("مبيعات العلب", a.sales, { sub: `${a.orders.toLocaleString("en-US")} طلب` })}
+          {line("أجور توصيل دفعها الزبائن", a.deliveryCharged)}
+          {line("أجور شركات التوصيل", a.courierFees, { minus: true })}
+          {line("ربح التوصيل", a.deliveryProfit)}
+          {line("الدخل", a.income, { strong: true, sub: "المبيعات + ربح التوصيل، قبل كلفة الإنتاج" })}
+        </dl>
+        <dl>
+          {line("استلمناه", a.received, { strong: true, sub: "سلّمته شركات التوصيل وسجّلناه، أو استلمناه بإيدنا" })}
+          {line("عند شركات التوصيل", a.owed, { sub: `${a.owedOrders.toLocaleString("en-US")} طلب مسلَّم ما استلمنا مبلغه` })}
+          {line("بالطريق", a.onTheWay, { sub: "مع المندوب الآن، بعد خصم أجرته" })}
+        </dl>
+      </div>
+      {(a.feeUnknown > 0 || a.returned > 0) && (
+        <ul className="dash-accounts__notes">
+          {a.feeUnknown > 0 && (
+            <li>
+              {a.feeUnknown.toLocaleString("en-US")} طلب بدون أجرة توصيل محددة: ما محسوبة بربح التوصيل. حددوا الأجرة الافتراضية لكل شركة من «شركات التوصيل».
+            </li>
+          )}
+          {a.returned > 0 && <li>{a.returned.toLocaleString("en-US")} طرد رجع من شركة التوصيل: محسوب ملغى.</li>}
+        </ul>
+      )}
+    </section>
   );
 }
