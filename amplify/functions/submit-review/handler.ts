@@ -8,6 +8,7 @@ import { REVIEW_MAX_COMMENT, firstNameOf, ratingValid } from "../../../lib/revie
 import { escapeHtml, sendToTelegram } from "../../../lib/telegram";
 import { formatIraqiMobile } from "../../../lib/phone";
 import { site } from "../../../lib/site";
+import { sendPush } from "../place-order/push";
 
 // submitReview: saves the customer's review of one of THEIR delivered orders.
 //   - the order must be theirs, delivered, and not reviewed yet (one review per order);
@@ -65,8 +66,10 @@ export const handler: Schema["submitReview"]["functionHandler"] = async (event) 
   const { errors } = await client.models.Order.update({ id: order.id, reviewed: true, reviewedAt: new Date().toISOString() });
   if (errors?.length) console.error("marking the order reviewed failed", JSON.stringify(errors));
 
-  // 3 stars or less: the team hears about it now (live only), to call the customer the same day.
+  // 3 stars or less: the team hears about it now (live only), to call the customer the same day:
+  // on their phones (admin app notifications), and on Telegram if that is switched on.
   if (Math.min(delivery, taste) <= 3 && process.env.STAGE === "amplify") {
+    await pushLowReview({ id: order.id, orderNumber: order.orderNumber, name: order.name, taste, delivery, comment });
     const text = [
       `<b>⚠️ تقييم منخفض ${order.orderNumber}</b>`,
       `الطعم ${taste}/5 · التوصيل ${delivery}/5${deliveredBy ? ` (${escapeHtml(deliveredBy)})` : ""}`,
@@ -76,8 +79,28 @@ export const handler: Schema["submitReview"]["functionHandler"] = async (event) 
     ]
       .filter(Boolean)
       .join("\n");
-    await sendToTelegram(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_CHAT_ID, text).catch((err) => console.error("low-review alert failed", err));
+    if (site.telegramAlerts) {
+      await sendToTelegram(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_CHAT_ID, text).catch((err) => console.error("low-review alert failed", err));
+    }
   }
 
   return JSON.stringify({ ok: true });
 };
+
+// Every team phone that turned notifications on. Best effort: never throws.
+async function pushLowReview(r: { id: string; orderNumber: string; name: string; taste: number; delivery: number; comment: string | null }) {
+  try {
+    const { data } = await client.models.PushSub.list({ limit: 500 });
+    const targets = (data ?? []).map((s) => ({ id: s.id, endpoint: s.endpoint, p256dh: s.p256dh, authKey: s.authKey }));
+    if (!targets.length) return;
+    const res = await sendPush(targets, {
+      title: `تقييم منخفض ${r.orderNumber}`,
+      body: [`الطعم ${r.taste}/5 · التوصيل ${r.delivery}/5`, r.name, r.comment ? `«${r.comment.slice(0, 80)}»` : null].filter(Boolean).join(" · "),
+      url: `/admin?order=${encodeURIComponent(r.id)}`,
+      tag: `review-${r.id}`,
+    });
+    await Promise.all(res.gone.map((id) => client.models.PushSub.delete({ id }).catch(() => null)));
+  } catch (err) {
+    console.error("low-review push failed", (err as Error).message);
+  }
+}

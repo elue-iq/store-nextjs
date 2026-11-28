@@ -62,9 +62,11 @@ backend.placeOrder.resources.lambda.addToRolePolicy(
 // Team notifications (web push, lib/push.ts): the private key is the secret VAPID_PRIVATE_KEY
 // (Hosting > Secrets), read the same way at runtime: until it is set, nothing is sent.
 const vapidKeyParam = `/amplify/shared/${process.env.AWS_APP_ID ?? "unknown"}/VAPID_PRIVATE_KEY`;
-backend.placeOrder.resources.lambda.addToRolePolicy(
-  new PolicyStatement({ actions: ["ssm:GetParameter"], resources: [`arn:aws:ssm:${Stack.of(backend.placeOrder.resources.lambda).region}:${Stack.of(backend.placeOrder.resources.lambda).account}:parameter${vapidKeyParam}`] }),
-);
+for (const fn of [backend.placeOrder, backend.submitReview]) {
+  fn.resources.lambda.addToRolePolicy(
+    new PolicyStatement({ actions: ["ssm:GetParameter"], resources: [`arn:aws:ssm:${Stack.of(fn.resources.lambda).region}:${Stack.of(fn.resources.lambda).account}:parameter${vapidKeyParam}`] }),
+  );
+}
 
 // courierApp reads the courier's WhatsApp number from the login record.
 backend.courierApp.addEnvironment("USER_POOL_ID", userPool.userPoolId);

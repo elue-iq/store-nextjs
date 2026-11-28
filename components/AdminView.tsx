@@ -43,6 +43,8 @@ import { slotText } from "@/lib/delivery-slot";
 import { deliveryPayOf, formatIQD, minusIQD, payKeyOf, PAY_KEY_LABELS, payMethodText, site, type PayKey } from "@/lib/site";
 import { fullAddress } from "@/lib/iraq";
 import { products } from "@/lib/products";
+import { OPEN_ORDER_EVENT, OPEN_VIEW_EVENT, publishOrders } from "@/lib/adminFeed";
+import { AdminSettings } from "./AdminSettings";
 
 
 // The admin works like a phone app: a compact list of orders, and tapping one
@@ -59,7 +61,7 @@ function orderFromUrl(): string | null {
 // Which section the list screen shows (?view=dashboard etc.), so a refresh stays there.
 function viewFromUrl(): View {
   const v = new URLSearchParams(window.location.search).get("view");
-  return v === "dashboard" || v === "customers" || v === "products" || v === "delivery" || v === "reviews" || v === "prep" || v === "coupons" || v === "rewards" || v === "affiliates" || v === "gifts"
+  return v === "dashboard" || v === "customers" || v === "products" || v === "delivery" || v === "reviews" || v === "prep" || v === "coupons" || v === "rewards" || v === "affiliates" || v === "gifts" || v === "settings"
     ? v
     : "orders";
 }
@@ -105,6 +107,8 @@ export function AdminView() {
   const auth = useAuth();
   const toast = useToast();
   const [allOrders, setOrders] = useState<Order[] | null>(null);
+  // The bell in the top bar lists the newest orders from here (lib/adminFeed).
+  useEffect(() => publishOrders(allOrders), [allOrders]);
   // Orders waiting for a Qi payment aren't real orders yet: the team sees them once paid.
   const orders = useMemo(() => allOrders?.filter((o) => !(o.qiStatus === "CREATED" && !o.paid)) ?? null, [allOrders]);
   const [synced, setSynced] = useState(false);
@@ -145,6 +149,24 @@ export function AdminView() {
     setSelected(id);
     window.scrollTo({ top: 0 });
   }, []);
+
+  // The bell in the top bar (AdminInbox) opens an order or a section here.
+  useEffect(() => {
+    const onOpen = (e: Event) => openOrder(String((e as CustomEvent).detail));
+    const onView = (e: Event) => {
+      const v = String((e as CustomEvent).detail) as View;
+      setSelected(null);
+      setView(v);
+      window.history.pushState(null, "", v === "orders" ? "/admin" : `/admin?view=${v}`);
+      window.scrollTo({ top: 0 });
+    };
+    window.addEventListener(OPEN_ORDER_EVENT, onOpen);
+    window.addEventListener(OPEN_VIEW_EVENT, onView);
+    return () => {
+      window.removeEventListener(OPEN_ORDER_EVENT, onOpen);
+      window.removeEventListener(OPEN_VIEW_EVENT, onView);
+    };
+  }, [openOrder]);
 
   const backToList = useCallback(() => {
     if (window.history.state?.order) {
@@ -638,6 +660,16 @@ export function AdminView() {
         {pullEl}
         {listHead("الشركاء والعمولات", "روابط الحملات، الطلبات، والعمولة لكل علبة")}
         <AdminAffiliates orders={orders} onOpenOrder={openOrder} />
+        {drawer}
+      </div>
+    );
+  }
+
+  if (view === "settings") {
+    return (
+      <div className="admin-screen">
+        {listHead("الإعدادات", "إعدادات هذا الجهاز")}
+        <AdminSettings />
         {drawer}
       </div>
     );
@@ -1205,10 +1237,10 @@ function OrderDetail({
           </p>
         )}
         <OrderSource order={o} />
-        {(o.source || o.telegramSent === false) && (
+        {(o.source || (site.telegramAlerts && o.telegramSent === false)) && (
           <p className="order-card__meta">
             {o.source && <span dir="ltr">{o.source}</span>}
-            {o.telegramSent === false && <span className="order-card__warn">لم يُرسل إلى تيليغرام</span>}
+            {site.telegramAlerts && o.telegramSent === false && <span className="order-card__warn">لم يُرسل إلى تيليغرام</span>}
           </p>
         )}
       </section>
